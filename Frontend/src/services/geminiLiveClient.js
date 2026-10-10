@@ -1,9 +1,11 @@
 /**
  * GeminiLiveClient manages the WebSocket connection directly to the Gemini Multimodal Live API
  * using backend-provisioned ephemeral tokens.
+ * Supports Real-Time Web Search via Tavily Tool Calling.
  */
 export class GeminiLiveClient {
   constructor({
+    backendUrl = 'http://localhost:3001',
     onOpen,
     onClose,
     onError,
@@ -12,7 +14,10 @@ export class GeminiLiveClient {
     onTurnComplete,
     onTranscript,
     onUserTurnFrozen,
+    onToolCall,
+    onToolResponse,
   }) {
+    this.backendUrl = backendUrl;
     this.onOpen = onOpen;
     this.onClose = onClose;
     this.onError = onError;
@@ -21,6 +26,8 @@ export class GeminiLiveClient {
     this.onTurnComplete = onTurnComplete;
     this.onTranscript = onTranscript;
     this.onUserTurnFrozen = onUserTurnFrozen;
+    this.onToolCall = onToolCall;
+    this.onToolResponse = onToolResponse;
 
     this.clientId = Math.random().toString(36).slice(2, 6);
     this.msgCounter = 0;
@@ -68,7 +75,7 @@ export class GeminiLiveClient {
           console.log('[GeminiLiveClient] WebSocket connection established.');
           this.isConnected = true;
 
-          // Send initial setup frame
+          // Send initial setup frame with tools declared
           this.sendSetup({
             model: normalizedModel,
             systemInstruction,
@@ -124,7 +131,7 @@ export class GeminiLiveClient {
   }
 
   /**
-   * Sends the session setup configuration frame.
+   * Sends the session setup configuration frame, including Tavily search tool declaration.
    */
   sendSetup({ model, systemInstruction, voiceName = 'Aoede' }) {
     const isExtendedThinking = model.includes('extended-thinking');
@@ -144,6 +151,26 @@ export class GeminiLiveClient {
         },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
+        tools: [
+          {
+            functionDeclarations: [
+              {
+                name: 'search_web',
+                description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    query: {
+                      type: 'STRING',
+                      description: 'The search query to look up on the web',
+                    },
+                  },
+                  required: ['query'],
+                },
+              },
+            ],
+          },
+        ],
       },
     };
 
@@ -161,12 +188,11 @@ export class GeminiLiveClient {
     }
 
     this.sendJson(setupPayload);
-    console.log('[GeminiLiveClient] Sent setup configuration frame with audio transcription enabled.');
+    console.log('[GeminiLiveClient] Sent setup configuration frame with audio transcription and search_web tool enabled.');
   }
 
   /**
    * Sends real-time microphone audio chunk (16kHz PCM base64).
-   * Emits both `audio` and `mediaChunks` to guarantee compatibility across all Live API versions.
    * @param {string} base64PCMChunk
    */
   sendAudioChunk(base64PCMChunk) {
@@ -220,6 +246,24 @@ export class GeminiLiveClient {
     }
 
     const serverContent = message.serverContent;
+
+    // Check for Tool Calls (Function Calling) at message level or serverContent level
+    const functionCalls = [];
+    if (message.toolCall?.functionCalls) {
+      functionCalls.push(...message.toolCall.functionCalls);
+    }
+    if (serverContent?.modelTurn?.parts) {
+      for (const part of serverContent.modelTurn.parts) {
+        if (part.functionCall) {
+          functionCalls.push(part.functionCall);
+        }
+      }
+    }
+
+    if (functionCalls.length > 0) {
+      this.handleToolCalls(functionCalls);
+    }
+
     if (!serverContent) return;
 
     const msgId = ++this.msgCounter;
@@ -303,6 +347,71 @@ export class GeminiLiveClient {
       console.log('[GeminiLiveClient] [Event] Model turn complete.');
       if (this.onTurnComplete) {
         this.onTurnComplete();
+      }
+    }
+  }
+
+  /**
+   * Executes tool calls requested by Gemini Live (e.g. search_web via Tavily backend)
+   * and sends toolResponse back through the WebSocket connection.
+   */
+  async handleToolCalls(functionCalls) {
+    console.log(`[GeminiLiveClient #${this.clientId}] Handling ${functionCalls.length} function call(s):`, functionCalls);
+
+    if (this.onToolCall) {
+      this.onToolCall(functionCalls);
+    }
+
+    const responses = [];
+
+    for (const call of functionCalls) {
+      if (call.name === 'search_web') {
+        const query = call.args?.query || '';
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing Tavily search for: "${query}" (id: ${call.id})`);
+
+        let searchResult = '';
+        try {
+          const res = await fetch(`${this.backendUrl}/api/tools/search`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            searchResult = data.formattedResult || data.answer || JSON.stringify(data);
+          } else {
+            searchResult = `Web search returned error status ${res.status}.`;
+          }
+        } catch (err) {
+          console.error(`[GeminiLiveClient] Search request failed:`, err);
+          searchResult = `Failed to execute search: ${err.message}`;
+        }
+
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: searchResult,
+          },
+        });
+      }
+    }
+
+    if (responses.length > 0) {
+      const toolResponsePayload = {
+        toolResponse: {
+          functionResponses: responses,
+        },
+      };
+
+      this.sendJson(toolResponsePayload);
+      console.log(`[GeminiLiveClient #${this.clientId}] Successfully sent toolResponse back to Gemini Live.`);
+
+      if (this.onToolResponse) {
+        this.onToolResponse(responses);
       }
     }
   }

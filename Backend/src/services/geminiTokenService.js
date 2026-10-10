@@ -1,6 +1,30 @@
 import { GoogleGenAI } from '@google/genai';
 
 /**
+ * Declared tool definitions available in Gemini Live session
+ */
+export const GEMINI_TOOLS = [
+  {
+    functionDeclarations: [
+      {
+        name: 'search_web',
+        description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            query: {
+              type: 'STRING',
+              description: 'The search query to look up on the web',
+            },
+          },
+          required: ['query'],
+        },
+      },
+    ],
+  },
+];
+
+/**
  * Service to generate short-lived ephemeral tokens for Gemini Live WebSockets.
  * Keeps the permanent GEMINI_API_KEY secure on the server.
  */
@@ -35,6 +59,7 @@ export class GeminiTokenService {
           responseModalities: ['AUDIO'],
           inputAudioTranscription: {},
           outputAudioTranscription: {},
+          tools: GEMINI_TOOLS,
         }
       }
     };

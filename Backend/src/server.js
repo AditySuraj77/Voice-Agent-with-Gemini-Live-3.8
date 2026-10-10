@@ -13,6 +13,7 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import tokenRouter from './routes/tokenRoute.js';
+import searchRouter from './routes/searchRoute.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -42,12 +43,16 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY)
+    apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY),
+    tavilyConfigured: Boolean(process.env.TAVILY_API_KEY)
   });
 });
 
 // Ephemeral token endpoint
 app.use('/api', tokenLimiter, tokenRouter);
+
+// Web search tool endpoint
+app.use('/api', searchRouter);
 
 // Start server
 app.listen(PORT, () => {
@@ -57,5 +62,10 @@ app.listen(PORT, () => {
     console.warn('[Backend] WARNING: GEMINI_API_KEY is not set in environment or .env file!');
   } else {
     console.log('[Backend] GEMINI_API_KEY detected.');
+  }
+  if (!process.env.TAVILY_API_KEY) {
+    console.warn('[Backend] NOTE: TAVILY_API_KEY is not set. Real-time web search will be disabled until set.');
+  } else {
+    console.log('[Backend] TAVILY_API_KEY detected. Real-time web search enabled.');
   }
 });

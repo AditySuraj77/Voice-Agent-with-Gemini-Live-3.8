@@ -1,13 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { User, Sparkles, Volume2 } from 'lucide-react';
+import { User, Sparkles, Volume2, Globe, Search } from 'lucide-react';
 
-export function ChatHistory({ messages, conversationState }) {
+export function ChatHistory({ messages, conversationState, isSearching, searchQuery }) {
   const bottomRef = useRef(null);
 
   // Auto-scroll to newest message smoothly
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, conversationState]);
+  }, [messages, conversationState, isSearching]);
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 space-y-6">
@@ -17,12 +17,47 @@ export function ChatHistory({ messages, conversationState }) {
             <Volume2 className="w-8 h-8 text-indigo-400 animate-pulse" />
           </div>
           <h2 className="text-lg font-semibold text-slate-200 mb-2">Natural Voice Conversation</h2>
-          <p className="text-sm text-slate-400 leading-relaxed">
+          <p className="text-sm text-slate-400 leading-relaxed mb-4">
             Click <strong>Start Session</strong> below to begin speaking. Gemini answers natively with low latency speech-to-speech. You can interrupt anytime by speaking!
           </p>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 text-xs">
+            <Globe className="w-3.5 h-3.5" />
+            <span>Real-time web search powered by Tavily is active</span>
+          </div>
         </div>
       ) : (
         messages.map((msg) => {
+          // Special UI card for Tavily Tool Execution
+          if (msg.sender === 'tool') {
+            return (
+              <div key={msg.id} className="flex gap-3 max-w-2xl mr-auto items-start my-2">
+                <div className="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                  <Globe className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col items-start">
+                  <div className="px-4 py-2.5 rounded-2xl bg-cyan-950/50 border border-cyan-800/60 text-cyan-100 text-xs shadow-sm flex items-center gap-2.5">
+                    {msg.isSearching ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                        <span>Searching the web for: <strong className="text-white">"{msg.query}"</strong>...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        <span>Web search completed for: <strong className="text-white">"{msg.query}"</strong></span>
+                      </>
+                    )}
+                  </div>
+                  {msg.timestamp && (
+                    <span className="text-[10px] text-slate-500 mt-1 px-1">
+                      {msg.timestamp} • Tavily Web Search
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
           const isUser = msg.sender === 'user';
           return (
             <div
@@ -69,19 +104,29 @@ export function ChatHistory({ messages, conversationState }) {
         })
       )}
 
-      {/* Thinking state bubble */}
+      {/* Thinking / Searching state bubble */}
       {conversationState === 'thinking' && (
         <div className="flex gap-3 max-w-3xl mr-auto items-center">
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0">
-            <Sparkles className="w-4 h-4" />
+            {isSearching ? <Search className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
           </div>
-          <div className="px-4 py-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/60 rounded-tl-none flex items-center gap-2 text-xs text-slate-400">
+          <div className={`px-4 py-2.5 rounded-2xl border rounded-tl-none flex items-center gap-2 text-xs shadow-sm ${
+            isSearching
+              ? 'bg-cyan-950/60 border-cyan-800/60 text-cyan-200'
+              : 'bg-slate-800/80 border-slate-700/60 text-slate-400'
+          }`}>
             <span className="flex gap-1 items-center">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" />
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:0.2s]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:0.4s]" />
+              <span className={`w-1.5 h-1.5 rounded-full ${isSearching ? 'bg-cyan-400' : 'bg-indigo-400'} animate-bounce`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${isSearching ? 'bg-cyan-400' : 'bg-indigo-400'} animate-bounce [animation-delay:0.2s]`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${isSearching ? 'bg-cyan-400' : 'bg-indigo-400'} animate-bounce [animation-delay:0.4s]`} />
             </span>
-            <span>Thinking...</span>
+            <span>
+              {isSearching ? (
+                <>Searching the web with Tavily{searchQuery ? `: "${searchQuery}"` : '...'} 🔍</>
+              ) : (
+                'Thinking...'
+              )}
+            </span>
           </div>
         </div>
       )}

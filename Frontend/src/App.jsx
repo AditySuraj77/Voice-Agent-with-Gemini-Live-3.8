@@ -14,6 +14,8 @@ export default function App() {
     inputVolume,
     error,
     messages,
+    isSearching,
+    searchQuery,
     startSession,
     endSession,
     toggleMute,
@@ -31,6 +33,7 @@ export default function App() {
         onModelChange={switchModel}
         sessionStatus={sessionStatus}
         conversationState={conversationState}
+        isSearching={isSearching}
       />
 
       {/* Error Banner */}
@@ -53,6 +56,8 @@ export default function App() {
       <ChatHistory
         messages={messages}
         conversationState={conversationState}
+        isSearching={isSearching}
+        searchQuery={searchQuery}
       />
 
       {/* Bottom Controls Bar */}

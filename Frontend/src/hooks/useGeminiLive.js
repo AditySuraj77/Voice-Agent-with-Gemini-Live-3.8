@@ -14,6 +14,8 @@ export function useGeminiLive() {
   const [inputVolume, setInputVolume] = useState(0);
   const [error, setError] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const audioRecorderRef = useRef(null);
   const audioPlayerRef = useRef(null);
@@ -63,6 +65,8 @@ export function useGeminiLive() {
     try {
       setError(null);
       setSessionStatus('connecting');
+      setIsSearching(false);
+      setSearchQuery('');
 
       // Guard: Disconnect any existing session before starting a new one
       if (liveClientRef.current) {
@@ -84,6 +88,7 @@ export function useGeminiLive() {
 
       // 2. Initialize Gemini Live WebSocket client
       liveClientRef.current = new GeminiLiveClient({
+        backendUrl: BACKEND_URL,
         onOpen: () => {
           console.log('[useGeminiLive] Live session connected & established.');
           setSessionStatus('connected');
@@ -93,6 +98,8 @@ export function useGeminiLive() {
           console.log('[useGeminiLive] Live session closed.');
           setSessionStatus('disconnected');
           setConversationState('idle');
+          setIsSearching(false);
+          setSearchQuery('');
           if (audioRecorderRef.current) {
             audioRecorderRef.current.stop();
             audioRecorderRef.current = null;
@@ -102,6 +109,7 @@ export function useGeminiLive() {
           console.error('[useGeminiLive] Live client error:', err);
           setError('Live connection error occurred.');
           setSessionStatus('error');
+          setIsSearching(false);
         },
         onAudioChunk: (chunk) => {
           if (audioPlayerRef.current) {
@@ -114,12 +122,50 @@ export function useGeminiLive() {
           if (audioPlayerRef.current) {
             audioPlayerRef.current.stopAndClear();
           }
+          setIsSearching(false);
           setConversationState('listening');
         },
         onUserTurnFrozen: () => {
           // As soon as the assistant starts replying, freeze all preceding user bubbles so they can never be overwritten
           setMessages((prev) =>
             prev.map((m) => (m.sender === 'user' && m.isPartial ? { ...m, isPartial: false } : m))
+          );
+        },
+        onToolCall: (calls) => {
+          const searchCall = calls.find((c) => c.name === 'search_web');
+          if (searchCall) {
+            const query = searchCall.args?.query || '';
+            console.log(`[useGeminiLive] Tool call triggered: search_web "${query}"`);
+            setIsSearching(true);
+            setSearchQuery(query);
+            setConversationState('thinking');
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: 'tool-' + Date.now() + Math.random().toString(36).slice(2, 5),
+                sender: 'tool',
+                toolName: 'Tavily Search',
+                query,
+                text: `Searching the web for: "${query}"...`,
+                isSearching: true,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              },
+            ]);
+          }
+        },
+        onToolResponse: (responses) => {
+          console.log('[useGeminiLive] Tool response received. Resuming speech generation.');
+          setIsSearching(false);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.sender === 'tool' && m.isSearching
+                ? {
+                    ...m,
+                    isSearching: false,
+                    text: `Web search completed for: "${m.query}"`,
+                  }
+                : m
+            )
           );
         },
         onTranscript: ({ sender, text, isPartial }) => {
@@ -166,6 +212,7 @@ export function useGeminiLive() {
           });
         },
         onTurnComplete: () => {
+          setIsSearching(false);
           // Finalize any open partial messages
           setMessages((prev) =>
             prev.map((m) => (m.isPartial ? { ...m, isPartial: false } : m))
@@ -177,12 +224,12 @@ export function useGeminiLive() {
       await liveClientRef.current.connect(token, {
         model: targetModel,
         voiceName: selectedVoice,
-        systemInstruction: `You are an intuitive, highly adaptive conversational voice AI companion.
+        systemInstruction: `You are an intuitive, highly adaptive conversational voice AI companion with real-time web search capabilities.
 
 Core Behavioral Directives:
 1. Dynamic Language & Dialect Mirroring:
    - Always respond in the EXACT language, dialect, and linguistic blend used by the primary speaker (e.g., Hindi, Hinglish, English, or any other language/regional mix).
-   - Never switch to an unrequested language (such as Spanish, Portuguese, or French) due to acoustic ambiguity or background noise.
+   - Never switch to an unrequested language due to acoustic ambiguity or background noise.
    - If the user switches languages or speaks Hinglish/colloquial speech, naturally mirror that shift immediately.
 
 2. Tone, Mood & Emotion Adaptation:
@@ -193,11 +240,21 @@ Core Behavioral Directives:
 3. Background Noise & Interruption Resilience:
    - Only listen and respond to the primary user actively conversing with you.
    - When the user interrupts you while you are speaking, prioritize the user's interruption immediately and halt your previous thought.
-   - Maintain conversational context continuity: do not assume a random foreign language or unrelated topic due to acoustic distortion or microphone collision. Stay anchored to the ongoing dialogue and language.
-   - If a short acoustic snippet is ambiguous or distorted, interpret it naturally within the ongoing conversation or politely ask for clarification in the user's ongoing language.
+   - Maintain conversational context continuity.
 
 4. Fluid Topic Tracking:
-   - Always prioritize the user's latest question or intent. If the user asks a new question or changes the subject, immediately abandon any previous assumption or task and focus directly on the new query.`,
+   - Always prioritize the user's latest question or intent. If the user asks a new question or changes the subject, immediately abandon any previous assumption or task and focus directly on the new query.
+
+5. Mandatory Real-Time Web Search Tool (search_web):
+   - You HAVE the \`search_web\` tool available to search the live internet in real-time.
+   - You MUST call \`search_web\` immediately whenever the user asks for:
+     * Current weather or temperature (e.g., "Delhi ka taapman", "aaj ka mausam").
+     * Live sports, match updates, scores, schedules (e.g., "abhi kaun sa match chal raha hai").
+     * Real-time financial data, stock prices (e.g., "Google stock price").
+     * Today's breaking news, recent events, or trending facts.
+     * Any question about real-time, live, or changing information.
+   - NEVER say "Main live search nahi kar sakta" or "Main information nahi dekh sakta". You DO have real-time web search via \`search_web\`. Call it immediately!
+   - Once search results return, answer naturally and concisely in the user's spoken language (Hindi/Hinglish/English).`,
       });
 
       // 4. Initialize and start microphone recorder
@@ -225,6 +282,7 @@ Core Behavioral Directives:
       console.error('[useGeminiLive] Failed to start session:', err);
       setError(err.message || 'Failed to start session');
       setSessionStatus('error');
+      setIsSearching(false);
       if (audioRecorderRef.current) {
         audioRecorderRef.current.stop();
         audioRecorderRef.current = null;
@@ -253,6 +311,8 @@ Core Behavioral Directives:
     }
     setSessionStatus('disconnected');
     setConversationState('idle');
+    setIsSearching(false);
+    setSearchQuery('');
     setInputVolume(0);
   }, []);
 
@@ -295,8 +355,7 @@ Core Behavioral Directives:
   }, []);
 
   /**
-   * Switches model between Fast Voice and Deep Thinking Voice,
-   * preserving conversation history context.
+   * Switches model between Fast Voice and Deep Thinking Voice.
    */
   const switchModel = useCallback(async (newModel) => {
     if (newModel === currentModel) return;
@@ -307,7 +366,6 @@ Core Behavioral Directives:
     // If session is active, reconnect cleanly with the new model
     if (sessionStatus === 'connected' || sessionStatus === 'connecting') {
       endSession();
-      // Brief pause to allow socket cleanup
       setTimeout(() => {
         startSession(newModel);
       }, 300);
@@ -324,6 +382,8 @@ Core Behavioral Directives:
     inputVolume,
     error,
     messages,
+    isSearching,
+    searchQuery,
     startSession,
     endSession,
     toggleMute,

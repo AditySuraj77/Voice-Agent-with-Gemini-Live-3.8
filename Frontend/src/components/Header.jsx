@@ -1,16 +1,24 @@
 import React from 'react';
-import { Sparkles, Zap, BrainCircuit } from 'lucide-react';
+import { Sparkles, Zap, BrainCircuit, Globe } from 'lucide-react';
 
 export function Header({
   currentModel,
   onModelChange,
   sessionStatus,
   conversationState,
-  onOpenSettings,
+  isSearching = false,
 }) {
   const getStatusBadge = () => {
     switch (sessionStatus) {
       case 'connected':
+        if (isSearching) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 animate-pulse">
+              <Globe className="w-3.5 h-3.5 animate-spin" />
+              Searching Web
+            </span>
+          );
+        }
         if (conversationState === 'speaking') {
           return (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse">
@@ -70,6 +78,12 @@ export function Header({
               3.8 Live
             </span>
           </h1>
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="inline-flex items-center gap-1 text-cyan-400 font-medium">
+              <Globe className="w-3 h-3" /> Tavily Search
+            </span>
+            <span>• Speech-to-Speech</span>
+          </div>
         </div>
       </div>
 
