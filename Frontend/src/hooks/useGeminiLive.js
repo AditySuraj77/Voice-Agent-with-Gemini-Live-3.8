@@ -17,6 +17,44 @@ export function useGeminiLive() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Aristotle Interactive Whiteboard & Mastery states
+  const [activeSubject, setActiveSubject] = useState('Arithmetic'); // 'Arithmetic' | 'Chemistry' | 'Computer Science'
+  const [whiteboardItems, setWhiteboardItems] = useState([
+    {
+      id: 'wb-initial-1',
+      component: 'math',
+      title: 'Expanded Form & Place Values',
+      data: {
+        formula: '4,619 = 4,000 + 600 + 10 + 9',
+        isVerified: true,
+        breakdown: [
+          { digit: '4 in 1,000s', place: 'thousands', value: '4,000' },
+          { digit: '6 in 100s', place: 'hundreds', value: '600' },
+          { digit: '1 in 10s', place: 'tens', value: '10' },
+          { digit: '9 in 1s', place: 'ones', value: '9' },
+        ],
+        steps: [
+          'Breaking a whole number apart into the sum of its place values.',
+          'Try writing numbers out loud or in expanded form!',
+        ],
+      },
+    },
+  ]);
+
+  const [masteryGoal, setMasteryGoal] = useState({
+    title: 'Writing whole numbers in expanded form',
+    current: 2,
+    target: 4,
+    status: 'Solid. Recording your progress on this one.',
+  });
+
+  const [learningMap, setLearningMap] = useState([
+    { title: 'Skip counting & extending base-ten number patterns', completed: true },
+    { title: 'Explaining place-value patterns when multiplying', completed: false },
+    { title: 'Converting whole numbers between standard & word form', completed: true },
+    { title: 'Writing whole numbers in expanded form', current: true },
+  ]);
+
   const audioRecorderRef = useRef(null);
   const audioPlayerRef = useRef(null);
   const liveClientRef = useRef(null);
@@ -168,6 +206,34 @@ export function useGeminiLive() {
             )
           );
         },
+        onWhiteboardCall: (args) => {
+          console.log('[useGeminiLive] update_whiteboard received:', args);
+          setWhiteboardItems((prev) => {
+            const newItem = {
+              id: 'wb-' + Date.now() + Math.random().toString(36).slice(2, 5),
+              component: args.component || 'notes',
+              title: args.title || '',
+              content: typeof args.content === 'string' ? args.content : '',
+              data: typeof args.content === 'object' ? args.content : { text: args.content },
+              timestamp: new Date().toLocaleTimeString(),
+            };
+            if (args.action === 'replace') {
+              return [newItem];
+            } else if (args.action === 'clear') {
+              return [];
+            }
+            return [...prev, newItem];
+          });
+        },
+        onMasteryCall: (args) => {
+          console.log('[useGeminiLive] update_mastery received:', args);
+          setMasteryGoal({
+            title: args.topic || 'Current Focus',
+            current: Number(args.current) || 1,
+            target: Number(args.target) || 4,
+            status: args.statusText || 'Solid. Recording your progress.',
+          });
+        },
         onTranscript: ({ sender, text, isPartial }) => {
           if (!text) return;
 
@@ -220,41 +286,37 @@ export function useGeminiLive() {
         },
       });
 
-      // 3. Connect to WebSocket
+      // 3. Connect to WebSocket with Aristotle Socratic Whiteboard Tutor Persona
       await liveClientRef.current.connect(token, {
         model: targetModel,
         voiceName: selectedVoice,
-        systemInstruction: `You are an intuitive, highly adaptive conversational voice AI companion with real-time web search capabilities.
+        systemInstruction: `You are Aristotle, a friendly, encouraging, and patient 1-on-1 Socratic AI voice tutor with an interactive real-time whiteboard.
+Your primary role is to guide the student through Math/Arithmetic, Chemistry/Science, and Computer Science using Socratic inquiry and live whiteboard visuals.
 
-Core Behavioral Directives:
-1. Dynamic Language & Dialect Mirroring:
-   - Always respond in the EXACT language, dialect, and linguistic blend used by the primary speaker (e.g., Hindi, Hinglish, English, or any other language/regional mix).
-   - Never switch to an unrequested language due to acoustic ambiguity or background noise.
-   - If the user switches languages or speaks Hinglish/colloquial speech, naturally mirror that shift immediately.
+Core Pedagogical Directives (Aristotle Method):
+1. Proactive Whiteboard Usage (update_whiteboard):
+   - You MUST call \`update_whiteboard\` frequently as you speak to draw or write on the student's canvas in real-time.
+   - For Math / Arithmetic: When explaining place values or numbers (like 4,619 or 583), immediately call \`update_whiteboard\` with component "math" or "notes" showing expanded form (e.g. "4,619 = 4,000 + 600 + 10 + 9 ✓").
+   - For Chemistry / Science: When asked to explain visually, or when discussing states of matter (solids, liquids, gases) or pure substances vs mixtures, immediately call \`update_whiteboard\` with component "diagram" (type: "states" or "classification_tree").
+   - For Computer Science / Python: When discussing loops, variables, or functions, call \`update_whiteboard\` with component "code" containing the Python snippet so the student can inspect and edit it.
 
-2. Tone, Mood & Emotion Adaptation:
-   - Listen to the user's emotional undertone, pacing, vibe, and energy.
-   - Match the user's tone and emotion: be warm, relaxed, enthusiastic, empathetic, or concise depending on how the user speaks to you.
-   - Keep answers natural, spoken, and conversational (avoid robotic or overly verbose essays).
+2. Socratic Scaffolding & Encouragement:
+   - Do NOT dump full essays or answers. Ask one targeted question at a time to test understanding.
+   - When the student answers correctly, enthusiastically praise them (e.g. "That's exactly right!", "You've got that down solid!"), write a checkmark on the board, and call \`update_mastery\`.
+   - When the student struggles, hesitates, or says "I don't know":
+     * Respond with warm reassurance: "No worries — let me show you!"
+     * Break the problem down into simple steps and put the breakdown on the whiteboard.
+   - When testing code or loops, guide the student to trace through the first iterations step-by-step: "What are the values of i and x on the first iteration?"
 
-3. Background Noise & Interruption Resilience:
-   - Only listen and respond to the primary user actively conversing with you.
-   - When the user interrupts you while you are speaking, prioritize the user's interruption immediately and halt your previous thought.
-   - Maintain conversational context continuity.
+3. Curriculum & Subject Anchor:
+   - When a student wants to jump prematurely across distant subjects (e.g., from basic states of matter straight into organic chemistry equations), gently anchor them: "We'll get there, I promise! But it will make much more sense once we have a few foundational building blocks first. Let's finish this one quick idea."
 
-4. Fluid Topic Tracking:
-   - Always prioritize the user's latest question or intent. If the user asks a new question or changes the subject, immediately abandon any previous assumption or task and focus directly on the new query.
+4. Natural Speech & Language Mirroring:
+   - Speak conversationally, warmly, and concisely (like a great British or neutral-accented teacher).
+   - Fluidly mirror the student's language (English, Hindi, or natural Hinglish).
 
-5. Mandatory Real-Time Web Search Tool (search_web):
-   - You HAVE the \`search_web\` tool available to search the live internet in real-time.
-   - You MUST call \`search_web\` immediately whenever the user asks for:
-     * Current weather or temperature (e.g., "Delhi ka taapman", "aaj ka mausam").
-     * Live sports, match updates, scores, schedules (e.g., "abhi kaun sa match chal raha hai").
-     * Real-time financial data, stock prices (e.g., "Google stock price").
-     * Today's breaking news, recent events, or trending facts.
-     * Any question about real-time, live, or changing information.
-   - NEVER say "Main live search nahi kar sakta" or "Main information nahi dekh sakta". You DO have real-time web search via \`search_web\`. Call it immediately!
-   - Once search results return, answer naturally and concisely in the user's spoken language (Hindi/Hinglish/English).`,
+5. Real-Time Web Search Tool (search_web):
+   - You have the \`search_web\` tool available whenever fresh facts, real-time news, or external references are needed.`,
       });
 
       // 4. Initialize and start microphone recorder
@@ -372,6 +434,102 @@ Core Behavioral Directives:
     }
   }, [currentModel, sessionStatus, endSession, startSession]);
 
+  /**
+   * Switches learning subject & updates initial whiteboard defaults.
+   */
+  const switchSubject = useCallback((subject) => {
+    setActiveSubject(subject);
+    if (subject === 'Chemistry') {
+      setWhiteboardItems([
+        {
+          id: 'wb-chem-1',
+          component: 'diagram',
+          title: 'States of Matter',
+          data: {
+            diagramType: 'states',
+          },
+        },
+      ]);
+      setMasteryGoal({
+        title: 'Classifying States of Matter',
+        current: 1,
+        target: 4,
+        status: 'Solid vs Liquid vs Gas particle arrangement.',
+      });
+      setLearningMap([
+        { title: 'Identifying properties of solids, liquids, & gases', current: true },
+        { title: 'Predicting shape and volume changes in containers', completed: false },
+        { title: 'Classifying pure substances vs mixtures', completed: false },
+        { title: 'Understanding molecular compositions', completed: false },
+      ]);
+    } else if (subject === 'Computer Science') {
+      setWhiteboardItems([
+        {
+          id: 'wb-cs-1',
+          component: 'code',
+          title: "Adi's For Loop Example",
+          content: 'x = 1\nfor i in range(0, 10):\n    print(i * x)\n    x += 1',
+        },
+      ]);
+      setMasteryGoal({
+        title: 'Control Flow in Python (conditionals & loops)',
+        current: 3,
+        target: 4,
+        status: 'Conditionals nailed. Moving to loops.',
+      });
+      setLearningMap([
+        { title: '1. Programming Fundamentals (variables, datatypes)', completed: true },
+        { title: '2. Control Flow (if, elif, else, loops)', current: true },
+        { title: '3. Functions (parameters, return values)', completed: false },
+        { title: '4. Data Structures (lists, dicts)', completed: false },
+      ]);
+    } else {
+      // Arithmetic
+      setWhiteboardItems([
+        {
+          id: 'wb-math-1',
+          component: 'math',
+          title: 'Expanded Form & Place Values',
+          data: {
+            formula: '4,619 = 4,000 + 600 + 10 + 9',
+            isVerified: true,
+            breakdown: [
+              { digit: '4 in 1,000s', place: 'thousands', value: '4,000' },
+              { digit: '6 in 100s', place: 'hundreds', value: '600' },
+              { digit: '1 in 10s', place: 'tens', value: '10' },
+              { digit: '9 in 1s', place: 'ones', value: '9' },
+            ],
+            steps: [
+              'Breaking a whole number apart into the sum of its place values.',
+              'Try writing numbers out loud or in expanded form!',
+            ],
+          },
+        },
+      ]);
+      setMasteryGoal({
+        title: 'Writing whole numbers in expanded form',
+        current: 2,
+        target: 4,
+        status: 'Recording your progress on this one.',
+      });
+    }
+
+    if (liveClientRef.current && liveClientRef.current.isConnected) {
+      sendTextMessage(`Let's switch our focus to ${subject}.`);
+    }
+  }, [sendTextMessage]);
+
+  /**
+   * User submits edited code from the in-canvas CodeSandbox to Aristotle.
+   */
+  const submitCodeToAristotle = useCallback((codeSnippet) => {
+    sendTextMessage(`Here is my updated Python code:\n\`\`\`python\n${codeSnippet}\n\`\`\`\nCan you trace through it with me?`);
+  }, [sendTextMessage]);
+
+  const clearWhiteboard = useCallback(() => {
+    setWhiteboardItems([]);
+  }, []);
+
   return {
     sessionStatus,
     conversationState,
@@ -384,6 +542,13 @@ Core Behavioral Directives:
     messages,
     isSearching,
     searchQuery,
+    activeSubject,
+    whiteboardItems,
+    masteryGoal,
+    learningMap,
+    switchSubject,
+    submitCodeToAristotle,
+    clearWhiteboard,
     startSession,
     endSession,
     toggleMute,

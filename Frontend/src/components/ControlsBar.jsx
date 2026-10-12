@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mic, MicOff, Send, PhoneCall, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, ArrowUp, PhoneCall, PhoneOff, Volume2 } from 'lucide-react';
 
 export function ControlsBar({
   sessionStatus,
@@ -24,87 +24,67 @@ export function ControlsBar({
   };
 
   return (
-    <div className="border-t border-slate-800/80 bg-slate-900/90 backdrop-blur-md px-4 py-4 md:px-8">
-      <div className="max-w-4xl mx-auto flex flex-col gap-3">
-        {/* Text Input Row */}
-        <form onSubmit={handleSend} className="flex items-center gap-2">
+    <footer className="fixed bottom-4 left-0 right-0 z-30 px-4 flex justify-center pointer-events-none">
+      <div className="w-full max-w-2xl bg-white/95 backdrop-blur-md rounded-2xl border border-stone-300 shadow-xl p-2.5 flex items-center gap-3 pointer-events-auto font-sans">
+        {/* Text Input to Aristotle */}
+        <form onSubmit={handleSend} className="flex-1 flex items-center gap-2">
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder={
-              isConnected
-                ? "Type a message or speak naturally..."
-                : "Start session to speak or type..."
-            }
-            className="flex-1 bg-slate-800/90 border border-slate-700/80 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+            placeholder="Type to Aristotle..."
+            className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-4 py-2 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-rose-500/30 transition-all font-serif"
           />
           <button
             type="submit"
-            disabled={!inputText.trim() || !isConnected}
-            className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white transition-all shadow-md"
-            title="Send Text Message"
+            disabled={!inputText.trim()}
+            className="w-8 h-8 rounded-xl bg-stone-800 hover:bg-stone-900 disabled:opacity-30 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer disabled:cursor-not-allowed"
+            title="Send to Aristotle"
           >
-            <Send className="w-4 h-4" />
+            <ArrowUp className="w-4 h-4" />
           </button>
         </form>
 
-        {/* Voice Session Controls Row */}
-        <div className="flex items-center justify-between pt-1">
-          {/* Status & Volume feedback */}
-          <div className="flex items-center gap-3">
-            {isConnected && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 font-medium">Mic Level:</span>
-                <div className="w-20 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
-                  <div
-                    className="h-full bg-emerald-400 transition-all duration-75"
-                    style={{ width: `${Math.min(100, inputVolume * 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="h-6 w-px bg-stone-200" />
 
-          {/* Core Action Buttons */}
-          <div className="flex items-center gap-3">
-            {/* Mute Button */}
-            {isConnected && (
-              <button
-                onClick={onToggleMute}
-                className={`p-3 rounded-xl border text-sm font-medium transition-all ${
-                  isMuted
-                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
-                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                }`}
-                title={isMuted ? 'Unmute Microphone' : 'Mute Microphone'}
-              >
-                {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
-            )}
+        {/* Audio Mic Level feedback & Mute button */}
+        <div className="flex items-center gap-2">
+          {isConnected && (
+            <button
+              onClick={onToggleMute}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
+                isMuted
+                  ? 'bg-rose-50 border-rose-200 text-rose-600'
+                  : 'bg-stone-100 hover:bg-stone-200 border-stone-200 text-stone-700'
+              }`}
+              title={isMuted ? 'Unmute Mic (Space)' : 'Mute Mic (Space)'}
+            >
+              {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-rose-600" />}
+              <span className="text-[11px]">{isMuted ? 'Unmute' : 'Mute'}</span>
+            </button>
+          )}
 
-            {/* Session Connect/Disconnect Button */}
-            {!isConnected ? (
-              <button
-                onClick={onStartSession}
-                disabled={isConnecting}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-sm transition-all shadow-lg shadow-indigo-500/25 disabled:opacity-50"
-              >
-                <PhoneCall className="w-4 h-4" />
-                {isConnecting ? 'Connecting...' : 'Start Voice Session'}
-              </button>
-            ) : (
-              <button
-                onClick={onEndSession}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-medium text-sm transition-all shadow-lg shadow-rose-500/25"
-              >
-                <PhoneOff className="w-4 h-4" />
-                End Session
-              </button>
-            )}
-          </div>
+          {/* Connect / Disconnect Action */}
+          {!isConnected ? (
+            <button
+              onClick={onStartSession}
+              disabled={isConnecting}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-medium text-xs transition-all shadow-md shadow-rose-600/20 disabled:opacity-50"
+            >
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span>{isConnecting ? 'Connecting...' : 'Start Voice Session'}</span>
+            </button>
+          ) : (
+            <button
+              onClick={onEndSession}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 font-medium text-xs transition-all"
+            >
+              <PhoneOff className="w-3.5 h-3.5 text-rose-600" />
+              <span>End Session</span>
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </footer>
   );
 }

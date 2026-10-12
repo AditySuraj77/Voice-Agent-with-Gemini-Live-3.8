@@ -16,6 +16,8 @@ export class GeminiLiveClient {
     onUserTurnFrozen,
     onToolCall,
     onToolResponse,
+    onWhiteboardCall,
+    onMasteryCall,
   }) {
     this.backendUrl = backendUrl;
     this.onOpen = onOpen;
@@ -28,6 +30,8 @@ export class GeminiLiveClient {
     this.onUserTurnFrozen = onUserTurnFrozen;
     this.onToolCall = onToolCall;
     this.onToolResponse = onToolResponse;
+    this.onWhiteboardCall = onWhiteboardCall;
+    this.onMasteryCall = onMasteryCall;
 
     this.clientId = Math.random().toString(36).slice(2, 6);
     this.msgCounter = 0;
@@ -166,6 +170,58 @@ export class GeminiLiveClient {
                     },
                   },
                   required: ['query'],
+                },
+              },
+              {
+                name: 'update_whiteboard',
+                description: 'Render or update visual interactive educational content on the student whiteboard canvas in real-time (math equations, science diagrams, interactive code editor, classification trees, tables, or notes).',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    component: {
+                      type: 'STRING',
+                      description: 'Type of component to render: "math", "diagram", "code", "table", or "notes"',
+                    },
+                    title: {
+                      type: 'STRING',
+                      description: 'Headline or topic title for the whiteboard entry',
+                    },
+                    content: {
+                      type: 'STRING',
+                      description: 'The core content: code text, math formula/expansion, diagram type or note item',
+                    },
+                    action: {
+                      type: 'STRING',
+                      description: 'Action on the whiteboard: "append", "replace", or "clear"',
+                    },
+                  },
+                  required: ['component', 'content'],
+                },
+              },
+              {
+                name: 'update_mastery',
+                description: 'Update the student learning progress, today focus, or mastery meter on the learning map.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    topic: {
+                      type: 'STRING',
+                      description: 'The skill or topic name being tracked',
+                    },
+                    current: {
+                      type: 'NUMBER',
+                      description: 'Current progress level or problems solved',
+                    },
+                    target: {
+                      type: 'NUMBER',
+                      description: 'Target goal level or total problems for mastery',
+                    },
+                    statusText: {
+                      type: 'STRING',
+                      description: 'Short encouraging status message (e.g. "Solid. Recording your progress.")',
+                    },
+                  },
+                  required: ['topic', 'current', 'target'],
                 },
               },
             ],
@@ -395,6 +451,30 @@ export class GeminiLiveClient {
           name: call.name,
           response: {
             result: searchResult,
+          },
+        });
+      } else if (call.name === 'update_whiteboard') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing update_whiteboard call:`, call.args);
+        if (this.onWhiteboardCall) {
+          this.onWhiteboardCall(call.args);
+        }
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: { status: 'success', message: 'Whiteboard canvas updated successfully.' },
+          },
+        });
+      } else if (call.name === 'update_mastery') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing update_mastery call:`, call.args);
+        if (this.onMasteryCall) {
+          this.onMasteryCall(call.args);
+        }
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: { status: 'success', message: 'Mastery progress updated.' },
           },
         });
       }
