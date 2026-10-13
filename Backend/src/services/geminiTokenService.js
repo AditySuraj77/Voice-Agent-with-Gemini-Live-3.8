@@ -7,6 +7,64 @@ export const GEMINI_TOOLS = [
   {
     functionDeclarations: [
       {
+        name: 'write_on_whiteboard',
+        description: 'MANDATORY FOR TEACHER: Call this tool every time you explain or teach a concept, solve a problem, or ask a question. Write down the topic heading and clear, concise bullet points, definitions, formulas, or code on the student infinite whiteboard canvas in real time.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            topic: {
+              type: 'STRING',
+              description: 'Topic heading or concept name (e.g., "Newton\'s First Law", "Expanded Form", "Quadratic Formula", "Python For Loop")',
+            },
+            notes: {
+              type: 'ARRAY',
+              items: {
+                type: 'STRING',
+              },
+              description: 'List of concise bullet points, definitions, or steps to display on the whiteboard',
+            },
+            cardType: {
+              type: 'STRING',
+              description: 'Visual type of the card: "concept", "formula", "code", "question", or "step"',
+            },
+            formula: {
+              type: 'STRING',
+              description: 'Mathematical or scientific equation (e.g., "F = m * a", "342 = 300 + 40 + 2")',
+            },
+            code: {
+              type: 'STRING',
+              description: 'Optional programming code snippet if teaching programming or algorithms',
+            },
+            question: {
+              type: 'STRING',
+              description: 'The Socratic question currently asked to the student to prompt their thinking',
+            },
+            studentAnswer: {
+              type: 'STRING',
+              description: 'If student answered correctly, record their verified answer with a checkmark (e.g. "Adi: 40 ✓")',
+            },
+            clearPrevious: {
+              type: 'BOOLEAN',
+              description: 'Set true if clearing the board for a new topic, false to append new notes',
+            },
+          },
+          required: ['topic', 'notes'],
+        },
+      },
+      {
+        name: 'clear_whiteboard',
+        description: 'Erase or clear all notes from the student whiteboard canvas to start fresh.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            reason: {
+              type: 'STRING',
+              description: 'Optional reason for clearing the board',
+            },
+          },
+        },
+      },
+      {
         name: 'search_web',
         description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
         parameters: {
@@ -18,58 +76,6 @@ export const GEMINI_TOOLS = [
             },
           },
           required: ['query'],
-        },
-      },
-      {
-        name: 'update_whiteboard',
-        description: 'Render or update visual interactive educational content on the student whiteboard canvas in real-time (math equations, science diagrams, interactive code editor, classification trees, tables, or notes).',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            component: {
-              type: 'STRING',
-              description: 'Type of component to render: "math", "diagram", "code", "table", or "notes"',
-            },
-            title: {
-              type: 'STRING',
-              description: 'Headline or topic title for the whiteboard entry',
-            },
-            content: {
-              type: 'STRING',
-              description: 'The core content: code text, math formula/expansion, diagram type or note item',
-            },
-            action: {
-              type: 'STRING',
-              description: 'Action on the whiteboard: "append", "replace", or "clear"',
-            },
-          },
-          required: ['component', 'content'],
-        },
-      },
-      {
-        name: 'update_mastery',
-        description: 'Update the student learning progress, today focus, or mastery meter on the learning map.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            topic: {
-              type: 'STRING',
-              description: 'The skill or topic name being tracked',
-            },
-            current: {
-              type: 'NUMBER',
-              description: 'Current progress level or problems solved',
-            },
-            target: {
-              type: 'NUMBER',
-              description: 'Target goal level or total problems for mastery',
-            },
-            statusText: {
-              type: 'STRING',
-              description: 'Short encouraging status message (e.g. "Solid. Recording your progress.")',
-            },
-          },
-          required: ['topic', 'current', 'target'],
         },
       },
     ],

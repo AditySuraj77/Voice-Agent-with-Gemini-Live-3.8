@@ -5,7 +5,7 @@ import { GeminiLiveClient } from '../services/geminiLiveClient.js';
 
 const BACKEND_URL = 'http://localhost:3001';
 
-export function useGeminiLive() {
+export function useGeminiLive({ studentProfile } = {}) {
   const [sessionStatus, setSessionStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'error'
   const [conversationState, setConversationState] = useState('idle'); // 'idle' | 'listening' | 'thinking' | 'speaking'
   const [currentModel, setCurrentModel] = useState('gemini-3.8-live');
@@ -17,43 +17,13 @@ export function useGeminiLive() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Aristotle Interactive Whiteboard & Mastery states
-  const [activeSubject, setActiveSubject] = useState('Arithmetic'); // 'Arithmetic' | 'Chemistry' | 'Computer Science'
-  const [whiteboardItems, setWhiteboardItems] = useState([
-    {
-      id: 'wb-initial-1',
-      component: 'math',
-      title: 'Expanded Form & Place Values',
-      data: {
-        formula: '4,619 = 4,000 + 600 + 10 + 9',
-        isVerified: true,
-        breakdown: [
-          { digit: '4 in 1,000s', place: 'thousands', value: '4,000' },
-          { digit: '6 in 100s', place: 'hundreds', value: '600' },
-          { digit: '1 in 10s', place: 'tens', value: '10' },
-          { digit: '9 in 1s', place: 'ones', value: '9' },
-        ],
-        steps: [
-          'Breaking a whole number apart into the sum of its place values.',
-          'Try writing numbers out loud or in expanded form!',
-        ],
-      },
-    },
-  ]);
+  // Live Whiteboard notes dynamically populated as the Teacher explains
+  const [whiteboardItems, setWhiteboardItems] = useState([]);
 
-  const [masteryGoal, setMasteryGoal] = useState({
-    title: 'Writing whole numbers in expanded form',
-    current: 2,
-    target: 4,
-    status: 'Solid. Recording your progress on this one.',
-  });
-
-  const [learningMap, setLearningMap] = useState([
-    { title: 'Skip counting & extending base-ten number patterns', completed: true },
-    { title: 'Explaining place-value patterns when multiplying', completed: false },
-    { title: 'Converting whole numbers between standard & word form', completed: true },
-    { title: 'Writing whole numbers in expanded form', current: true },
-  ]);
+  // Turn and speech synchronization refs
+  const hasTurnWhiteboardUpdateRef = useRef(false);
+  const currentTurnAssistantTextRef = useRef('');
+  const lastUserQueryRef = useRef('');
 
   const audioRecorderRef = useRef(null);
   const audioPlayerRef = useRef(null);
@@ -97,7 +67,14 @@ export function useGeminiLive() {
   };
 
   /**
-   * Starts a voice session.
+   * Manually clears the whiteboard.
+   */
+  const clearWhiteboard = useCallback(() => {
+    setWhiteboardItems([]);
+  }, []);
+
+  /**
+   * Starts a voice session with the AI Teacher.
    */
   const startSession = useCallback(async (targetModel = currentModel) => {
     try {
@@ -105,8 +82,10 @@ export function useGeminiLive() {
       setSessionStatus('connecting');
       setIsSearching(false);
       setSearchQuery('');
+      hasTurnWhiteboardUpdateRef.current = false;
+      currentTurnAssistantTextRef.current = '';
 
-      // Guard: Disconnect any existing session before starting a new one
+      // Disconnect any existing session before starting a new one
       if (liveClientRef.current) {
         liveClientRef.current.disconnect();
         liveClientRef.current = null;
@@ -155,7 +134,7 @@ export function useGeminiLive() {
           }
         },
         onInterrupted: () => {
-          // Barge-in: flush playing audio queue immediately
+          // User barged in: clear audio queue immediately
           console.log('[useGeminiLive] User barged in: clearing active audio playback.');
           if (audioPlayerRef.current) {
             audioPlayerRef.current.stopAndClear();
@@ -164,7 +143,6 @@ export function useGeminiLive() {
           setConversationState('listening');
         },
         onUserTurnFrozen: () => {
-          // As soon as the assistant starts replying, freeze all preceding user bubbles so they can never be overwritten
           setMessages((prev) =>
             prev.map((m) => (m.sender === 'user' && m.isPartial ? { ...m, isPartial: false } : m))
           );
@@ -206,48 +184,90 @@ export function useGeminiLive() {
             )
           );
         },
-        onWhiteboardCall: (args) => {
-          console.log('[useGeminiLive] update_whiteboard received:', args);
-          setWhiteboardItems((prev) => {
-            const newItem = {
-              id: 'wb-' + Date.now() + Math.random().toString(36).slice(2, 5),
-              component: args.component || 'notes',
-              title: args.title || '',
-              content: typeof args.content === 'string' ? args.content : '',
-              data: typeof args.content === 'object' ? args.content : { text: args.content },
-              timestamp: new Date().toLocaleTimeString(),
-            };
-            if (args.action === 'replace') {
-              return [newItem];
-            } else if (args.action === 'clear') {
-              return [];
-            }
-            return [...prev, newItem];
-          });
+        onClearWhiteboard: () => {
+          console.log('[useGeminiLive] clear_whiteboard tool executed.');
+          setWhiteboardItems([]);
         },
-        onMasteryCall: (args) => {
-          console.log('[useGeminiLive] update_mastery received:', args);
-          setMasteryGoal({
-            title: args.topic || 'Current Focus',
-            current: Number(args.current) || 1,
-            target: Number(args.target) || 4,
-            status: args.statusText || 'Solid. Recording your progress.',
-          });
+        onWhiteboardCall: (args) => {
+          console.log('[useGeminiLive] Whiteboard tool executed:', args);
+
+          if (args.action === 'clear') {
+            setWhiteboardItems([]);
+            return;
+          }
+
+          let topic = (args.topic || args.title || '').trim();
+          // Filter out junk/conversational titles
+          if (topic === '*' || topic.toLowerCase() === 'hey' || topic.length < 2) {
+            topic = '';
+          }
+
+          let notes = [];
+          if (Array.isArray(args.notes)) {
+            notes = args.notes.filter(Boolean);
+          } else if (typeof args.notes === 'string') {
+            notes = [args.notes];
+          } else if (typeof args.content === 'string') {
+            notes = args.content.split('\n').map((l) => l.trim()).filter(Boolean);
+          } else if (Array.isArray(args.content)) {
+            notes = args.content.filter(Boolean);
+          }
+
+          if (notes.length === 0 && (args.explanation || args.summary)) {
+            notes = [args.explanation || args.summary];
+          }
+
+          // Sanitize studentAnswer (strip trailing checkmark so it's clean)
+          let studentAnswer = null;
+          if (args.studentAnswer) {
+            studentAnswer = args.studentAnswer.replace(/[✓✔\s]+$/, '').trim();
+          }
+
+          const newItem = {
+            id: 'wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+            topic,
+            notes,
+            cardType: args.cardType || (args.formula ? 'formula' : args.code ? 'code' : 'concept'),
+            formula: args.formula || null,
+            code: args.code || (args.component === 'code' ? args.content : null),
+            question: args.question || null,
+            studentAnswer,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+
+          if (args.clearPrevious || args.action === 'replace') {
+            setWhiteboardItems([newItem]);
+          } else {
+            setWhiteboardItems((prev) => {
+              // Deduplicate if the exact same topic and formula were just added
+              const lastItem = prev[prev.length - 1];
+              if (
+                lastItem &&
+                lastItem.topic === topic &&
+                lastItem.formula === (args.formula || null) &&
+                JSON.stringify(lastItem.notes) === JSON.stringify(notes)
+              ) {
+                return prev;
+              }
+              return [...prev, newItem];
+            });
+          }
         },
         onTranscript: ({ sender, text, isPartial }) => {
           if (!text) return;
 
+          if (sender === 'user' && !isPartial) {
+            lastUserQueryRef.current = text;
+          }
+
           setMessages((prev) => {
             const lastMsg = prev[prev.length - 1];
 
-            // If the latest message in chat belongs to this same sender
             if (lastMsg && lastMsg.sender === sender) {
-              // If sender is assistant, or user with active streaming bubble
               let nextText = text;
               if (sender === 'user') {
-                nextText = text; // User text is progressive cumulative text from Gemini STT
+                nextText = text;
               } else {
-                // Assistant text: if it's already an extension of lastMsg, avoid exact duplicate chunks
                 if (lastMsg.text.endsWith(text)) {
                   nextText = lastMsg.text;
                 } else {
@@ -263,7 +283,6 @@ export function useGeminiLive() {
               };
               return updated;
             } else {
-              // Start a new message bubble (new speaker turn)
               return [
                 ...prev,
                 {
@@ -279,44 +298,56 @@ export function useGeminiLive() {
         },
         onTurnComplete: () => {
           setIsSearching(false);
-          // Finalize any open partial messages
           setMessages((prev) =>
             prev.map((m) => (m.isPartial ? { ...m, isPartial: false } : m))
           );
         },
       });
 
-      // 3. Connect to WebSocket with Aristotle Socratic Whiteboard Tutor Persona
+      // 3. Connect to WebSocket with Aristotle Socratic Direct Whiteboard Persona
+      const studentName = studentProfile?.name || 'Adi';
+      const studentGrade = studentProfile?.grade || 'Class 8-10 / Middle School';
+      const studentInterests = studentProfile?.interests || 'Cricket, Science experiments, Video games';
+      const studentLang = studentProfile?.preferredLanguage || 'Hinglish (Hindi + English mix)';
+      const studentGoal = studentProfile?.learningGoal || 'Conceptual clarity and step-by-step problem solving';
+
+      const teacherSystemInstruction = `You are Aristotle, an exceptional 1-on-1 Socratic AI voice tutor with an interactive real-time whiteboard.
+
+STUDENT PROFILE & PERSONALIZATION:
+- Student Name: "${studentName}". Always address them warmly by their name ("${studentName}").
+- Level / Grade: "${studentGrade}". Adapt vocabulary and mathematical difficulty accordingly.
+- Interests & Hobbies: "${studentInterests}". Freely relate concepts, word problems, and real-world analogies to these interests (e.g. physics of cricket bowling/batting, gaming framerates, coding logic, etc.)!
+- Language Preference: "${studentLang}". Speak naturally in this style.
+- Goal: "${studentGoal}".
+
+You can teach ANY subject (Math, Physics, Chemistry, Biology, Computer Science, History, Hindi, English, Economics, etc.).
+
+CRITICAL WHITEBOARD TEACHING DIRECTIVE:
+You write directly on the student's whiteboard canvas.
+NEVER write conversational small-talk (like "आज हम पढ़ेंगे", "यह बहुत दिलचस्प विषय है", "ठीक है जहां से चाहो") on the board!
+Keep conversational chit-chat strictly in your SPOKEN VOICE.
+On the whiteboard, write ONLY:
+1. Topic heading (\`topic\`)
+2. Core definitions, steps, or bullet points (\`notes\`)
+3. Mathematical formulas or equations (\`formula\`, e.g. "342 = 300 + 40 + 2" or "F = m · a")
+4. Code blocks (\`code\`)
+5. Socratic questions for the student (\`question\`)
+6. Verified student answers with checkmark (\`studentAnswer\`, e.g. "${studentName}: 3247 ✓" or "${studentName}: 4 valence electrons ✓")
+
+ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
+YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
+
+Socratic Dialogue Rules:
+- Keep your speech concise (1 to 3 sentences maximum per turn).
+- Ask one question at a time to keep ${studentName} thinking and answering out loud.
+- When ${studentName} answers, praise them warmly, verify their answer, and write it on the board with a checkmark!
+
+If the student asks to clear the board, call \`clear_whiteboard\`.`;
+
       await liveClientRef.current.connect(token, {
         model: targetModel,
         voiceName: selectedVoice,
-        systemInstruction: `You are Aristotle, a friendly, encouraging, and patient 1-on-1 Socratic AI voice tutor with an interactive real-time whiteboard.
-Your primary role is to guide the student through Math/Arithmetic, Chemistry/Science, and Computer Science using Socratic inquiry and live whiteboard visuals.
-
-Core Pedagogical Directives (Aristotle Method):
-1. Proactive Whiteboard Usage (update_whiteboard):
-   - You MUST call \`update_whiteboard\` frequently as you speak to draw or write on the student's canvas in real-time.
-   - For Math / Arithmetic: When explaining place values or numbers (like 4,619 or 583), immediately call \`update_whiteboard\` with component "math" or "notes" showing expanded form (e.g. "4,619 = 4,000 + 600 + 10 + 9 ✓").
-   - For Chemistry / Science: When asked to explain visually, or when discussing states of matter (solids, liquids, gases) or pure substances vs mixtures, immediately call \`update_whiteboard\` with component "diagram" (type: "states" or "classification_tree").
-   - For Computer Science / Python: When discussing loops, variables, or functions, call \`update_whiteboard\` with component "code" containing the Python snippet so the student can inspect and edit it.
-
-2. Socratic Scaffolding & Encouragement:
-   - Do NOT dump full essays or answers. Ask one targeted question at a time to test understanding.
-   - When the student answers correctly, enthusiastically praise them (e.g. "That's exactly right!", "You've got that down solid!"), write a checkmark on the board, and call \`update_mastery\`.
-   - When the student struggles, hesitates, or says "I don't know":
-     * Respond with warm reassurance: "No worries — let me show you!"
-     * Break the problem down into simple steps and put the breakdown on the whiteboard.
-   - When testing code or loops, guide the student to trace through the first iterations step-by-step: "What are the values of i and x on the first iteration?"
-
-3. Curriculum & Subject Anchor:
-   - When a student wants to jump prematurely across distant subjects (e.g., from basic states of matter straight into organic chemistry equations), gently anchor them: "We'll get there, I promise! But it will make much more sense once we have a few foundational building blocks first. Let's finish this one quick idea."
-
-4. Natural Speech & Language Mirroring:
-   - Speak conversationally, warmly, and concisely (like a great British or neutral-accented teacher).
-   - Fluidly mirror the student's language (English, Hindi, or natural Hinglish).
-
-5. Real-Time Web Search Tool (search_web):
-   - You have the \`search_web\` tool available whenever fresh facts, real-time news, or external references are needed.`,
+        systemInstruction: teacherSystemInstruction,
       });
 
       // 4. Initialize and start microphone recorder
@@ -354,7 +385,7 @@ Core Pedagogical Directives (Aristotle Method):
         liveClientRef.current = null;
       }
     }
-  }, [currentModel, selectedVoice, conversationState]);
+  }, [currentModel, selectedVoice, conversationState, studentProfile]);
 
   /**
    * Ends the active voice session.
@@ -395,7 +426,8 @@ Core Pedagogical Directives (Aristotle Method):
   const sendTextMessage = useCallback((text) => {
     if (!text || !text.trim()) return;
 
-    // Add user message to UI immediately
+    lastUserQueryRef.current = text.trim();
+
     setMessages((prev) => [
       ...prev,
       {
@@ -412,7 +444,7 @@ Core Pedagogical Directives (Aristotle Method):
     if (liveClientRef.current && liveClientRef.current.isConnected) {
       liveClientRef.current.sendTextMessage(text.trim());
     } else {
-      setError('Not connected. Start session to chat.');
+      setError('Session not connected. Please click "Start Voice Session" or connect first.');
     }
   }, []);
 
@@ -425,7 +457,6 @@ Core Pedagogical Directives (Aristotle Method):
     console.log(`[useGeminiLive] Switching model from ${currentModel} to ${newModel}`);
     setCurrentModel(newModel);
 
-    // If session is active, reconnect cleanly with the new model
     if (sessionStatus === 'connected' || sessionStatus === 'connecting') {
       endSession();
       setTimeout(() => {
@@ -433,102 +464,6 @@ Core Pedagogical Directives (Aristotle Method):
       }, 300);
     }
   }, [currentModel, sessionStatus, endSession, startSession]);
-
-  /**
-   * Switches learning subject & updates initial whiteboard defaults.
-   */
-  const switchSubject = useCallback((subject) => {
-    setActiveSubject(subject);
-    if (subject === 'Chemistry') {
-      setWhiteboardItems([
-        {
-          id: 'wb-chem-1',
-          component: 'diagram',
-          title: 'States of Matter',
-          data: {
-            diagramType: 'states',
-          },
-        },
-      ]);
-      setMasteryGoal({
-        title: 'Classifying States of Matter',
-        current: 1,
-        target: 4,
-        status: 'Solid vs Liquid vs Gas particle arrangement.',
-      });
-      setLearningMap([
-        { title: 'Identifying properties of solids, liquids, & gases', current: true },
-        { title: 'Predicting shape and volume changes in containers', completed: false },
-        { title: 'Classifying pure substances vs mixtures', completed: false },
-        { title: 'Understanding molecular compositions', completed: false },
-      ]);
-    } else if (subject === 'Computer Science') {
-      setWhiteboardItems([
-        {
-          id: 'wb-cs-1',
-          component: 'code',
-          title: "Adi's For Loop Example",
-          content: 'x = 1\nfor i in range(0, 10):\n    print(i * x)\n    x += 1',
-        },
-      ]);
-      setMasteryGoal({
-        title: 'Control Flow in Python (conditionals & loops)',
-        current: 3,
-        target: 4,
-        status: 'Conditionals nailed. Moving to loops.',
-      });
-      setLearningMap([
-        { title: '1. Programming Fundamentals (variables, datatypes)', completed: true },
-        { title: '2. Control Flow (if, elif, else, loops)', current: true },
-        { title: '3. Functions (parameters, return values)', completed: false },
-        { title: '4. Data Structures (lists, dicts)', completed: false },
-      ]);
-    } else {
-      // Arithmetic
-      setWhiteboardItems([
-        {
-          id: 'wb-math-1',
-          component: 'math',
-          title: 'Expanded Form & Place Values',
-          data: {
-            formula: '4,619 = 4,000 + 600 + 10 + 9',
-            isVerified: true,
-            breakdown: [
-              { digit: '4 in 1,000s', place: 'thousands', value: '4,000' },
-              { digit: '6 in 100s', place: 'hundreds', value: '600' },
-              { digit: '1 in 10s', place: 'tens', value: '10' },
-              { digit: '9 in 1s', place: 'ones', value: '9' },
-            ],
-            steps: [
-              'Breaking a whole number apart into the sum of its place values.',
-              'Try writing numbers out loud or in expanded form!',
-            ],
-          },
-        },
-      ]);
-      setMasteryGoal({
-        title: 'Writing whole numbers in expanded form',
-        current: 2,
-        target: 4,
-        status: 'Recording your progress on this one.',
-      });
-    }
-
-    if (liveClientRef.current && liveClientRef.current.isConnected) {
-      sendTextMessage(`Let's switch our focus to ${subject}.`);
-    }
-  }, [sendTextMessage]);
-
-  /**
-   * User submits edited code from the in-canvas CodeSandbox to Aristotle.
-   */
-  const submitCodeToAristotle = useCallback((codeSnippet) => {
-    sendTextMessage(`Here is my updated Python code:\n\`\`\`python\n${codeSnippet}\n\`\`\`\nCan you trace through it with me?`);
-  }, [sendTextMessage]);
-
-  const clearWhiteboard = useCallback(() => {
-    setWhiteboardItems([]);
-  }, []);
 
   return {
     sessionStatus,
@@ -542,12 +477,7 @@ Core Pedagogical Directives (Aristotle Method):
     messages,
     isSearching,
     searchQuery,
-    activeSubject,
     whiteboardItems,
-    masteryGoal,
-    learningMap,
-    switchSubject,
-    submitCodeToAristotle,
     clearWhiteboard,
     startSession,
     endSession,

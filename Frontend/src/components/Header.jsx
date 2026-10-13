@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, BrainCircuit, Globe, BookOpen, Atom, Terminal, Calculator } from 'lucide-react';
+import { Zap, BrainCircuit, Globe } from 'lucide-react';
 
 export function Header({
   currentModel,
@@ -7,8 +7,6 @@ export function Header({
   sessionStatus,
   conversationState,
   isSearching = false,
-  activeSubject = 'Arithmetic',
-  onSubjectChange,
 }) {
   const getStatusBadge = () => {
     switch (sessionStatus) {
@@ -25,7 +23,7 @@ export function Header({
           return (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              Aristotle Speaking
+              Teacher Speaking
             </span>
           );
         }
@@ -33,7 +31,7 @@ export function Header({
           return (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-medium bg-rose-50 text-rose-700 border border-rose-200">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-              Listening
+              Listening to you
             </span>
           );
         }
@@ -54,7 +52,7 @@ export function Header({
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-medium bg-rose-50 text-rose-700 border border-rose-200">
             <span className="w-2 h-2 rounded-full bg-rose-500" />
-            Error
+            Connection Error
           </span>
         );
       default:
@@ -67,50 +65,23 @@ export function Header({
     }
   };
 
-  const subjects = [
-    { name: 'Arithmetic', icon: Calculator },
-    { name: 'Chemistry', icon: Atom },
-    { name: 'Computer Science', icon: Terminal },
-  ];
-
   return (
-    <header className="flex items-center justify-between px-6 py-3.5 border-b border-stone-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-20 font-serif select-none">
-      {/* Brand & Active Subject */}
-      <div className="flex items-center gap-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-500 to-red-600 flex items-center justify-center shadow-xs">
-            <span className="text-white text-base font-bold">🍎</span>
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-stone-900 tracking-tight flex items-center gap-2 leading-none">
-              Aristotle
-              <span className="font-sans text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-wider">
-                Live Tutor
-              </span>
-            </h1>
-          </div>
+    <header className="flex items-center justify-between px-6 py-3.5 border-b border-stone-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-20 font-sans select-none shadow-xs">
+      {/* Brand */}
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center shadow-xs">
+          <span className="text-white text-lg">🧑‍🏫</span>
         </div>
-
-        {/* Subject Navigation Chips */}
-        <div className="hidden md:flex items-center gap-1 bg-stone-100/90 p-1 rounded-xl border border-stone-200 font-sans text-xs">
-          {subjects.map((sub) => {
-            const Icon = sub.icon;
-            const isSelected = activeSubject === sub.name;
-            return (
-              <button
-                key={sub.name}
-                onClick={() => onSubjectChange && onSubjectChange(sub.name)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-medium ${
-                  isSelected
-                    ? 'bg-white text-stone-900 shadow-xs font-semibold'
-                    : 'text-stone-500 hover:text-stone-800'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-rose-600' : 'text-stone-400'}`} />
-                <span>{sub.name}</span>
-              </button>
-            );
-          })}
+        <div>
+          <h1 className="text-base font-bold text-stone-900 tracking-tight flex items-center gap-2 leading-none">
+            AI Teacher
+            <span className="font-sans text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 uppercase tracking-wider">
+              Live Whiteboard
+            </span>
+          </h1>
+          <p className="text-[11px] text-stone-400 mt-0.5">
+            1-on-1 Voice & Dynamic Notes
+          </p>
         </div>
       </div>
 
@@ -120,7 +91,7 @@ export function Header({
         <div className="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 font-sans">
           <button
             onClick={() => onModelChange('gemini-3.8-live')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               currentModel === 'gemini-3.8-live'
                 ? 'bg-white text-stone-900 shadow-xs font-semibold'
                 : 'text-stone-500 hover:text-stone-800'
@@ -131,7 +102,7 @@ export function Header({
           </button>
           <button
             onClick={() => onModelChange('gemini-3.8-live-extended-thinking')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               currentModel === 'gemini-3.8-live-extended-thinking'
                 ? 'bg-white text-purple-900 shadow-xs font-semibold'
                 : 'text-stone-500 hover:text-stone-800'
