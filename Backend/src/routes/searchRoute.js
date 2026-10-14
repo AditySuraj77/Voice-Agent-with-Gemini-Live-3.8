@@ -11,11 +11,16 @@ const router = express.Router();
 router.post('/tools/search', async (req, res) => {
   try {
     const { query, maxResults } = req.body;
-    if (!query || typeof query !== 'string') {
+    if (!query || typeof query !== 'string' || !query.trim()) {
       return res.status(400).json({ error: 'A valid string "query" is required in request body.' });
     }
 
-    const searchResult = await searchTavily(query, { maxResults: maxResults || 3 });
+    const cleanQuery = query.trim();
+    if (cleanQuery.length > 300) {
+      return res.status(400).json({ error: 'Search query exceeds maximum allowed length of 300 characters.' });
+    }
+
+    const searchResult = await searchTavily(cleanQuery, { maxResults: maxResults || 3 });
     return res.json(searchResult);
   } catch (err) {
     console.error('[searchRoute] Error during search execution:', err);

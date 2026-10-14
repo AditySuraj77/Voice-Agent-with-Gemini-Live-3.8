@@ -5,7 +5,6 @@ export function ControlsBar({
   sessionStatus,
   conversationState,
   isMuted,
-  inputVolume,
   studentProfile,
   onOpenProfile,
   onStartSession,

@@ -123,6 +123,11 @@ export class GeminiLiveClient {
           console.log(`[GeminiLiveClient] WebSocket closed (code: ${event.code}, reason: ${event.reason || 'none'}).`);
           this.isConnected = false;
           if (this.onClose) this.onClose(event);
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(setupTimeout);
+            reject(new Error(`WebSocket closed during handshake with code ${event.code}`));
+          }
         };
       } catch (err) {
         console.error('[GeminiLiveClient] Error establishing WebSocket:', err);
@@ -197,9 +202,9 @@ export class GeminiLiveClient {
                       type: 'STRING',
                       description: 'If student answered correctly, record their verified answer with a checkmark (e.g. "Adi: 40 ✓")',
                     },
-                    clearPrevious: {
-                      type: 'BOOLEAN',
-                      description: 'Set true if clearing the board for a new topic, false to append new notes',
+                    language: {
+                      type: 'STRING',
+                      description: 'Programming language if code is provided: "c", "rust", "python", "javascript", "html", etc.',
                     },
                   },
                   required: ['topic', 'notes'],
@@ -298,6 +303,29 @@ export class GeminiLiveClient {
 
     this.sendJson(payload);
     console.log(`[GeminiLiveClient #${this.clientId}] Sent client text message turn: "${text}"`);
+  }
+
+  /**
+   * Sends background environmental context update (e.g. Code Lab code change, execution result, student profile).
+   * @param {string} contextText
+   */
+  sendContextNotification(contextText) {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+    const payload = {
+      clientContent: {
+        turns: [
+          {
+            role: 'user',
+            parts: [{ text: contextText }],
+          },
+        ],
+        turnComplete: false,
+      },
+    };
+
+    this.sendJson(payload);
+    console.log(`[GeminiLiveClient #${this.clientId}] Sent live context update: "${contextText.slice(0, 100)}..."`);
   }
 
   /**
@@ -530,11 +558,16 @@ export class GeminiLiveClient {
   disconnect() {
     this.isConnected = false;
     if (this.ws) {
+      // Clear all event listeners so closing socket doesn't fire spurious onerror / onclose
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onerror = null;
+      this.ws.onclose = null;
       try {
         this.ws.close();
       } catch (e) {}
       this.ws = null;
     }
-    console.log('[GeminiLiveClient] Disconnected.');
+    console.log('[GeminiLiveClient] Disconnected cleanly.');
   }
 }

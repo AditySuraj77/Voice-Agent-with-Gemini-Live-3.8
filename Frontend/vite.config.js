@@ -11,4 +11,18 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('katex')) {
+            return 'katex';
+          }
+          if (id.includes('monaco')) {
+            return 'monaco';
+          }
+        },
+      },
+    },
+  },
 });

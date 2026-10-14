@@ -5,13 +5,116 @@ import { GeminiLiveClient } from '../services/geminiLiveClient.js';
 
 const BACKEND_URL = 'http://localhost:3001';
 
-export function useGeminiLive({ studentProfile } = {}) {
+/**
+ * Normalizes and extracts key topic root words to detect when the teacher is elaborating on the same concept
+ * (e.g. "Python Variables" vs "Variables in Python" vs "Storing Text in a Variable").
+ */
+function extractTopicKeywords(topic) {
+  if (!topic || typeof topic !== 'string') return [];
+  const stopWords = new Set([
+    'in', 'a', 'an', 'the', 'to', 'for', 'with', 'of', 'and', 'or', 'on', 'at', 'by',
+    'python', 'programming', 'code', 'coding', 'introduction', 'basics', 'concept', 'example', 'more', 'your', 'first'
+  ]);
+  return topic
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 3 && !stopWords.has(w))
+    .map((w) => {
+      if (w.endsWith('ies')) return w.slice(0, -3) + 'y';
+      if (w.endsWith('es') && w.length > 4) return w.slice(0, -2);
+      if (w.endsWith('s') && !w.endsWith('ss') && w.length > 3) return w.slice(0, -1);
+      return w;
+    });
+}
+
+function isSameOrRelatedTopic(topicA, topicB) {
+  if (!topicA || !topicB) return false;
+  const a = topicA.trim().toLowerCase();
+  const b = topicB.trim().toLowerCase();
+  if (a === b) return true;
+  if (a.includes(b) || b.includes(a)) return true;
+
+  const kwA = extractTopicKeywords(topicA);
+  const kwB = extractTopicKeywords(topicB);
+
+  if (kwA.length === 0 || kwB.length === 0) return false;
+
+  // Check if they share any core conceptual keywords (e.g. "variable")
+  const overlap = kwA.filter((w) => kwB.includes(w));
+  return overlap.length > 0;
+}
+
+/**
+ * Builds rich, adaptive, human-like system prompt for Aristotle AI Voice Tutor.
+ */
+function buildTeacherSystemInstruction(studentProfile, recentTopicsSummary = '') {
+  const studentName = studentProfile?.name || 'Bhai or Bro';
+  const studentGrade = studentProfile?.grade || 'Class 1-12 / Middle School , College';
+  const studentInterests = studentProfile?.interests || 'Cricket, Science experiments, Video games';
+  const studentLang = studentProfile?.preferredLanguage || 'Hinglish (Hindi + English mix)';
+  const studentGoal = studentProfile?.learningGoal || 'Conceptual clarity and step-by-step problem solving';
+
+  return `You are Aristotle, an exceptional 1-on-1 human-like AI voice tutor with an interactive real-time whiteboard.
+
+STUDENT IDENTITY & PROFILE (ALREADY LOADED & CONFIRMED):
+- Student Name: "${studentName}". You ALREADY know this student well! Always greet them warmly by their name ("${studentName}"), and address them as "${studentName}".
+- NEVER say "I don't know your name" or "I don't have access to your profile" or ask "What is your name?". You already have their full profile.
+- Level / Grade: "${studentGrade}". Adapt vocabulary, pacing, and difficulty accordingly.
+- Interests & Hobbies: "${studentInterests}". Freely relate concepts, word problems, and real-world analogies to these interests (e.g. physics of cricket bowling/batting, gaming framerates, coding logic, robotics)!
+- Language Preference: "${studentLang}". Speak naturally and warmly in this style.
+- Goal: "${studentGoal}".
+${recentTopicsSummary ? `\nPREVIOUS WHITEBOARD TOPICS DISCUSSED IN THIS CONTINUOUS SESSION:\n${recentTopicsSummary}\n` : ''}
+You can teach ANY subject (Math, Physics, Chemistry, Biology, Computer Science, History, Hindi, English, Economics, etc.).
+
+CRITICAL CONVERSATIONAL PACING & HUMAN-LIKE DEPTH:
+- Talk like a real, passionate human mentor and friendly elder sibling—NEVER sound robotic, rushed, or artificially brief!
+- ADAPT YOUR EXPLANATION DEPTH TO WHAT ${studentName} ASKS:
+  1. WHEN EXPLAINING CONCEPTS, SCIENCE, HISTORY, LITERATURE, OR WHEN ASKED "DETAIL ME BATAO":
+     - Do NOT cut yourself short after 1-2 sentences!
+     - Give a rich, engaging, story-driven explanation (3 to 6 sentences with natural narrative flow).
+     - Break it down naturally with vivid real-world analogies, historical eras, or scientific mechanics that make it exciting and easy to visualize.
+  2. WHEN DOING MATH PROBLEMS, CODE EXERCISES, OR STEP-BY-STEP QUIZZES:
+     - Keep it interactive and Socratic: explain the immediate step clearly, then ask one thought-provoking question to prompt ${studentName}'s thinking.
+  3. IF ${studentName} SAYS "aur batao", "detail me samjhao", "human ki tarah baat karo", OR "tum ruk kyu rahe ho":
+     - Deepen the discussion! Share interesting backstories, real-world applications, or practical examples.
+- Speak warmly and expressively with natural conversational transitions like "Dekho ${studentName}...", "Actually baat yeh hai ki...", "Sabse interesting cheez pata hai kya hai?".
+
+CRITICAL WHITEBOARD TEACHING DIRECTIVE:
+You write directly on the student's whiteboard canvas.
+NEVER write conversational small-talk (like "आज हम पढ़ेंगे", "यह बहुत दिलचस्प विषय है", "ठीक है जहां से चाहो") on the board!
+Keep conversational chit-chat strictly in your SPOKEN VOICE.
+On the whiteboard, write ONLY:
+1. Topic heading (\`topic\`)
+2. Core definitions, steps, or bullet points (\`notes\`)
+3. Mathematical formulas or equations (\`formula\`, e.g. "342 = 300 + 40 + 2" or "F = m · a")
+4. Code blocks (\`code\`) with exact programming language (\`language\`, e.g. "c", "rust", "python", "javascript")
+5. Socratic questions for the student (\`question\`)
+6. Verified student answers with checkmark (\`studentAnswer\`, e.g. "${studentName}: 3247 ✓" or "${studentName}: 4 valence electrons ✓")
+
+IMPORTANT WHITEBOARD PRESERVATION RULE:
+- NEVER wipe or replace previous notes when moving to a new topic or step!
+- The whiteboard is an INFINITE SCROLL NOTEBOOK. Always APPEND new topics and notes below the previous ones so the student can review and export the complete session.
+- ONLY call \`clear_whiteboard\` if the student explicitly asks: "board saaf kar do" / "erase the board".
+
+ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
+YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
+
+CRITICAL THINKING TIME & PATIENCE RULE:
+- If ${studentName} says "wait", "ruko", "ruk jao", "ek second", "ek minute", "sochne do", "batata hoon", "let me think", or asks for time to think, write, or run code:
+  - DO NOT lecture, explain, or rush ahead!
+  - Reply with ONLY 3 to 4 words warmly: "हाँ, आराम से सोचो! मैं यहीं हूँ।" (or "Sure, take your time!").
+  - Then REMAIN COMPLETELY SILENT until ${studentName} speaks again or gives their answer. Give them all the time they need!`;
+}
+
+export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   const [sessionStatus, setSessionStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'error'
   const [conversationState, setConversationState] = useState('idle'); // 'idle' | 'listening' | 'thinking' | 'speaking'
   const [currentModel, setCurrentModel] = useState('gemini-3.8-live');
   const [selectedVoice, setSelectedVoice] = useState('Aoede');
   const [isMuted, setIsMuted] = useState(false);
-  const [inputVolume, setInputVolume] = useState(0);
+  const inputVolumeRef = useRef(0);
   const [error, setError] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -25,9 +128,36 @@ export function useGeminiLive({ studentProfile } = {}) {
   const currentTurnAssistantTextRef = useRef('');
   const lastUserQueryRef = useRef('');
 
+  // Session lifecycle & auto-reconnect refs
+  const isExplicitlyEndedRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const rotationTimerRef = useRef(null);
+  const isRotatingRef = useRef(false);
+  const whiteboardItemsRef = useRef([]);
+  const studentProfileRef = useRef(studentProfile);
+  const currentModelRef = useRef(currentModel);
+  const selectedVoiceRef = useRef(selectedVoice);
+
   const audioRecorderRef = useRef(null);
   const audioPlayerRef = useRef(null);
   const liveClientRef = useRef(null);
+
+  // Keep refs synchronized with active states
+  useEffect(() => {
+    whiteboardItemsRef.current = whiteboardItems;
+  }, [whiteboardItems]);
+
+  useEffect(() => {
+    studentProfileRef.current = studentProfile;
+  }, [studentProfile]);
+
+  useEffect(() => {
+    currentModelRef.current = currentModel;
+  }, [currentModel]);
+
+  useEffect(() => {
+    selectedVoiceRef.current = selectedVoice;
+  }, [selectedVoice]);
 
   // Initialize audio player on mount
   useEffect(() => {
@@ -41,6 +171,10 @@ export function useGeminiLive({ studentProfile } = {}) {
     });
 
     return () => {
+      isExplicitlyEndedRef.current = true;
+      if (rotationTimerRef.current) {
+        clearTimeout(rotationTimerRef.current);
+      }
       if (audioPlayerRef.current) {
         audioPlayerRef.current.destroy();
       }
@@ -74,16 +208,376 @@ export function useGeminiLive({ studentProfile } = {}) {
   }, []);
 
   /**
+   * Core function to establish or rotate Gemini Live WebSocket session.
+   */
+  const establishLiveSession = async (targetModel, { isRotation = false } = {}) => {
+    const token = await fetchEphemeralToken(targetModel);
+
+    // Summary of topics discussed so far to maintain continuous context across rotations
+    const recentTopics = whiteboardItemsRef.current
+      .map((item) => item.topic)
+      .filter(Boolean)
+      .slice(-6)
+      .join(', ');
+
+    const teacherSystemInstruction = buildTeacherSystemInstruction(studentProfileRef.current, recentTopics);
+
+    liveClientRef.current = new GeminiLiveClient({
+      backendUrl: BACKEND_URL,
+      onOpen: () => {
+        console.log(`[useGeminiLive] Live session connected & established (isRotation: ${isRotation}).`);
+        setSessionStatus('connected');
+        setConversationState('listening');
+        reconnectAttemptsRef.current = 0;
+        isRotatingRef.current = false;
+
+        // Schedule proactive session rotation at 9 min 30 sec (570,000 ms)
+        // to seamlessly renew the connection before Google's 10-minute timeout
+        if (rotationTimerRef.current) clearTimeout(rotationTimerRef.current);
+        rotationTimerRef.current = setTimeout(() => {
+          console.log('[useGeminiLive] 9.5-minute timer fired: Proactively rotating session to prevent Google timeout.');
+          handleAutoReconnect(true);
+        }, 570000);
+
+        // Send handshake
+        const sName = studentProfileRef.current?.name || 'Adi';
+        setTimeout(() => {
+          if (liveClientRef.current && liveClientRef.current.isConnected) {
+            if (!isRotation) {
+              const sGrade = studentProfileRef.current?.grade || 'Class 8-10 / Middle School';
+              const sInterests = studentProfileRef.current?.interests || 'Cricket, Science experiments, Video games';
+              const sLang = studentProfileRef.current?.preferredLanguage || 'Hinglish (Hindi + English mix)';
+              liveClientRef.current.sendContextNotification(
+                `[STUDENT PROFILE HANDSHAKE]: The student's name is "${sName}", Grade: "${sGrade}", Interests: "${sInterests}", Language: "${sLang}". You ALREADY know them. Greet them warmly by name.`
+              );
+            } else {
+              liveClientRef.current.sendContextNotification(
+                `[SESSION CONTINUATION]: Seamlessly continuing tutoring session with ${sName}. Whiteboard has notes on: ${recentTopics || 'various topics'}. Pick up right where we left off. DO NOT repeat greetings.`
+              );
+            }
+          }
+        }, 350);
+      },
+      onClose: (event) => {
+        console.log(`[useGeminiLive] Live session closed (code: ${event?.code}, reason: ${event?.reason || 'none'}).`);
+        if (isExplicitlyEndedRef.current) {
+          setSessionStatus('disconnected');
+          setConversationState('idle');
+          setIsSearching(false);
+          setSearchQuery('');
+          if (audioRecorderRef.current) {
+            audioRecorderRef.current.stop();
+            audioRecorderRef.current = null;
+          }
+          return;
+        }
+
+        // Involuntary disconnect detected (e.g. 10-minute timeout code 1011/1000 or network drop 1006)
+        console.warn('[useGeminiLive] Involuntary session close detected. Triggering auto-reconnect...');
+        handleAutoReconnect(false);
+      },
+      onError: (err) => {
+        console.error('[useGeminiLive] Live client error:', err);
+        if (!isExplicitlyEndedRef.current && reconnectAttemptsRef.current < 4) {
+          handleAutoReconnect(false);
+        } else {
+          setError('Live connection error occurred.');
+          setSessionStatus('error');
+          setIsSearching(false);
+        }
+      },
+      onAudioChunk: (chunk) => {
+        if (audioPlayerRef.current) {
+          audioPlayerRef.current.playChunk(chunk);
+        }
+      },
+      onInterrupted: () => {
+        console.log('[useGeminiLive] User barged in: clearing active audio playback.');
+        if (audioPlayerRef.current) {
+          audioPlayerRef.current.stopAndClear();
+        }
+        setIsSearching(false);
+        setConversationState('listening');
+      },
+      onUserTurnFrozen: () => {
+        setMessages((prev) =>
+          prev.map((m) => (m.sender === 'user' && m.isPartial ? { ...m, isPartial: false } : m))
+        );
+      },
+      onToolCall: (calls) => {
+        const searchCall = calls.find((c) => c.name === 'search_web');
+        if (searchCall) {
+          const query = searchCall.args?.query || '';
+          console.log(`[useGeminiLive] Tool call triggered: search_web "${query}"`);
+          setIsSearching(true);
+          setSearchQuery(query);
+          setConversationState('thinking');
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: 'tool-' + Date.now() + Math.random().toString(36).slice(2, 5),
+              sender: 'tool',
+              toolName: 'Tavily Search',
+              query,
+              text: `Searching the web for: "${query}"...`,
+              isSearching: true,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+          ]);
+        }
+      },
+      onToolResponse: () => {
+        console.log('[useGeminiLive] Tool response received. Resuming speech generation.');
+        setIsSearching(false);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.sender === 'tool' && m.isSearching
+              ? {
+                  ...m,
+                  isSearching: false,
+                  text: `Web search completed for: "${m.query}"`,
+                }
+              : m
+          )
+        );
+      },
+      onClearWhiteboard: () => {
+        console.log('[useGeminiLive] clear_whiteboard tool executed.');
+        setWhiteboardItems([]);
+      },
+      onWhiteboardCall: (args) => {
+        console.log('[useGeminiLive] Whiteboard tool executed:', args);
+
+        if (args.action === 'clear') {
+          setWhiteboardItems([]);
+          return;
+        }
+
+        let topic = (args.topic || args.title || '').trim();
+        // Filter out junk/conversational titles
+        if (topic === '*' || topic.toLowerCase() === 'hey' || topic.length < 2) {
+          topic = '';
+        }
+
+        let notes = [];
+        if (Array.isArray(args.notes)) {
+          notes = args.notes.filter(Boolean);
+        } else if (typeof args.notes === 'string') {
+          notes = [args.notes];
+        } else if (typeof args.content === 'string') {
+          notes = args.content.split('\n').map((l) => l.trim()).filter(Boolean);
+        } else if (Array.isArray(args.content)) {
+          notes = args.content.filter(Boolean);
+        }
+
+        if (notes.length === 0 && (args.explanation || args.summary)) {
+          notes = [args.explanation || args.summary];
+        }
+
+        // Sanitize studentAnswer (strip trailing checkmark so it's clean)
+        let studentAnswer = null;
+        if (args.studentAnswer) {
+          studentAnswer = args.studentAnswer.replace(/[✓✔\s]+$/, '').trim();
+        }
+
+        const newItem = {
+          id: 'wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          topic,
+          notes,
+          cardType: args.cardType || (args.formula ? 'formula' : args.code ? 'code' : 'concept'),
+          formula: args.formula || null,
+          code: args.code || (args.component === 'code' ? args.content : null),
+          language: (args.language || '').toLowerCase().trim() || null,
+          question: args.question || null,
+          studentAnswer,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        // Merge notes if teacher continues elaborating on same topic
+        setWhiteboardItems((prev) => {
+          const lastItem = prev[prev.length - 1];
+          if (
+            lastItem &&
+            lastItem.topic &&
+            topic &&
+            isSameOrRelatedTopic(lastItem.topic, topic)
+          ) {
+            const mergedNotes = [...lastItem.notes];
+            for (const note of notes) {
+              const noteClean = note.trim().toLowerCase();
+              if (!mergedNotes.some((n) => n.trim().toLowerCase() === noteClean)) {
+                mergedNotes.push(note);
+              }
+            }
+
+            const updatedItem = {
+              ...lastItem,
+              notes: mergedNotes,
+              formula: args.formula || lastItem.formula,
+              code: args.code || lastItem.code,
+              language: (args.language || '').toLowerCase().trim() || lastItem.language,
+              question: args.question || lastItem.question,
+              studentAnswer: studentAnswer || lastItem.studentAnswer,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+
+            const updatedList = [...prev];
+            updatedList[updatedList.length - 1] = updatedItem;
+            return updatedList;
+          }
+
+          return [...prev, newItem];
+        });
+
+        // Auto-load code into Code Lab if code was written
+        if (newItem.code && onCodeGenerated) {
+          onCodeGenerated(newItem.code, newItem.language);
+        }
+      },
+      onTranscript: ({ sender, text, isPartial }) => {
+        if (!text) return;
+
+        if (sender === 'user' && !isPartial) {
+          lastUserQueryRef.current = text;
+        }
+
+        setMessages((prev) => {
+          const lastMsg = prev[prev.length - 1];
+
+          if (lastMsg && lastMsg.sender === sender) {
+            let nextText = text;
+            if (sender === 'user') {
+              nextText = text;
+            } else {
+              if (lastMsg.text.endsWith(text)) {
+                nextText = lastMsg.text;
+              } else {
+                nextText = lastMsg.text + text;
+              }
+            }
+
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...lastMsg,
+              text: nextText,
+              isPartial,
+            };
+            return updated;
+          } else {
+            return [
+              ...prev,
+              {
+                id: Date.now() + Math.random().toString(36).slice(2, 6),
+                sender,
+                text,
+                isPartial,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              },
+            ];
+          }
+        });
+      },
+      onTurnComplete: () => {
+        setIsSearching(false);
+        setMessages((prev) =>
+          prev.map((m) => (m.isPartial ? { ...m, isPartial: false } : m))
+        );
+      },
+    });
+
+    // Connect WebSocket
+    let connectAttempt = 0;
+    let connectedSuccessfully = false;
+    let lastConnectError = null;
+
+    while (connectAttempt < 2 && !connectedSuccessfully) {
+      connectAttempt++;
+      try {
+        await liveClientRef.current.connect(token, {
+          model: targetModel,
+          voiceName: selectedVoiceRef.current,
+          systemInstruction: teacherSystemInstruction,
+        });
+        connectedSuccessfully = true;
+      } catch (connErr) {
+        lastConnectError = connErr;
+        console.warn(`[useGeminiLive] Live connect attempt #${connectAttempt} failed, retrying in 400ms...`, connErr);
+        if (connectAttempt < 2) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+    }
+
+    if (!connectedSuccessfully) {
+      throw lastConnectError || new Error('Failed to connect to Gemini Live session.');
+    }
+  };
+
+  /**
+   * Automatically rotates or reconnects the session seamlessly without user intervention.
+   */
+  const handleAutoReconnect = async (isProactive = false) => {
+    if (isExplicitlyEndedRef.current) return;
+    if (isRotatingRef.current) return;
+
+    if (reconnectAttemptsRef.current >= 4) {
+      console.error('[useGeminiLive] Maximum auto-reconnect attempts reached (4). Terminating session.');
+      setSessionStatus('disconnected');
+      setConversationState('idle');
+      if (audioRecorderRef.current) {
+        audioRecorderRef.current.stop();
+        audioRecorderRef.current = null;
+      }
+      return;
+    }
+
+    isRotatingRef.current = true;
+    reconnectAttemptsRef.current += 1;
+    console.log(`[useGeminiLive] Auto-reconnecting session (attempt #${reconnectAttemptsRef.current}, proactive: ${isProactive})...`);
+
+    // Cleanly close old client
+    if (liveClientRef.current) {
+      liveClientRef.current.disconnect();
+      liveClientRef.current = null;
+    }
+
+    if (rotationTimerRef.current) {
+      clearTimeout(rotationTimerRef.current);
+      rotationTimerRef.current = null;
+    }
+
+    await new Promise((r) => setTimeout(r, 450));
+
+    try {
+      const model = currentModelRef.current;
+      await establishLiveSession(model, { isRotation: true });
+      console.log('[useGeminiLive] Session rotated & reconnected successfully.');
+    } catch (err) {
+      console.error('[useGeminiLive] Auto-reconnect attempt failed:', err);
+      isRotatingRef.current = false;
+      setTimeout(() => handleAutoReconnect(false), 1200);
+    }
+  };
+
+  /**
    * Starts a voice session with the AI Teacher.
    */
   const startSession = useCallback(async (targetModel = currentModel) => {
     try {
       setError(null);
+      isExplicitlyEndedRef.current = false;
+      reconnectAttemptsRef.current = 0;
+      isRotatingRef.current = false;
       setSessionStatus('connecting');
       setIsSearching(false);
       setSearchQuery('');
       hasTurnWhiteboardUpdateRef.current = false;
       currentTurnAssistantTextRef.current = '';
+
+      if (rotationTimerRef.current) {
+        clearTimeout(rotationTimerRef.current);
+        rotationTimerRef.current = null;
+      }
 
       // Disconnect any existing session before starting a new one
       if (liveClientRef.current) {
@@ -98,278 +592,31 @@ export function useGeminiLive({ studentProfile } = {}) {
         audioPlayerRef.current.stopAndClear();
       }
 
-      // 1. Get ephemeral token from backend
-      const token = await fetchEphemeralToken(targetModel);
+      await establishLiveSession(targetModel, { isRotation: false });
 
-      let chunkCount = 0;
-
-      // 2. Initialize Gemini Live WebSocket client
-      liveClientRef.current = new GeminiLiveClient({
-        backendUrl: BACKEND_URL,
-        onOpen: () => {
-          console.log('[useGeminiLive] Live session connected & established.');
-          setSessionStatus('connected');
-          setConversationState('listening');
-        },
-        onClose: () => {
-          console.log('[useGeminiLive] Live session closed.');
-          setSessionStatus('disconnected');
-          setConversationState('idle');
-          setIsSearching(false);
-          setSearchQuery('');
-          if (audioRecorderRef.current) {
-            audioRecorderRef.current.stop();
-            audioRecorderRef.current = null;
-          }
-        },
-        onError: (err) => {
-          console.error('[useGeminiLive] Live client error:', err);
-          setError('Live connection error occurred.');
-          setSessionStatus('error');
-          setIsSearching(false);
-        },
-        onAudioChunk: (chunk) => {
-          if (audioPlayerRef.current) {
-            audioPlayerRef.current.playChunk(chunk);
-          }
-        },
-        onInterrupted: () => {
-          // User barged in: clear audio queue immediately
-          console.log('[useGeminiLive] User barged in: clearing active audio playback.');
-          if (audioPlayerRef.current) {
-            audioPlayerRef.current.stopAndClear();
-          }
-          setIsSearching(false);
-          setConversationState('listening');
-        },
-        onUserTurnFrozen: () => {
-          setMessages((prev) =>
-            prev.map((m) => (m.sender === 'user' && m.isPartial ? { ...m, isPartial: false } : m))
-          );
-        },
-        onToolCall: (calls) => {
-          const searchCall = calls.find((c) => c.name === 'search_web');
-          if (searchCall) {
-            const query = searchCall.args?.query || '';
-            console.log(`[useGeminiLive] Tool call triggered: search_web "${query}"`);
-            setIsSearching(true);
-            setSearchQuery(query);
-            setConversationState('thinking');
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: 'tool-' + Date.now() + Math.random().toString(36).slice(2, 5),
-                sender: 'tool',
-                toolName: 'Tavily Search',
-                query,
-                text: `Searching the web for: "${query}"...`,
-                isSearching: true,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ]);
-          }
-        },
-        onToolResponse: (responses) => {
-          console.log('[useGeminiLive] Tool response received. Resuming speech generation.');
-          setIsSearching(false);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.sender === 'tool' && m.isSearching
-                ? {
-                    ...m,
-                    isSearching: false,
-                    text: `Web search completed for: "${m.query}"`,
-                  }
-                : m
-            )
-          );
-        },
-        onClearWhiteboard: () => {
-          console.log('[useGeminiLive] clear_whiteboard tool executed.');
-          setWhiteboardItems([]);
-        },
-        onWhiteboardCall: (args) => {
-          console.log('[useGeminiLive] Whiteboard tool executed:', args);
-
-          if (args.action === 'clear') {
-            setWhiteboardItems([]);
-            return;
-          }
-
-          let topic = (args.topic || args.title || '').trim();
-          // Filter out junk/conversational titles
-          if (topic === '*' || topic.toLowerCase() === 'hey' || topic.length < 2) {
-            topic = '';
-          }
-
-          let notes = [];
-          if (Array.isArray(args.notes)) {
-            notes = args.notes.filter(Boolean);
-          } else if (typeof args.notes === 'string') {
-            notes = [args.notes];
-          } else if (typeof args.content === 'string') {
-            notes = args.content.split('\n').map((l) => l.trim()).filter(Boolean);
-          } else if (Array.isArray(args.content)) {
-            notes = args.content.filter(Boolean);
-          }
-
-          if (notes.length === 0 && (args.explanation || args.summary)) {
-            notes = [args.explanation || args.summary];
-          }
-
-          // Sanitize studentAnswer (strip trailing checkmark so it's clean)
-          let studentAnswer = null;
-          if (args.studentAnswer) {
-            studentAnswer = args.studentAnswer.replace(/[✓✔\s]+$/, '').trim();
-          }
-
-          const newItem = {
-            id: 'wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-            topic,
-            notes,
-            cardType: args.cardType || (args.formula ? 'formula' : args.code ? 'code' : 'concept'),
-            formula: args.formula || null,
-            code: args.code || (args.component === 'code' ? args.content : null),
-            question: args.question || null,
-            studentAnswer,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          };
-
-          if (args.clearPrevious || args.action === 'replace') {
-            setWhiteboardItems([newItem]);
-          } else {
-            setWhiteboardItems((prev) => {
-              // Deduplicate if the exact same topic and formula were just added
-              const lastItem = prev[prev.length - 1];
-              if (
-                lastItem &&
-                lastItem.topic === topic &&
-                lastItem.formula === (args.formula || null) &&
-                JSON.stringify(lastItem.notes) === JSON.stringify(notes)
-              ) {
-                return prev;
+      // Initialize and start microphone recorder if not already active
+      if (!audioRecorderRef.current) {
+        let chunkCount = 0;
+        audioRecorderRef.current = new AudioRecorder({
+          onAudioChunk: (chunk) => {
+            if (liveClientRef.current && liveClientRef.current.isConnected) {
+              chunkCount++;
+              if (chunkCount <= 3 || chunkCount % 50 === 0) {
+                console.log(`[useGeminiLive] Transmitted chunk #${chunkCount} to Gemini Live.`);
               }
-              return [...prev, newItem];
-            });
-          }
-        },
-        onTranscript: ({ sender, text, isPartial }) => {
-          if (!text) return;
-
-          if (sender === 'user' && !isPartial) {
-            lastUserQueryRef.current = text;
-          }
-
-          setMessages((prev) => {
-            const lastMsg = prev[prev.length - 1];
-
-            if (lastMsg && lastMsg.sender === sender) {
-              let nextText = text;
-              if (sender === 'user') {
-                nextText = text;
-              } else {
-                if (lastMsg.text.endsWith(text)) {
-                  nextText = lastMsg.text;
-                } else {
-                  nextText = lastMsg.text + text;
-                }
-              }
-
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                ...lastMsg,
-                text: nextText,
-                isPartial,
-              };
-              return updated;
-            } else {
-              return [
-                ...prev,
-                {
-                  id: Date.now() + Math.random().toString(36).slice(2, 6),
-                  sender,
-                  text,
-                  isPartial,
-                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                },
-              ];
+              liveClientRef.current.sendAudioChunk(chunk);
             }
-          });
-        },
-        onTurnComplete: () => {
-          setIsSearching(false);
-          setMessages((prev) =>
-            prev.map((m) => (m.isPartial ? { ...m, isPartial: false } : m))
-          );
-        },
-      });
-
-      // 3. Connect to WebSocket with Aristotle Socratic Direct Whiteboard Persona
-      const studentName = studentProfile?.name || 'Adi';
-      const studentGrade = studentProfile?.grade || 'Class 8-10 / Middle School';
-      const studentInterests = studentProfile?.interests || 'Cricket, Science experiments, Video games';
-      const studentLang = studentProfile?.preferredLanguage || 'Hinglish (Hindi + English mix)';
-      const studentGoal = studentProfile?.learningGoal || 'Conceptual clarity and step-by-step problem solving';
-
-      const teacherSystemInstruction = `You are Aristotle, an exceptional 1-on-1 Socratic AI voice tutor with an interactive real-time whiteboard.
-
-STUDENT PROFILE & PERSONALIZATION:
-- Student Name: "${studentName}". Always address them warmly by their name ("${studentName}").
-- Level / Grade: "${studentGrade}". Adapt vocabulary and mathematical difficulty accordingly.
-- Interests & Hobbies: "${studentInterests}". Freely relate concepts, word problems, and real-world analogies to these interests (e.g. physics of cricket bowling/batting, gaming framerates, coding logic, etc.)!
-- Language Preference: "${studentLang}". Speak naturally in this style.
-- Goal: "${studentGoal}".
-
-You can teach ANY subject (Math, Physics, Chemistry, Biology, Computer Science, History, Hindi, English, Economics, etc.).
-
-CRITICAL WHITEBOARD TEACHING DIRECTIVE:
-You write directly on the student's whiteboard canvas.
-NEVER write conversational small-talk (like "आज हम पढ़ेंगे", "यह बहुत दिलचस्प विषय है", "ठीक है जहां से चाहो") on the board!
-Keep conversational chit-chat strictly in your SPOKEN VOICE.
-On the whiteboard, write ONLY:
-1. Topic heading (\`topic\`)
-2. Core definitions, steps, or bullet points (\`notes\`)
-3. Mathematical formulas or equations (\`formula\`, e.g. "342 = 300 + 40 + 2" or "F = m · a")
-4. Code blocks (\`code\`)
-5. Socratic questions for the student (\`question\`)
-6. Verified student answers with checkmark (\`studentAnswer\`, e.g. "${studentName}: 3247 ✓" or "${studentName}: 4 valence electrons ✓")
-
-ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
-YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
-
-Socratic Dialogue Rules:
-- Keep your speech concise (1 to 3 sentences maximum per turn).
-- Ask one question at a time to keep ${studentName} thinking and answering out loud.
-- When ${studentName} answers, praise them warmly, verify their answer, and write it on the board with a checkmark!
-
-If the student asks to clear the board, call \`clear_whiteboard\`.`;
-
-      await liveClientRef.current.connect(token, {
-        model: targetModel,
-        voiceName: selectedVoice,
-        systemInstruction: teacherSystemInstruction,
-      });
-
-      // 4. Initialize and start microphone recorder
-      audioRecorderRef.current = new AudioRecorder({
-        onAudioChunk: (chunk) => {
-          if (liveClientRef.current && liveClientRef.current.isConnected) {
-            chunkCount++;
-            if (chunkCount <= 3 || chunkCount % 50 === 0) {
-              console.log(`[useGeminiLive] Transmitted chunk #${chunkCount} to Gemini Live.`);
+          },
+          onVolumeChange: (vol) => {
+            inputVolumeRef.current = vol;
+            if (vol > 0.08) {
+              setConversationState((prev) => (prev === 'idle' ? 'listening' : prev));
             }
-            liveClientRef.current.sendAudioChunk(chunk);
-          }
-        },
-        onVolumeChange: (vol) => {
-          setInputVolume(vol);
-          if (vol > 0.05 && conversationState === 'idle') {
-            setConversationState('listening');
-          }
-        },
-      });
+          },
+        });
+        await audioRecorderRef.current.start();
+      }
 
-      await audioRecorderRef.current.start();
       setCurrentModel(targetModel);
     } catch (err) {
       console.error('[useGeminiLive] Failed to start session:', err);
@@ -385,12 +632,17 @@ If the student asks to clear the board, call \`clear_whiteboard\`.`;
         liveClientRef.current = null;
       }
     }
-  }, [currentModel, selectedVoice, conversationState, studentProfile]);
+  }, [currentModel]);
 
   /**
-   * Ends the active voice session.
+   * Ends the active voice session manually.
    */
   const endSession = useCallback(() => {
+    isExplicitlyEndedRef.current = true;
+    if (rotationTimerRef.current) {
+      clearTimeout(rotationTimerRef.current);
+      rotationTimerRef.current = null;
+    }
     if (audioRecorderRef.current) {
       audioRecorderRef.current.stop();
       audioRecorderRef.current = null;
@@ -449,6 +701,15 @@ If the student asks to clear the board, call \`clear_whiteboard\`.`;
   }, []);
 
   /**
+   * Silently syncs environment updates (e.g. Code Lab code change or execution output) to the teacher.
+   */
+  const sendContextUpdate = useCallback((contextText) => {
+    if (liveClientRef.current && liveClientRef.current.isConnected) {
+      liveClientRef.current.sendContextNotification(contextText);
+    }
+  }, []);
+
+  /**
    * Switches model between Fast Voice and Deep Thinking Voice.
    */
   const switchModel = useCallback(async (newModel) => {
@@ -472,7 +733,7 @@ If the student asks to clear the board, call \`clear_whiteboard\`.`;
     selectedVoice,
     setSelectedVoice,
     isMuted,
-    inputVolume,
+    inputVolume: inputVolumeRef.current,
     error,
     messages,
     isSearching,
@@ -483,6 +744,7 @@ If the student asks to clear the board, call \`clear_whiteboard\`.`;
     endSession,
     toggleMute,
     sendTextMessage,
+    sendContextUpdate,
     switchModel,
   };
 }

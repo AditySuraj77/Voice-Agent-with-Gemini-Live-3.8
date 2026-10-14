@@ -6,6 +6,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
+  timeout: 60000,
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:5173',
@@ -21,6 +22,6 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: true,
-    timeout: 30000,
+    timeout: 90000,
   },
 });

@@ -43,9 +43,9 @@ export const GEMINI_TOOLS = [
               type: 'STRING',
               description: 'If student answered correctly, record their verified answer with a checkmark (e.g. "Adi: 40 ✓")',
             },
-            clearPrevious: {
-              type: 'BOOLEAN',
-              description: 'Set true if clearing the board for a new topic, false to append new notes',
+            language: {
+              type: 'STRING',
+              description: 'Programming language if code is provided: "c", "rust", "python", "javascript", "html", etc.',
             },
           },
           required: ['topic', 'notes'],

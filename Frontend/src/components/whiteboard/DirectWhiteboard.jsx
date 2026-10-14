@@ -1,6 +1,9 @@
-import React, { useEffect, useRef } from 'react';
-import { Trash2, BookOpen, Check, Code2, Calculator, Download, Printer } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Trash2, BookOpen, Check, Download, Printer, ArrowDown } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
+import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
+import { MathFormula } from './MathFormula.jsx';
+import { InlineFormattedNote } from './InlineFormattedNote.jsx';
 import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
 
 /**
@@ -14,23 +17,55 @@ export function DirectWhiteboard({
   items = [],
   onClearBoard,
   studentProfile = {},
+  onOpenInCodeLab,
+  isCodeLabOpen = false,
+  onToggleCodeLab,
 }) {
+  const containerRef = useRef(null);
   const bottomAnchorRef = useRef(null);
+  const isUserScrolledUpRef = useRef(false);
+  const [showScrollBottomPill, setShowScrollBottomPill] = useState(false);
+  const prevItemsLengthRef = useRef(0);
 
-  // Smoothly auto-scroll as new notes or formulas are written by the teacher
-  useEffect(() => {
-    if (items.length > 0 && bottomAnchorRef.current) {
-      bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
+  // Track manual scroll to know if user is reading previous notes
+  const handleScroll = () => {
+    if (!containerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    // If user is within 120px of the bottom, consider them "at bottom"
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 120;
+    isUserScrolledUpRef.current = !isAtBottom;
+    setShowScrollBottomPill(!isAtBottom);
+  };
+
+  const scrollToBottom = (behavior = 'smooth') => {
+    if (bottomAnchorRef.current) {
+      bottomAnchorRef.current.scrollIntoView({ behavior });
+      isUserScrolledUpRef.current = false;
+      setShowScrollBottomPill(false);
     }
-  }, [items.length, items]);
+  };
+
+  // Only auto-scroll when new items arrive AND the user is NOT reading earlier notes
+  useEffect(() => {
+    const isNewItemAdded = items.length > prevItemsLengthRef.current;
+    prevItemsLengthRef.current = items.length;
+
+    if (items.length > 0 && isNewItemAdded) {
+      if (!isUserScrolledUpRef.current) {
+        scrollToBottom('smooth');
+      }
+    }
+  }, [items.length]);
 
   return (
     <div
-      className="flex-1 overflow-y-auto px-6 py-10 md:px-16 md:py-14 bg-[#fbf8f3] text-stone-800 font-serif select-text pb-36 print:p-0 print:bg-white"
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-y-auto px-6 py-10 md:px-12 md:py-12 bg-[#fbf8f3] text-stone-800 font-serif select-text pb-36 print:p-0 print:bg-white relative"
       data-testid="direct-whiteboard"
     >
       <div className="max-w-3xl mx-auto space-y-8">
-        {/* Top Board Action Bar (Clean Export, Print & Erase Icons) */}
+        {/* Top Board Action Bar (Clean Export, Print, CodeLab Toggle & Erase Icons) */}
         {items.length > 0 && (
           <div className="flex items-center justify-between border-b border-stone-200/60 pb-2.5 print:hidden">
             <div className="text-xs font-sans text-stone-400">
@@ -41,6 +76,21 @@ export function DirectWhiteboard({
             </div>
 
             <div className="flex items-center gap-1.5">
+              {/* Toggle Code Lab */}
+              {onToggleCodeLab && (
+                <button
+                  onClick={onToggleCodeLab}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
+                    isCodeLabOpen
+                      ? 'bg-amber-100 text-amber-800 font-semibold'
+                      : 'text-stone-600 hover:text-amber-700 hover:bg-amber-50'
+                  }`}
+                  title="Toggle Split Code Lab & Live UI Sandbox"
+                >
+                  <span>💻 Code Lab</span>
+                </button>
+              )}
+
               {/* Download Markdown Notes */}
               <button
                 onClick={() => exportWhiteboardToMarkdown(items, studentProfile)}
@@ -99,6 +149,15 @@ export function DirectWhiteboard({
                 ? [item.notes]
                 : [];
 
+              // Deduplicate notes that merely repeat the formula or are redundant with item.formula
+              const cleanNotesList = notesList.filter((note) => {
+                if (!item.formula) return true;
+                const n = note.replace(/[\s\(\)\,\.\;\:\-\_]/g, '').toLowerCase();
+                const f = item.formula.replace(/[\s\(\)\,\.\;\:\-\_]/g, '').toLowerCase();
+                if (!n) return false;
+                return n !== f && !f.includes(n);
+              });
+
               // Check if item was just added (latest item gets typewriter effect)
               const isLatest = index === items.length - 1;
 
@@ -125,23 +184,19 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 3. Highlighted Math / Scientific Formula written directly on board */}
+                  {/* 3. Highlighted Math / Scientific Formula written directly on board with KaTeX */}
                   {item.formula && (
-                    <div className="py-3 my-2 text-center">
-                      <div className="text-xl md:text-2xl font-bold text-stone-900 font-serif tracking-wider">
-                        {isLatest ? (
-                          <TypewriterText text={item.formula} speed={12} />
-                        ) : (
-                          item.formula
-                        )}
+                    <div className="py-3 my-2 text-center bg-stone-100/50 rounded-xl px-4 border border-stone-200/50 shadow-2xs">
+                      <div className="text-xl md:text-2xl font-bold text-stone-900 font-serif tracking-wide overflow-x-auto py-1">
+                        <MathFormula formula={item.formula} displayMode={true} />
                       </div>
                     </div>
                   )}
 
                   {/* 4. Notes / Step-by-Step Derivations written directly on surface */}
-                  {notesList.length > 0 && (
+                  {cleanNotesList.length > 0 && (
                     <div className="space-y-2 text-sm md:text-base text-stone-800 font-serif leading-relaxed">
-                      {notesList.map((note, idx) => {
+                      {cleanNotesList.map((note, idx) => {
                         const isStepMapping = note.includes('->') || note.includes('→') || note.includes('=');
                         return (
                           <div
@@ -154,11 +209,7 @@ export function DirectWhiteboard({
                               <span className="text-stone-400 select-none">•</span>
                             )}
                             <span className="flex-1">
-                              {isLatest ? (
-                                <TypewriterText text={note} speed={14} />
-                              ) : (
-                                note
-                              )}
+                              <InlineFormattedNote text={note} isLatest={isLatest} />
                             </span>
                           </div>
                         );
@@ -196,29 +247,13 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 6. Code Snippet written directly with line numbers */}
+                  {/* 6. Interactive Code Snippet with Dynamic Language and Runner */}
                   {item.code && (
-                    <div className="my-4 rounded-xl overflow-hidden border border-stone-300 bg-[#f8f6f0] text-stone-900 font-mono text-xs md:text-sm shadow-2xs">
-                      <div className="px-3.5 py-1.5 bg-[#eae5dc] border-b border-stone-300 flex items-center justify-between text-[11px] text-stone-600 font-sans">
-                        <span className="font-semibold flex items-center gap-1.5">
-                          <Code2 className="w-3.5 h-3.5 text-stone-700" />
-                          Code Block
-                        </span>
-                        <span className="text-[10px] uppercase font-bold text-stone-500">Python</span>
-                      </div>
-                      <div className="p-4 overflow-x-auto leading-relaxed">
-                        <pre className="space-y-0.5">
-                          {item.code.split('\n').map((line, lineIdx) => (
-                            <div key={lineIdx} className="flex">
-                              <span className="w-8 select-none text-stone-400 text-right pr-3 shrink-0">
-                                {lineIdx + 1}
-                              </span>
-                              <span className="text-stone-800">{line}</span>
-                            </div>
-                          ))}
-                        </pre>
-                      </div>
-                    </div>
+                    <InteractiveCodeBlock
+                      code={item.code}
+                      language={item.language}
+                      onOpenInCodeLab={onOpenInCodeLab}
+                    />
                   )}
 
                   {/* 7. Socratic Question written directly on board to prompt student */}
@@ -240,6 +275,19 @@ export function DirectWhiteboard({
           </div>
         )}
       </div>
+
+      {/* Floating Pill: Jump to latest notes when user has scrolled up to review */}
+      {showScrollBottomPill && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom('smooth')}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-stone-900/90 hover:bg-stone-950 text-white text-xs font-sans shadow-lg shadow-black/15 backdrop-blur-sm transition-all duration-200 cursor-pointer border border-stone-700/50 print:hidden animate-fadeIn"
+          title="Jump to latest whiteboard notes"
+        >
+          <ArrowDown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+          <span>Latest notes</span>
+        </button>
+      )}
     </div>
   );
 }

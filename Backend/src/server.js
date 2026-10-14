@@ -37,6 +37,15 @@ const tokenLimiter = rateLimit({
   message: { error: 'Too many token requests, please try again shortly.' }
 });
 
+// Rate limiting for web search tool endpoint to protect Tavily quota
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // Limit each IP to 20 search requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many search requests, please slow down.' }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -51,8 +60,8 @@ app.get('/api/health', (req, res) => {
 // Ephemeral token endpoint
 app.use('/api', tokenLimiter, tokenRouter);
 
-// Web search tool endpoint
-app.use('/api', searchRouter);
+// Web search tool endpoint protected by searchLimiter
+app.use('/api', searchLimiter, searchRouter);
 
 // Start server
 app.listen(PORT, () => {

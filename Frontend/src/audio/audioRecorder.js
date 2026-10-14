@@ -1,8 +1,38 @@
 import { downsampleBuffer, float32ToPCM16, arrayBufferToBase64 } from './pcmUtils.js';
 
+const AUDIO_WORKLET_CODE = `
+class PcmCaptureProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 4096;
+    this.buffer = new Float32Array(this.bufferSize);
+    this.bufferIndex = 0;
+  }
+
+  process(inputs) {
+    const input = inputs[0];
+    if (!input || !input[0]) return true;
+
+    const channelData = input[0];
+    for (let i = 0; i < channelData.length; i++) {
+      this.buffer[this.bufferIndex++] = channelData[i];
+      if (this.bufferIndex >= this.bufferSize) {
+        this.port.postMessage(this.buffer);
+        this.buffer = new Float32Array(this.bufferSize);
+        this.bufferIndex = 0;
+      }
+    }
+    return true;
+  }
+}
+
+registerProcessor('pcm-capture-processor', PcmCaptureProcessor);
+`;
+
 /**
- * AudioRecorder captures microphone input using Web Audio API ScriptProcessor/AudioWorklet,
- * downsamples to 16kHz mono PCM, and sends base64 chunks through a callback.
+ * AudioRecorder captures microphone input using modern Web Audio AudioWorkletNode
+ * (running off the main thread on dedicated audio thread), downsamples to 16kHz mono PCM,
+ * and sends base64 chunks through callback.
  */
 export class AudioRecorder {
   constructor({ onAudioChunk, onVolumeChange }) {
@@ -11,9 +41,41 @@ export class AudioRecorder {
     this.audioContext = null;
     this.mediaStream = null;
     this.sourceNode = null;
+    this.workletNode = null;
     this.processorNode = null;
     this.isRecording = false;
     this.isMuted = false;
+    this._lastVolTime = 0;
+  }
+
+  /**
+   * Internal helper to process a slice of raw Float32 microphone samples
+   */
+  processAudioSlice(inputData) {
+    if (!this.isRecording || this.isMuted) return;
+
+    // Throttled volume estimation for UI activity indicator (max ~5/sec instead of flooding 12+/sec)
+    if (this.onVolumeChange) {
+      const now = performance.now();
+      if (now - this._lastVolTime > 200) {
+        this._lastVolTime = now;
+        let sumSquares = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sumSquares += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sumSquares / inputData.length);
+        this.onVolumeChange(Math.min(1, rms * 5)); // Scaled volume level (0 to 1)
+      }
+    }
+
+    // Downsample input from browser rate (e.g. 48kHz) to Gemini 16kHz
+    const downsampled = downsampleBuffer(inputData, this.audioContext.sampleRate, 16000);
+    const pcm16 = float32ToPCM16(downsampled);
+    const base64Chunk = arrayBufferToBase64(pcm16);
+
+    if (this.onAudioChunk && base64Chunk) {
+      this.onAudioChunk(base64Chunk);
+    }
   }
 
   /**
@@ -33,7 +95,7 @@ export class AudioRecorder {
         },
       });
 
-      // Browser AudioContext (typically 44100 or 48000 Hz, or 16000 if supported)
+      // Browser AudioContext (typically 44100 or 48000 Hz)
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
@@ -41,47 +103,47 @@ export class AudioRecorder {
 
       this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
-      // Buffer size 4096 gives ~90ms slices, reducing CPU interrupt overhead & packet jitter
-      const bufferSize = 4096;
-      this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+      // Attempt to use modern AudioWorkletNode for off-thread processing
+      let workletInitialized = false;
+      if (this.audioContext.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
+        try {
+          const blob = new Blob([AUDIO_WORKLET_CODE], { type: 'application/javascript' });
+          const workletUrl = URL.createObjectURL(blob);
+          await this.audioContext.audioWorklet.addModule(workletUrl);
+          URL.revokeObjectURL(workletUrl);
 
-      this.processorNode.onaudioprocess = (event) => {
-        // Zero out output buffer to guarantee 100% silence to destination (no feedback)
-        for (let i = 0; i < event.outputBuffer.numberOfChannels; i++) {
-          event.outputBuffer.getChannelData(i).fill(0);
+          this.workletNode = new AudioWorkletNode(this.audioContext, 'pcm-capture-processor');
+          this.workletNode.port.onmessage = (event) => {
+            this.processAudioSlice(event.data);
+          };
+
+          this.sourceNode.connect(this.workletNode);
+          workletInitialized = true;
+          console.log(`[AudioRecorder] AudioWorkletNode initialized at ${this.audioContext.sampleRate}Hz (dedicated audio thread).`);
+        } catch (workletErr) {
+          console.warn('[AudioRecorder] AudioWorklet failed to initialize, falling back to ScriptProcessor:', workletErr);
         }
+      }
 
-        if (!this.isRecording || this.isMuted) return;
+      // Fallback to ScriptProcessorNode if AudioWorklet unavailable
+      if (!workletInitialized) {
+        const bufferSize = 4096;
+        this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
 
-        const inputData = event.inputBuffer.getChannelData(0);
-
-        // Volume estimation for UI activity indicator
-        if (this.onVolumeChange) {
-          let sumSquares = 0;
-          for (let i = 0; i < inputData.length; i++) {
-            sumSquares += inputData[i] * inputData[i];
+        this.processorNode.onaudioprocess = (event) => {
+          for (let i = 0; i < event.outputBuffer.numberOfChannels; i++) {
+            event.outputBuffer.getChannelData(i).fill(0);
           }
-          const rms = Math.sqrt(sumSquares / inputData.length);
-          this.onVolumeChange(Math.min(1, rms * 5)); // Scaled volume level (0 to 1)
-        }
+          const inputData = event.inputBuffer.getChannelData(0);
+          this.processAudioSlice(inputData);
+        };
 
-        // Downsample input from browser rate (e.g. 48kHz) to Gemini 16kHz
-        const downsampled = downsampleBuffer(inputData, this.audioContext.sampleRate, 16000);
-        const pcm16 = float32ToPCM16(downsampled);
-        const base64Chunk = arrayBufferToBase64(pcm16);
-
-        if (this.onAudioChunk && base64Chunk) {
-          this.onAudioChunk(base64Chunk);
-        }
-      };
-
-      // Connect to destination directly so Chromium's audio rendering graph keeps pulling frames
-      // while onaudioprocess outputs pure silence to speakers.
-      this.sourceNode.connect(this.processorNode);
-      this.processorNode.connect(this.audioContext.destination);
+        this.sourceNode.connect(this.processorNode);
+        this.processorNode.connect(this.audioContext.destination);
+        console.log(`[AudioRecorder] ScriptProcessor fallback initialized at ${this.audioContext.sampleRate}Hz.`);
+      }
 
       this.isRecording = true;
-      console.log(`[AudioRecorder] Microphone initialized at ${this.audioContext.sampleRate}Hz.`);
     } catch (err) {
       console.error('[AudioRecorder] Failed to start microphone:', err);
       this.stop();
@@ -102,6 +164,11 @@ export class AudioRecorder {
   stop() {
     this.isRecording = false;
 
+    if (this.workletNode) {
+      this.workletNode.port.onmessage = null;
+      this.workletNode.disconnect();
+      this.workletNode = null;
+    }
     if (this.processorNode) {
       this.processorNode.disconnect();
       this.processorNode = null;
