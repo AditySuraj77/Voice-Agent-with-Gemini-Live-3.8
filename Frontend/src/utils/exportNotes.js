@@ -43,7 +43,8 @@ export function exportWhiteboardToMarkdown(items = [], studentProfile = {}) {
     }
 
     if (item.code) {
-      md += `\`\`\`python\n${item.code}\n\`\`\`\n\n`;
+      const codeLang = (item.language || 'text').toLowerCase();
+      md += `\`\`\`${codeLang}\n${item.code}\n\`\`\`\n\n`;
     }
 
     if (item.question) {

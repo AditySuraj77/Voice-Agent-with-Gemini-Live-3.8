@@ -20,6 +20,8 @@ export function DirectWhiteboard({
   onOpenInCodeLab,
   isCodeLabOpen = false,
   onToggleCodeLab,
+  isBrowserOpen = false,
+  onToggleBrowser,
 }) {
   const containerRef = useRef(null);
   const bottomAnchorRef = useRef(null);
@@ -66,65 +68,82 @@ export function DirectWhiteboard({
     >
       <div className="max-w-3xl mx-auto space-y-8">
         {/* Top Board Action Bar (Clean Export, Print, CodeLab Toggle & Erase Icons) */}
-        {items.length > 0 && (
-          <div className="flex items-center justify-between border-b border-stone-200/60 pb-2.5 print:hidden">
-            <div className="text-xs font-sans text-stone-400">
-              <span>Today's Board Notes</span>
-              {studentProfile?.name && (
-                <span className="text-stone-600 font-medium ml-1.5">• {studentProfile.name}</span>
-              )}
-            </div>
+        <div className="flex items-center justify-between border-b border-stone-200/60 pb-2.5 print:hidden">
+          <div className="text-xs font-sans text-stone-400">
+            <span>Today's Board Notes</span>
+            {studentProfile?.name && (
+              <span className="text-stone-600 font-medium ml-1.5">• {studentProfile.name}</span>
+            )}
+          </div>
 
-            <div className="flex items-center gap-1.5">
-              {/* Toggle Code Lab */}
-              {onToggleCodeLab && (
-                <button
-                  onClick={onToggleCodeLab}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
-                    isCodeLabOpen
-                      ? 'bg-amber-100 text-amber-800 font-semibold'
-                      : 'text-stone-600 hover:text-amber-700 hover:bg-amber-50'
-                  }`}
-                  title="Toggle Split Code Lab & Live UI Sandbox"
-                >
-                  <span>💻 Code Lab</span>
-                </button>
-              )}
+          <div className="flex items-center gap-1.5">
+            {/* Toggle Code Lab */}
+            {onToggleCodeLab && (
+              <button
+                onClick={onToggleCodeLab}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
+                  isCodeLabOpen
+                    ? 'bg-amber-100 text-amber-800 font-semibold'
+                    : 'text-stone-600 hover:text-amber-700 hover:bg-amber-50'
+                }`}
+                title="Toggle Split Code Lab & Live UI Sandbox"
+              >
+                <span>💻 Code Lab</span>
+              </button>
+            )}
 
-              {/* Download Markdown Notes */}
+            {/* Toggle Live Browser */}
+            {onToggleBrowser && (
+              <button
+                onClick={onToggleBrowser}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
+                  isBrowserOpen
+                    ? 'bg-cyan-100 text-cyan-800 font-semibold border border-cyan-300'
+                    : 'text-stone-600 hover:text-cyan-700 hover:bg-cyan-50'
+                }`}
+                title="Toggle Live Voice Browser"
+              >
+                <span>🌐 Live Browser</span>
+              </button>
+            )}
+
+            {/* Download Markdown Notes (only if items present) */}
+            {items.length > 0 && (
               <button
                 onClick={() => exportWhiteboardToMarkdown(items, studentProfile)}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-600 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
                 title="Download Study Notes (.md)"
               >
                 <Download className="w-3.5 h-3.5 text-amber-600" />
-                <span>Export Notes</span>
+                <span className="hidden sm:inline">Export Notes</span>
               </button>
+            )}
 
-              {/* Print / Save as PDF */}
+            {/* Print / Save as PDF (only if items present) */}
+            {items.length > 0 && (
               <button
                 onClick={printWhiteboard}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-600 hover:text-stone-900 hover:bg-stone-200/60 transition-colors cursor-pointer"
                 title="Print / Save PDF"
               >
                 <Printer className="w-3.5 h-3.5 text-stone-500" />
-                <span>Print / PDF</span>
+                <span className="hidden sm:inline">Print / PDF</span>
               </button>
+            )}
 
-              {/* Erase Board */}
-              {onClearBoard && (
-                <button
-                  onClick={onClearBoard}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer ml-1"
-                  title="Clear Whiteboard"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Erase Board</span>
-                </button>
-              )}
-            </div>
+            {/* Erase Board (only if items present) */}
+            {items.length > 0 && onClearBoard && (
+              <button
+                onClick={onClearBoard}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer ml-1"
+                title="Clear Whiteboard"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Erase Board</span>
+              </button>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Empty Canvas State */}
         {items.length === 0 ? (

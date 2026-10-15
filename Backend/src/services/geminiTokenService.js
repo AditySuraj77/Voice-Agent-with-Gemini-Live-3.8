@@ -78,6 +78,90 @@ export const GEMINI_TOOLS = [
           required: ['query'],
         },
       },
+      {
+        name: 'browser_navigate',
+        description: 'Navigate the live browser to a specific URL (e.g. "https://en.wikipedia.org" or "python.org") or search term. The page is displayed live on the student screen, and you receive real-time screenshots to visually inspect the website.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            url: {
+              type: 'STRING',
+              description: 'Target website URL or search term (e.g. "https://en.wikipedia.org/wiki/Quantum_computing")',
+            },
+            description: {
+              type: 'STRING',
+              description: 'Brief reason or goal for navigating to this page',
+            },
+          },
+          required: ['url'],
+        },
+      },
+      {
+        name: 'browser_click',
+        description: 'Click an element, link, or button on the live browser page using visible screen coordinates {x, y} from the webpage screenshot or CSS selector / text.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            description: {
+              type: 'STRING',
+              description: 'Description of the element being clicked (e.g. "Search button", "Getting Started link")',
+            },
+            x: {
+              type: 'NUMBER',
+              description: 'X coordinate (horizontal position 0 to 1280) of the element on the webpage screenshot',
+            },
+            y: {
+              type: 'NUMBER',
+              description: 'Y coordinate (vertical position 0 to 720) of the element on the webpage screenshot',
+            },
+            selector: {
+              type: 'STRING',
+              description: 'Optional CSS selector or visible text of the element',
+            },
+          },
+          required: ['description'],
+        },
+      },
+      {
+        name: 'browser_type',
+        description: 'Type text into an input field or search box on the live browser page.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            text: {
+              type: 'STRING',
+              description: 'The text string to type into the active input',
+            },
+            selector: {
+              type: 'STRING',
+              description: 'Optional CSS selector of the input field',
+            },
+            pressEnter: {
+              type: 'BOOLEAN',
+              description: 'Whether to press Enter after typing (default true for searches)',
+            },
+          },
+          required: ['text'],
+        },
+      },
+      {
+        name: 'browser_scroll',
+        description: 'Scroll the live browser viewport up or down to read more content on the page.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            direction: {
+              type: 'STRING',
+              description: 'Scroll direction: "down" to view more content below, or "up" to view content above',
+            },
+            amount: {
+              type: 'NUMBER',
+              description: 'Distance in pixels to scroll (defaults to 450)',
+            },
+          },
+          required: ['direction'],
+        },
+      },
     ],
   },
 ];

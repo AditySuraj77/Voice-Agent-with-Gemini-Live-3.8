@@ -19,6 +19,7 @@ export class GeminiLiveClient {
     onWhiteboardCall,
     onClearWhiteboard,
     onMasteryCall,
+    onBrowserFrame,
   }) {
     this.backendUrl = backendUrl;
     this.onOpen = onOpen;
@@ -34,6 +35,7 @@ export class GeminiLiveClient {
     this.onWhiteboardCall = onWhiteboardCall;
     this.onClearWhiteboard = onClearWhiteboard;
     this.onMasteryCall = onMasteryCall;
+    this.onBrowserFrame = onBrowserFrame;
 
     this.clientId = Math.random().toString(36).slice(2, 6);
     this.msgCounter = 0;
@@ -237,6 +239,90 @@ export class GeminiLiveClient {
                   required: ['query'],
                 },
               },
+              {
+                name: 'browser_navigate',
+                description: 'Navigate the live browser to a specific URL (e.g. "https://en.wikipedia.org" or "python.org") or search term. The page is displayed live on the student screen, and you receive real-time screenshots to visually inspect the website.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    url: {
+                      type: 'STRING',
+                      description: 'Target website URL or search term (e.g. "https://en.wikipedia.org/wiki/Quantum_computing")',
+                    },
+                    description: {
+                      type: 'STRING',
+                      description: 'Brief reason or goal for navigating to this page',
+                    },
+                  },
+                  required: ['url'],
+                },
+              },
+              {
+                name: 'browser_click',
+                description: 'Click an element, link, or button on the live browser page using visible screen coordinates {x, y} from the webpage screenshot or CSS selector / text.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    description: {
+                      type: 'STRING',
+                      description: 'Description of the element being clicked (e.g. "Search button", "Getting Started link")',
+                    },
+                    x: {
+                      type: 'NUMBER',
+                      description: 'X coordinate (horizontal position 0 to 1280) of the element on the webpage screenshot',
+                    },
+                    y: {
+                      type: 'NUMBER',
+                      description: 'Y coordinate (vertical position 0 to 720) of the element on the webpage screenshot',
+                    },
+                    selector: {
+                      type: 'STRING',
+                      description: 'Optional CSS selector or visible text of the element',
+                    },
+                  },
+                  required: ['description'],
+                },
+              },
+              {
+                name: 'browser_type',
+                description: 'Type text into an input field or search box on the live browser page.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    text: {
+                      type: 'STRING',
+                      description: 'The text string to type into the active input',
+                    },
+                    selector: {
+                      type: 'STRING',
+                      description: 'Optional CSS selector of the input field',
+                    },
+                    pressEnter: {
+                      type: 'BOOLEAN',
+                      description: 'Whether to press Enter after typing (default true for searches)',
+                    },
+                  },
+                  required: ['text'],
+                },
+              },
+              {
+                name: 'browser_scroll',
+                description: 'Scroll the live browser viewport up or down to read more content on the page.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    direction: {
+                      type: 'STRING',
+                      description: 'Scroll direction: "down" to view more content below, or "up" to view content above',
+                    },
+                    amount: {
+                      type: 'NUMBER',
+                      description: 'Distance in pixels to scroll (defaults to 450)',
+                    },
+                  },
+                  required: ['direction'],
+                },
+              },
             ],
           },
         ],
@@ -280,6 +366,28 @@ export class GeminiLiveClient {
     };
 
     this.sendJson(payload);
+  }
+
+  /**
+   * Sends real-time JPEG vision frame to Gemini Live multimodal input.
+   * @param {string} base64JPEG
+   */
+  sendImageChunk(base64JPEG) {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+    const mediaBlob = {
+      mimeType: 'image/jpeg',
+      data: base64JPEG,
+    };
+
+    const payload = {
+      realtimeInput: {
+        mediaChunks: [mediaBlob],
+      },
+    };
+
+    this.sendJson(payload);
+    console.log(`[GeminiLiveClient #${this.clientId}] Streamed vision frame (JPEG) to Gemini Live.`);
   }
 
   /**
@@ -513,6 +621,87 @@ export class GeminiLiveClient {
           name: call.name,
           response: {
             result: searchResult,
+          },
+        });
+      } else if (
+        call.name === 'browser_navigate' ||
+        call.name === 'browser_click' ||
+        call.name === 'browser_type' ||
+        call.name === 'browser_scroll'
+      ) {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing browser tool ${call.name}:`, call.args);
+
+        let actionPayload = {};
+        if (call.name === 'browser_navigate') {
+          actionPayload = { action: 'navigate', url: call.args?.url };
+        } else if (call.name === 'browser_click') {
+          actionPayload = {
+            action: 'click',
+            selector: call.args?.selector,
+            x: call.args?.x,
+            y: call.args?.y,
+            description: call.args?.description,
+          };
+        } else if (call.name === 'browser_type') {
+          actionPayload = {
+            action: 'type',
+            text: call.args?.text,
+            selector: call.args?.selector,
+            pressEnter: call.args?.pressEnter !== false,
+          };
+        } else if (call.name === 'browser_scroll') {
+          actionPayload = {
+            action: 'scroll',
+            direction: call.args?.direction || 'down',
+            amount: call.args?.amount || 450,
+          };
+        }
+
+        let actionResult = { status: 'in_progress' };
+        try {
+          const res = await fetch(`${this.backendUrl}/api/browser/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(actionPayload),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            actionResult = {
+              status: 'success',
+              url: data.url,
+              title: data.title,
+              message: `Browser action "${call.name}" executed. You are currently viewing "${data.title}" at URL: ${data.url}. A fresh visual screenshot of this webpage has been captured and injected into your vision input. Describe what you see to the student.`,
+            };
+
+            // Stream updated webpage screenshot to Gemini Live visual input
+            if (data.screenshot) {
+              this.sendImageChunk(data.screenshot);
+            }
+
+            // Notify UI to render live browser canvas
+            if (this.onBrowserFrame) {
+              this.onBrowserFrame({
+                url: data.url,
+                title: data.title,
+                screenshot: data.screenshot,
+                action: data.action,
+                clickCoordinates: data.clickCoordinates,
+              });
+            }
+          } else {
+            actionResult = { status: 'error', message: `Browser action failed with HTTP status ${res.status}` };
+          }
+        } catch (err) {
+          console.error(`[GeminiLiveClient] Browser action error:`, err);
+          actionResult = { status: 'error', message: `Browser action execution error: ${err.message}` };
+        }
+
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: actionResult,
           },
         });
       } else {

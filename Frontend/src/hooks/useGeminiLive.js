@@ -101,6 +101,17 @@ IMPORTANT WHITEBOARD PRESERVATION RULE:
 ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
 YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
 
+CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
+You have autonomous control of a live web browser connected directly to your visual input!
+- When ${studentName} asks to search something, view a website, read documentation, look up Wikipedia, or explore an article:
+  - Call \`browser_navigate\` with the target URL or query (e.g. "https://en.wikipedia.org" or "https://python.org").
+  - The live browser viewport opens directly on ${studentName}'s screen.
+  - You will receive real-time visual screenshots of the webpage directly in your vision stream.
+  - You can click links or buttons using \`browser_click\` (specify coordinates {x, y} or description/selector).
+  - You can type text with \`browser_type\`.
+  - You can scroll the page with \`browser_scroll\`.
+- Talk naturally as you browse! Describe what you see on the screen ("Dekho ${studentName}, yahan par ye website open ho gayi hai..."), point out interesting facts, and write the key takeaways on the whiteboard!
+
 CRITICAL THINKING TIME & PATIENCE RULE:
 - If ${studentName} says "wait", "ruko", "ruk jao", "ek second", "ek minute", "sochne do", "batata hoon", "let me think", or asks for time to think, write, or run code:
   - DO NOT lecture, explain, or rush ahead!
@@ -119,6 +130,17 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   const [messages, setMessages] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Live Browser State for AI-controlled browsing & split screen viewer
+  const [browserState, setBrowserState] = useState({
+    isOpen: false,
+    url: 'about:blank',
+    title: 'Ready',
+    screenshot: null,
+    isLoading: false,
+    lastAction: null,
+    clickCoordinates: null,
+  });
 
   // Live Whiteboard notes dynamically populated as the Teacher explains
   const [whiteboardItems, setWhiteboardItems] = useState([]);
@@ -325,10 +347,22 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
             },
           ]);
         }
+
+        const browserCall = calls.find((c) => c.name.startsWith('browser_'));
+        if (browserCall) {
+          console.log(`[useGeminiLive] Browser tool call detected: ${browserCall.name}`);
+          setBrowserState((prev) => ({
+            ...prev,
+            isOpen: true,
+            isLoading: true,
+            lastAction: browserCall.name,
+          }));
+        }
       },
       onToolResponse: () => {
         console.log('[useGeminiLive] Tool response received. Resuming speech generation.');
         setIsSearching(false);
+        setBrowserState((prev) => ({ ...prev, isLoading: false }));
         setMessages((prev) =>
           prev.map((m) =>
             m.sender === 'tool' && m.isSearching
@@ -340,6 +374,19 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               : m
           )
         );
+      },
+      onBrowserFrame: (frameData) => {
+        console.log('[useGeminiLive] Live browser frame received:', frameData.title);
+        setBrowserState((prev) => ({
+          ...prev,
+          isOpen: true,
+          url: frameData.url,
+          title: frameData.title,
+          screenshot: frameData.screenshot,
+          isLoading: false,
+          lastAction: frameData.action,
+          clickCoordinates: frameData.clickCoordinates,
+        }));
       },
       onClearWhiteboard: () => {
         console.log('[useGeminiLive] clear_whiteboard tool executed.');
@@ -658,7 +705,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     setConversationState('idle');
     setIsSearching(false);
     setSearchQuery('');
-    setInputVolume(0);
+    inputVolumeRef.current = 0;
   }, []);
 
   /**
@@ -726,6 +773,47 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     }
   }, [currentModel, sessionStatus, endSession, startSession]);
 
+  /**
+   * Allows user or UI to trigger manual browser action (navigate, reload, click, scroll).
+   */
+  const executeBrowserAction = useCallback(async (actionPayload) => {
+    setBrowserState((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/browser/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(actionPayload),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setBrowserState((prev) => ({
+          ...prev,
+          isOpen: true,
+          url: data.url,
+          title: data.title,
+          screenshot: data.screenshot,
+          isLoading: false,
+          lastAction: data.action,
+          clickCoordinates: data.clickCoordinates,
+        }));
+
+        // Send user's navigation screenshot to Gemini Live visual input
+        if (liveClientRef.current && liveClientRef.current.isConnected && data.screenshot) {
+          liveClientRef.current.sendImageChunk(data.screenshot);
+          liveClientRef.current.sendContextNotification(
+            `[STUDENT BROWSER NAVIGATION]: Currently viewing "${data.title}" at ${data.url}.`
+          );
+        }
+        return data;
+      }
+    } catch (err) {
+      console.error('[useGeminiLive] Manual browser action error:', err);
+    } finally {
+      setBrowserState((prev) => ({ ...prev, isLoading: false }));
+    }
+  }, []);
+
   return {
     sessionStatus,
     conversationState,
@@ -738,6 +826,9 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     messages,
     isSearching,
     searchQuery,
+    browserState,
+    setBrowserState,
+    executeBrowserAction,
     whiteboardItems,
     clearWhiteboard,
     startSession,

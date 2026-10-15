@@ -14,6 +14,8 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import tokenRouter from './routes/tokenRoute.js';
 import searchRouter from './routes/searchRoute.js';
+import browserRouter from './routes/browserRoute.js';
+import { browserService } from './services/browserService.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -63,8 +65,11 @@ app.use('/api', tokenLimiter, tokenRouter);
 // Web search tool endpoint protected by searchLimiter
 app.use('/api', searchLimiter, searchRouter);
 
+// Browser automation tool endpoint
+app.use('/api', browserRouter);
+
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[Backend] Gemini Live Voice Agent Server listening on http://localhost:${PORT}`);
   console.log(`[Backend] Client CORS origin: ${CLIENT_ORIGIN}`);
   if (!process.env.GEMINI_API_KEY) {
@@ -77,4 +82,17 @@ app.listen(PORT, () => {
   } else {
     console.log('[Backend] TAVILY_API_KEY detected. Real-time web search enabled.');
   }
+  console.log('[Backend] Autonomous Chromium Browser Control ready.');
 });
+
+// Graceful cleanup
+const shutdown = async () => {
+  console.log('[Backend] Shutting down server and closing browser session...');
+  await browserService.close();
+  server.close(() => {
+    process.exit(0);
+  });
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

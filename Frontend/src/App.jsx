@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { loader } from '@monaco-editor/react';
 import { useGeminiLive } from './hooks/useGeminiLive.js';
 import { DirectWhiteboard } from './components/whiteboard/DirectWhiteboard.jsx';
+import { LiveBrowserViewer } from './components/browser/LiveBrowserViewer.jsx';
 import { ControlsBar } from './components/ControlsBar.jsx';
 import { StudentProfileModal } from './components/profile/StudentProfileModal.jsx';
 import { getStudentProfile, saveStudentProfile } from './services/studentProfile.js';
-import { AlertCircle, X, GripVertical, Loader2 } from 'lucide-react';
+import { AlertCircle, X, GripVertical, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 
 // Code-split CodeLab so Monaco Editor & compilers are loaded on demand
 const CodeLab = lazy(() =>
@@ -23,16 +24,18 @@ export default function App() {
     loader.init().catch(() => {});
   }, []);
 
-  // Split-screen Code Lab state
-  const [isCodeLabOpen, setIsCodeLabOpen] = useState(false);
-  const [isCodeLabMaximized, setIsCodeLabMaximized] = useState(false);
+  // Multi-panel workspace state (Code Lab / Live Browser)
+  const [activeRightTab, setActiveRightTab] = useState('codelab'); // 'codelab' | 'browser'
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+  const [isRightPanelMaximized, setIsRightPanelMaximized] = useState(false);
   const [codeLabSnippet, setCodeLabSnippet] = useState({ code: '', language: 'javascript' });
   const [splitRatio, setSplitRatio] = useState(50); // 50% by default
   const isDraggingRef = useRef(false);
 
   const handleOpenInCodeLab = (code, language) => {
     setCodeLabSnippet({ code, language });
-    setIsCodeLabOpen(true);
+    setActiveRightTab('codelab');
+    setIsRightPanelOpen(true);
   };
 
   const {
@@ -47,13 +50,26 @@ export default function App() {
     toggleMute,
     sendTextMessage,
     sendContextUpdate,
+    browserState,
+    setBrowserState,
+    executeBrowserAction,
   } = useGeminiLive({
     studentProfile,
     onCodeGenerated: (code, language) => {
       // Auto-load teacher's newly generated code into Code Lab without disturbing whiteboard
       setCodeLabSnippet({ code, language: language || 'python' });
+      setActiveRightTab('codelab');
+      setIsRightPanelOpen(true);
     },
   });
+
+  // Automatically open right workspace to Live Browser when Gemini or user triggers navigation
+  useEffect(() => {
+    if (browserState?.isOpen) {
+      setActiveRightTab('browser');
+      setIsRightPanelOpen(true);
+    }
+  }, [browserState?.isOpen]);
 
   const [dismissError, setDismissError] = useState(false);
 
@@ -117,9 +133,9 @@ export default function App() {
       {/* Main Clean Workspace: Split View with Draggable Divider */}
       <main className="flex-1 flex overflow-hidden relative">
         {/* Left Side: Infinite Paper Canvas Whiteboard */}
-        {(!isCodeLabOpen || !isCodeLabMaximized) && (
+        {(!isRightPanelOpen || !isRightPanelMaximized) && (
           <div
-            style={{ width: isCodeLabOpen ? `${splitRatio}%` : '100%' }}
+            style={{ width: isRightPanelOpen ? `${splitRatio}%` : '100%' }}
             className="flex flex-col h-full transition-all duration-75 overflow-hidden"
           >
             <DirectWhiteboard
@@ -127,13 +143,26 @@ export default function App() {
               onClearBoard={clearWhiteboard}
               studentProfile={studentProfile}
               onOpenInCodeLab={handleOpenInCodeLab}
-              isCodeLabOpen={isCodeLabOpen}
+              isCodeLabOpen={isRightPanelOpen && activeRightTab === 'codelab'}
               onToggleCodeLab={() => {
-                if (isCodeLabOpen) {
-                  setIsCodeLabOpen(false);
-                  setIsCodeLabMaximized(false);
+                if (isRightPanelOpen && activeRightTab === 'codelab') {
+                  setIsRightPanelOpen(false);
+                  setIsRightPanelMaximized(false);
                 } else {
-                  setIsCodeLabOpen(true);
+                  setActiveRightTab('codelab');
+                  setIsRightPanelOpen(true);
+                }
+              }}
+              isBrowserOpen={isRightPanelOpen && activeRightTab === 'browser'}
+              onToggleBrowser={() => {
+                if (isRightPanelOpen && activeRightTab === 'browser') {
+                  setIsRightPanelOpen(false);
+                  setIsRightPanelMaximized(false);
+                  setBrowserState((prev) => ({ ...prev, isOpen: false }));
+                } else {
+                  setActiveRightTab('browser');
+                  setIsRightPanelOpen(true);
+                  setBrowserState((prev) => ({ ...prev, isOpen: true }));
                 }
               }}
             />
@@ -141,44 +170,129 @@ export default function App() {
         )}
 
         {/* Draggable Divider (Grip Handle) */}
-        {isCodeLabOpen && !isCodeLabMaximized && (
+        {isRightPanelOpen && !isRightPanelMaximized && (
           <div
             onMouseDown={handleMouseDown}
             className="hidden md:flex w-2 bg-stone-300 hover:bg-amber-500 cursor-col-resize items-center justify-center transition-colors z-20 shrink-0 group select-none"
-            title="Drag to resize Whiteboard and Code Lab"
+            title="Drag to resize Whiteboard and Workspace"
           >
             <GripVertical className="w-3 h-3 text-stone-500 group-hover:text-white" />
           </div>
         )}
 
-        {/* Right Side: Split Code Lab & Live UI Sandbox */}
-        {isCodeLabOpen && (
+        {/* Right Side: Split Multi-tool Panel (Code Lab & Live Autonomous Browser) */}
+        {isRightPanelOpen && (
           <div
-            style={{ width: isCodeLabMaximized ? '100%' : `${100 - splitRatio}%` }}
-            className="flex flex-col h-full animate-fadeIn transition-all duration-75 overflow-hidden"
+            style={{ width: isRightPanelMaximized ? '100%' : `${100 - splitRatio}%` }}
+            className="flex flex-col h-full animate-fadeIn transition-all duration-75 overflow-hidden border-l border-stone-800 bg-[#121316]"
           >
-            <Suspense
-              fallback={
-                <div className="flex-1 bg-stone-900 text-stone-300 flex flex-col items-center justify-center gap-3 font-mono text-xs">
-                  <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
-                  <span>Loading Monaco Code Lab...</span>
-                </div>
-              }
-            >
-              <CodeLab
-                initialCode={codeLabSnippet.code}
-                initialLanguage={codeLabSnippet.language}
-                onSyncWithTeacher={sendContextUpdate}
-                onClose={() => {
-                  setIsCodeLabOpen(false);
-                  setIsCodeLabMaximized(false);
-                }}
-                isTeacherMuted={isMuted}
-                onToggleTeacherMute={toggleMute}
-                isMaximized={isCodeLabMaximized}
-                onToggleMaximize={() => setIsCodeLabMaximized(!isCodeLabMaximized)}
-              />
-            </Suspense>
+            {/* Top Workspace Tab Switcher Strip */}
+            <div className="bg-[#18181b] border-b border-stone-800 px-3 py-1.5 flex items-center justify-between text-xs font-sans shrink-0">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setActiveRightTab('codelab')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    activeRightTab === 'codelab'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs'
+                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
+                  }`}
+                  title="Switch to Monaco Code Lab"
+                >
+                  <span>💻 Code Lab</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveRightTab('browser');
+                    if (!browserState.isOpen) {
+                      setBrowserState((prev) => ({ ...prev, isOpen: true }));
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    activeRightTab === 'browser'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs'
+                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
+                  }`}
+                  title="Switch to Live Voice Browser"
+                >
+                  <span>🌐 Live Browser</span>
+                  {browserState.isLoading ? (
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  ) : browserState.screenshot ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  ) : null}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsRightPanelMaximized(!isRightPanelMaximized)}
+                  className="p-1 rounded text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors cursor-pointer"
+                  title={isRightPanelMaximized ? 'Restore Viewport' : 'Maximize Viewport'}
+                >
+                  {isRightPanelMaximized ? (
+                    <Minimize2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsRightPanelOpen(false);
+                    setIsRightPanelMaximized(false);
+                    if (activeRightTab === 'browser') {
+                      setBrowserState((prev) => ({ ...prev, isOpen: false }));
+                    }
+                  }}
+                  className="p-1 rounded text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors cursor-pointer"
+                  title="Close Workspace Panel"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Tab Viewport: Code Lab or Live Browser */}
+            <div className="flex-1 flex flex-col overflow-hidden relative">
+              {activeRightTab === 'codelab' && (
+                <Suspense
+                  fallback={
+                    <div className="flex-1 bg-stone-900 text-stone-300 flex flex-col items-center justify-center gap-3 font-mono text-xs">
+                      <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
+                      <span>Loading Monaco Code Lab...</span>
+                    </div>
+                  }
+                >
+                  <CodeLab
+                    initialCode={codeLabSnippet.code}
+                    initialLanguage={codeLabSnippet.language}
+                    onSyncWithTeacher={sendContextUpdate}
+                    onClose={() => {
+                      setIsRightPanelOpen(false);
+                      setIsRightPanelMaximized(false);
+                    }}
+                    isTeacherMuted={isMuted}
+                    onToggleTeacherMute={toggleMute}
+                    isMaximized={isRightPanelMaximized}
+                    onToggleMaximize={() => setIsRightPanelMaximized(!isRightPanelMaximized)}
+                  />
+                </Suspense>
+              )}
+
+              {activeRightTab === 'browser' && (
+                <LiveBrowserViewer
+                  browserState={browserState}
+                  onAction={executeBrowserAction}
+                  onClose={() => {
+                    setIsRightPanelOpen(false);
+                    setIsRightPanelMaximized(false);
+                    setBrowserState((prev) => ({ ...prev, isOpen: false }));
+                  }}
+                  isMaximized={isRightPanelMaximized}
+                  onToggleMaximize={() => setIsRightPanelMaximized(!isRightPanelMaximized)}
+                />
+              )}
+            </div>
           </div>
         )}
       </main>
