@@ -42,6 +42,13 @@ export function exportWhiteboardToMarkdown(items = [], studentProfile = {}) {
       md += `\n`;
     }
 
+    if (item.image) {
+      md += `![${item.caption || item.topic || 'Clipped Diagram'}](${item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}`})\n\n`;
+      if (item.caption) {
+        md += `*📌 ${item.caption}*\n\n`;
+      }
+    }
+
     if (item.code) {
       const codeLang = (item.language || 'text').toLowerCase();
       md += `\`\`\`${codeLang}\n${item.code}\n\`\`\`\n\n`;

@@ -323,6 +323,74 @@ export class GeminiLiveClient {
                   required: ['direction'],
                 },
               },
+              {
+                name: 'browser_clip_to_whiteboard',
+                description: 'Clip a diagram, illustration, graph, or equation from the active webpage and permanently pin/paste it onto the student\'s whiteboard notes so they can reference it later.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    caption: {
+                      type: 'STRING',
+                      description: 'Title or description of the clipped diagram (e.g. "Diagram: Structure of DNA Molecule")',
+                    },
+                    selector: {
+                      type: 'STRING',
+                      description: 'Optional CSS selector of the specific image, figure, or element to clip (defaults to current viewport)',
+                    },
+                  },
+                  required: ['caption'],
+                },
+              },
+              {
+                name: 'browser_highlight',
+                description: 'Visually highlight an important paragraph, formula, diagram, or button on the live browser screen using an AI visual laser box so the student sees exactly what you are pointing to.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    text: {
+                      type: 'STRING',
+                      description: 'Visible text snippet to highlight (e.g. "Newton\'s Second Law", "Photosynthesis Formula")',
+                    },
+                    selector: {
+                      type: 'STRING',
+                      description: 'Optional CSS selector of the element to highlight',
+                    },
+                    label: {
+                      type: 'STRING',
+                      description: 'Short concept badge displayed over the highlight (e.g. "Core Concept", "Formula", "Key Proof")',
+                    },
+                  },
+                  required: ['text'],
+                },
+              },
+              {
+                name: 'browser_reader_mode',
+                description: 'Toggle Clean Reader View for the current webpage to eliminate all ads, clutter, navigation, and banners for effortless reading.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    enabled: {
+                      type: 'BOOLEAN',
+                      description: 'True to activate clean distraction-free reader mode, False to return to standard web layout',
+                    },
+                  },
+                  required: ['enabled'],
+                },
+              },
+              {
+                name: 'browser_history_nav',
+                description: 'Navigate back to the previous webpage or forward in browser history when the student asks to go back or forward.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    action: {
+                      type: 'STRING',
+                      description: 'Direction to navigate: "back" or "forward"',
+                    },
+                  },
+                  required: ['action'],
+                },
+              },
             ],
           },
         ],
@@ -627,7 +695,11 @@ export class GeminiLiveClient {
         call.name === 'browser_navigate' ||
         call.name === 'browser_click' ||
         call.name === 'browser_type' ||
-        call.name === 'browser_scroll'
+        call.name === 'browser_scroll' ||
+        call.name === 'browser_clip_to_whiteboard' ||
+        call.name === 'browser_highlight' ||
+        call.name === 'browser_reader_mode' ||
+        call.name === 'browser_history_nav'
       ) {
         console.log(`[GeminiLiveClient #${this.clientId}] Executing browser tool ${call.name}:`, call.args);
 
@@ -655,6 +727,28 @@ export class GeminiLiveClient {
             direction: call.args?.direction || 'down',
             amount: call.args?.amount || 450,
           };
+        } else if (call.name === 'browser_clip_to_whiteboard') {
+          actionPayload = {
+            action: 'clip_whiteboard',
+            selector: call.args?.selector,
+            caption: call.args?.caption || 'Clipped Web Diagram',
+          };
+        } else if (call.name === 'browser_highlight') {
+          actionPayload = {
+            action: 'highlight',
+            text: call.args?.text,
+            selector: call.args?.selector,
+            label: call.args?.label || 'Key Concept',
+          };
+        } else if (call.name === 'browser_reader_mode') {
+          actionPayload = {
+            action: 'reader_mode',
+            enabled: call.args?.enabled !== false,
+          };
+        } else if (call.name === 'browser_history_nav') {
+          actionPayload = {
+            action: call.args?.action === 'forward' ? 'forward' : 'back',
+          };
         }
 
         let actionResult = { status: 'in_progress' };
@@ -674,6 +768,17 @@ export class GeminiLiveClient {
               message: `Browser action "${call.name}" executed. You are currently viewing "${data.title}" at URL: ${data.url}. A fresh visual screenshot of this webpage has been captured and injected into your vision input. Describe what you see to the student.`,
             };
 
+            // If diagram clipped, pin it onto student's whiteboard canvas immediately
+            if (call.name === 'browser_clip_to_whiteboard' && data.image) {
+              if (this.onWhiteboardCall) {
+                this.onWhiteboardCall({
+                  topic: data.caption || 'Clipped Diagram',
+                  image: data.image,
+                  caption: data.caption,
+                });
+              }
+            }
+
             // Stream updated webpage screenshot to Gemini Live visual input
             if (data.screenshot) {
               this.sendImageChunk(data.screenshot);
@@ -687,6 +792,9 @@ export class GeminiLiveClient {
                 screenshot: data.screenshot,
                 action: data.action,
                 clickCoordinates: data.clickCoordinates,
+                boundingBox: data.boundingBox,
+                label: data.label,
+                isReaderMode: data.isReaderMode,
               });
             }
           } else {

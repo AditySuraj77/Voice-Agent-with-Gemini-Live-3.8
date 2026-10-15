@@ -162,6 +162,74 @@ export const GEMINI_TOOLS = [
           required: ['direction'],
         },
       },
+      {
+        name: 'browser_clip_to_whiteboard',
+        description: 'Clip a diagram, illustration, graph, or equation from the active webpage and permanently pin/paste it onto the student\'s whiteboard notes so they can reference it later.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            caption: {
+              type: 'STRING',
+              description: 'Title or description of the clipped diagram (e.g. "Diagram: Structure of DNA Molecule")',
+            },
+            selector: {
+              type: 'STRING',
+              description: 'Optional CSS selector of the specific image, figure, or element to clip (defaults to current viewport)',
+            },
+          },
+          required: ['caption'],
+        },
+      },
+      {
+        name: 'browser_highlight',
+        description: 'Visually highlight an important paragraph, formula, diagram, or button on the live browser screen using an AI visual laser box so the student sees exactly what you are pointing to.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            text: {
+              type: 'STRING',
+              description: 'Visible text snippet to highlight (e.g. "Newton\'s Second Law", "Photosynthesis Formula")',
+            },
+            selector: {
+              type: 'STRING',
+              description: 'Optional CSS selector of the element to highlight',
+            },
+            label: {
+              type: 'STRING',
+              description: 'Short concept badge displayed over the highlight (e.g. "Core Concept", "Formula", "Key Proof")',
+            },
+          },
+          required: ['text'],
+        },
+      },
+      {
+        name: 'browser_reader_mode',
+        description: 'Toggle Clean Reader View for the current webpage to eliminate all ads, clutter, navigation, and banners for effortless reading.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            enabled: {
+              type: 'BOOLEAN',
+              description: 'True to activate clean distraction-free reader mode, False to return to standard web layout',
+            },
+          },
+          required: ['enabled'],
+        },
+      },
+      {
+        name: 'browser_history_nav',
+        description: 'Navigate back to the previous webpage or forward in browser history when the student asks to go back or forward.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            action: {
+              type: 'STRING',
+              description: 'Direction to navigate: "back" or "forward"',
+            },
+          },
+          required: ['action'],
+        },
+      },
     ],
   },
 ];

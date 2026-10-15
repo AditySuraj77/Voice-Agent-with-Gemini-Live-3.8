@@ -266,7 +266,23 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 6. Interactive Code Snippet with Dynamic Language and Runner */}
+                  {/* 6. Clipped Science/Math Diagram or Web Image */}
+                  {item.image && (
+                    <div className="my-3 rounded-2xl overflow-hidden border border-stone-300/80 bg-white shadow-xs max-w-xl mx-auto p-2">
+                      <img
+                        src={item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}`}
+                        alt={item.caption || item.topic || 'Clipped Whiteboard Diagram'}
+                        className="w-full h-auto max-h-96 object-contain rounded-xl select-none"
+                      />
+                      {item.caption && (
+                        <div className="text-center text-xs font-sans text-stone-600 mt-2 font-medium">
+                          📌 {item.caption}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 7. Interactive Code Snippet with Dynamic Language and Runner */}
                   {item.code && (
                     <InteractiveCodeBlock
                       code={item.code}

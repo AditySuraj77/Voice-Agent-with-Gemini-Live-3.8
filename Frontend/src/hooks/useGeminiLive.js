@@ -110,6 +110,10 @@ You have autonomous control of a live web browser connected directly to your vis
   - You can click links or buttons using \`browser_click\` (specify coordinates {x, y} or description/selector).
   - You can type text with \`browser_type\`.
   - You can scroll the page with \`browser_scroll\`.
+  - SUPERPOWER 1 - CLIP TO WHITEBOARD: If the page has an informative science diagram, chart, or formula, or if ${studentName} asks "isko whiteboard par daal do" / "clip this diagram", call \`browser_clip_to_whiteboard(caption: "...")\` to permanently paste it directly onto the student's whiteboard notes!
+  - SUPERPOWER 2 - AI VISUAL LASER HIGHLIGHTER: When referring to a specific sentence, formula, or definition, call \`browser_highlight(text: "...", label: "...")\` to draw an animated laser highlight box around the text so ${studentName} sees exactly what you are pointing to!
+  - SUPERPOWER 3 - CLEAN READER MODE: If an article is cluttered with ads or menus, call \`browser_reader_mode(enabled: true)\` to instantly strip out all clutter and show clean, distraction-free typography!
+  - SUPERPOWER 4 - HISTORY NAVIGATION: If ${studentName} asks to go back or forward ("pichle page par jao", "go back"), call \`browser_history_nav(action: "back")\`.
 - Talk naturally as you browse! Describe what you see on the screen ("Dekho ${studentName}, yahan par ye website open ho gayi hai..."), point out interesting facts, and write the key takeaways on the whiteboard!
 
 CRITICAL THINKING TIME & PATIENCE RULE:
@@ -386,6 +390,9 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           isLoading: false,
           lastAction: frameData.action,
           clickCoordinates: frameData.clickCoordinates,
+          boundingBox: frameData.boundingBox,
+          label: frameData.label,
+          isReaderMode: frameData.isReaderMode,
         }));
       },
       onClearWhiteboard: () => {
@@ -431,12 +438,14 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           id: 'wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
           topic,
           notes,
-          cardType: args.cardType || (args.formula ? 'formula' : args.code ? 'code' : 'concept'),
+          cardType: args.cardType || (args.image ? 'image' : args.formula ? 'formula' : args.code ? 'code' : 'concept'),
           formula: args.formula || null,
           code: args.code || (args.component === 'code' ? args.content : null),
           language: (args.language || '').toLowerCase().trim() || null,
           question: args.question || null,
           studentAnswer,
+          image: args.image || null,
+          caption: args.caption || null,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
 
@@ -796,7 +805,26 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           isLoading: false,
           lastAction: data.action,
           clickCoordinates: data.clickCoordinates,
+          boundingBox: data.boundingBox,
+          label: data.label,
+          isReaderMode: data.isReaderMode,
         }));
+
+        // If diagram clipped via manual action, add directly to whiteboard
+        if (actionPayload.action === 'clip_whiteboard' && data.image) {
+          setWhiteboardItems((prev) => [
+            ...prev,
+            {
+              id: 'wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+              topic: data.caption || 'Clipped Web Diagram',
+              notes: [],
+              cardType: 'image',
+              image: data.image,
+              caption: data.caption,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+          ]);
+        }
 
         // Send user's navigation screenshot to Gemini Live visual input
         if (liveClientRef.current && liveClientRef.current.isConnected && data.screenshot) {

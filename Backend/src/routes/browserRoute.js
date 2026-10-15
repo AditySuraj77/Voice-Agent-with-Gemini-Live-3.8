@@ -6,11 +6,25 @@ const router = express.Router();
 /**
  * Executes a browser action requested by Gemini Live or user UI.
  * POST /api/browser/action
- * Body: { action: 'navigate'|'click'|'type'|'scroll', ...args }
+ * Body: { action: 'navigate'|'click'|'type'|'scroll'|'clip_whiteboard'|'highlight'|'reader_mode'|'back'|'forward', ...args }
  */
 router.post('/browser/action', async (req, res) => {
   try {
-    const { action, url, selector, x, y, text, pressEnter, direction, amount, description } = req.body;
+    const {
+      action,
+      url,
+      selector,
+      x,
+      y,
+      text,
+      pressEnter,
+      direction,
+      amount,
+      description,
+      caption,
+      label,
+      enabled,
+    } = req.body;
 
     if (!action) {
       return res.status(400).json({ error: 'Field "action" is required.' });
@@ -25,6 +39,16 @@ router.post('/browser/action', async (req, res) => {
       result = await browserService.type({ text, selector, pressEnter });
     } else if (action === 'scroll') {
       result = await browserService.scroll({ direction, amount });
+    } else if (action === 'clip_whiteboard') {
+      result = await browserService.clipToWhiteboard({ selector, caption });
+    } else if (action === 'highlight') {
+      result = await browserService.highlight({ selector, text, label });
+    } else if (action === 'reader_mode') {
+      result = await browserService.toggleReaderMode(enabled);
+    } else if (action === 'back') {
+      result = await browserService.goBack();
+    } else if (action === 'forward') {
+      result = await browserService.goForward();
     } else {
       return res.status(400).json({ error: `Unsupported browser action "${action}".` });
     }
