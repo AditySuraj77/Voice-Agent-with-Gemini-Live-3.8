@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Globe, ArrowLeft, ArrowRight, RotateCw, Lock, Sparkles,
   ChevronDown, ChevronUp, ExternalLink, Loader2, Compass, Shield,
-  Maximize2, Minimize2, Pin, BookOpen
+  Maximize2, Minimize2, Pin, BookOpen, Tag
 } from 'lucide-react';
 
 /**
@@ -188,6 +188,26 @@ export function LiveBrowserViewer({
             <span className="hidden lg:inline">{browserState.isReaderMode ? 'Reader On' : 'Reader View'}</span>
           </button>
 
+          {/* Set-of-Marks Numbered Badges Toggle */}
+          <button
+            onClick={() =>
+              onAction &&
+              onAction({
+                action: 'toggle_som',
+                enabled: !browserState.showSoMBadges,
+              })
+            }
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer font-medium text-[11px] ${
+              browserState.showSoMBadges
+                ? 'bg-amber-500/25 border border-amber-500/50 text-amber-300 shadow-xs'
+                : 'bg-stone-800/80 border border-stone-700/70 text-stone-300 hover:bg-stone-700'
+            }`}
+            title="Toggle Set-of-Marks (SoM) Numbered Click Badges [1], [2], [3]..."
+          >
+            <Tag className="w-3 h-3 text-amber-400" />
+            <span className="hidden lg:inline">{browserState.showSoMBadges ? `Labels On (${browserState.somCount || 0})` : 'Labels'}</span>
+          </button>
+
           {/* Scroll & Reload */}
           <button
             onClick={() => handleScroll('up')}
@@ -329,8 +349,21 @@ export function LiveBrowserViewer({
         </div>
 
         <div className="flex items-center gap-3 shrink-0 text-[10px]">
-          <span>Resolution: 960×540 (Ultra-Fast)</span>
-          <span className="text-emerald-400 font-medium">Vision Stream: Active</span>
+          {browserState.isSleeping ? (
+            <span className="text-amber-400 font-medium flex items-center gap-1">
+              <span>💤 Sleep (RAM Freed)</span>
+            </span>
+          ) : (
+            <span className="text-emerald-400 font-medium flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Active</span>
+            </span>
+          )}
+          {browserState.showSoMBadges && (
+            <span className="text-amber-300 font-medium">Badges: {browserState.somCount || 0}</span>
+          )}
+          <span>960×540</span>
+          <span className="text-emerald-400 font-medium">Vision: Active</span>
         </div>
       </div>
     </div>

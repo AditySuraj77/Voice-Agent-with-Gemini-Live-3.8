@@ -6,7 +6,7 @@ const router = express.Router();
 /**
  * Executes a browser action requested by Gemini Live or user UI.
  * POST /api/browser/action
- * Body: { action: 'navigate'|'click'|'type'|'scroll'|'clip_whiteboard'|'highlight'|'reader_mode'|'back'|'forward', ...args }
+ * Body: { action: 'navigate'|'click'|'type'|'scroll'|'clip_whiteboard'|'highlight'|'reader_mode'|'back'|'forward'|'toggle_som', ...args }
  */
 router.post('/browser/action', async (req, res) => {
   try {
@@ -14,6 +14,7 @@ router.post('/browser/action', async (req, res) => {
       action,
       url,
       selector,
+      elementId,
       x,
       y,
       text,
@@ -34,9 +35,9 @@ router.post('/browser/action', async (req, res) => {
     if (action === 'navigate') {
       result = await browserService.navigate(url);
     } else if (action === 'click') {
-      result = await browserService.click({ selector, x, y, description });
+      result = await browserService.click({ elementId, selector, x, y, description });
     } else if (action === 'type') {
-      result = await browserService.type({ text, selector, pressEnter });
+      result = await browserService.type({ elementId, text, selector, pressEnter });
     } else if (action === 'scroll') {
       result = await browserService.scroll({ direction, amount });
     } else if (action === 'clip_whiteboard') {
@@ -49,6 +50,8 @@ router.post('/browser/action', async (req, res) => {
       result = await browserService.goBack();
     } else if (action === 'forward') {
       result = await browserService.goForward();
+    } else if (action === 'toggle_som') {
+      result = await browserService.toggleSoM(enabled);
     } else {
       return res.status(400).json({ error: `Unsupported browser action "${action}".` });
     }

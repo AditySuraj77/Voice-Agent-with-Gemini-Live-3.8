@@ -2,8 +2,13 @@ import { chromium } from 'playwright';
 
 /**
  * High-Performance Autonomous Browser Service for Gemini Live
- * Optimized for low CPU/RAM footprint, zero-lag multimodal streaming,
- * ad/media interception, and AI teaching superpowers.
+ * Features:
+ * - Ultra-low CPU/RAM footprint with Chromium performance flags
+ * - Ad/Media request interception (zero lag on 4K video / 3D sites)
+ * - 960x540 adaptive lightweight streaming
+ * - Set-of-Marks (SoM) Numbered Badging for 100% accurate clicks
+ * - Automatic Chromium Sleep & RAM Release after 3 minutes idle
+ * - Superpowers: Clip to Whiteboard, AI Laser Highlighter, Reader Mode, History
  */
 class BrowserService {
   constructor() {
@@ -19,6 +24,50 @@ class BrowserService {
     this.isReaderMode = false;
     this.canGoBack = false;
     this.canGoForward = false;
+
+    // Milestone 1 additions: Set-of-Marks & Auto-Sleep
+    this.showSoMBadges = false;
+    this.somMap = new Map(); // elementId -> { id, x, y, width, height, tag, text }
+    this.idleTimer = null;
+    this.idleTimeoutMs = 3 * 60 * 1000; // 3 minutes idle
+    this.isSleeping = false;
+  }
+
+  /**
+   * Resets the idle sleep timer. Called on every user/AI action.
+   */
+  resetIdleTimer() {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+    }
+    this.idleTimer = setTimeout(() => {
+      this.sleep();
+    }, this.idleTimeoutMs);
+  }
+
+  /**
+   * Puts Chromium to sleep after 3 minutes of inactivity to completely release system RAM.
+   */
+  async sleep() {
+    if (!this.browser || this.isSleeping) return;
+    console.log('[BrowserService] 💤 3 minutes idle detected. Putting Chromium to sleep to release system RAM...');
+    this.isSleeping = true;
+    try {
+      if (this.context) {
+        await this.context.close().catch(() => {});
+        this.context = null;
+      }
+      if (this.browser) {
+        await this.browser.close().catch(() => {});
+        this.browser = null;
+      }
+      this.page = null;
+      this.isInitialized = false;
+      this.initPromise = null;
+      console.log('[BrowserService] ✅ Chromium RAM released. System sleeping quietly.');
+    } catch (e) {
+      console.warn('[BrowserService] Error during auto-sleep:', e.message);
+    }
   }
 
   /**
@@ -26,6 +75,8 @@ class BrowserService {
    * 960x540 viewport, and ad/media request aborting.
    */
   async init() {
+    this.resetIdleTimer();
+
     if (this.isInitialized && this.page && !this.page.isClosed()) {
       return this.page;
     }
@@ -34,8 +85,11 @@ class BrowserService {
       return this.initPromise;
     }
 
+    const wasSleeping = this.isSleeping;
+    const previousUrl = this.activeUrl;
+
     this.initPromise = (async () => {
-      console.log('[BrowserService] Launching ultra-fast Chromium instance for AI agent...');
+      console.log(`[BrowserService] ${wasSleeping ? '⚡ Waking up Chromium from sleep...' : '🚀 Launching ultra-fast Chromium instance...'}`);
       try {
         this.browser = await chromium.launch({
           headless: true,
@@ -117,45 +171,52 @@ class BrowserService {
           } catch (e) {}
         });
 
-        // Set blank initial page with clean placeholder
-        await this.page.setContent(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <style>
-                body {
-                  margin: 0;
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  justify-content: center;
-                  height: 100vh;
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                  background: #0a0f1d;
-                  color: #94a3b8;
-                }
-                .card {
-                  text-align: center;
-                  padding: 2rem 2.5rem;
-                  border: 1px solid #1e293b;
-                  border-radius: 16px;
-                  background: #111827;
-                  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-                }
-                h1 { color: #f8fafc; font-size: 1.4rem; margin-bottom: 0.4rem; font-weight: 700; }
-                p { font-size: 0.85rem; margin: 0; color: #64748b; }
-              </style>
-            </head>
-            <body>
-              <div class="card">
-                <h1>🌐 Aristotle Live Browser</h1>
-                <p>High-Performance Voice-Guided Autonomous Web Assistant</p>
-              </div>
-            </body>
-          </html>
-        `);
+        // If waking from sleep on a real webpage, seamlessly re-open the page
+        if (wasSleeping && previousUrl && previousUrl !== 'about:blank') {
+          console.log(`[BrowserService] Restoring previous tab state: ${previousUrl}`);
+          await this.page.goto(previousUrl, { waitUntil: 'domcontentloaded', timeout: 7000 }).catch(() => {});
+        } else {
+          // Set blank initial page with clean placeholder
+          await this.page.setContent(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="utf-8">
+                <style>
+                  body {
+                    margin: 0;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: #0a0f1d;
+                    color: #94a3b8;
+                  }
+                  .card {
+                    text-align: center;
+                    padding: 2rem 2.5rem;
+                    border: 1px solid #1e293b;
+                    border-radius: 16px;
+                    background: #111827;
+                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+                  }
+                  h1 { color: #f8fafc; font-size: 1.4rem; margin-bottom: 0.4rem; font-weight: 700; }
+                  p { font-size: 0.85rem; margin: 0; color: #64748b; }
+                </style>
+              </head>
+              <body>
+                <div class="card">
+                  <h1>🌐 Aristotle Live Browser</h1>
+                  <p>High-Performance Voice-Guided Autonomous Web Assistant</p>
+                </div>
+              </body>
+            </html>
+          `);
+        }
 
+        this.isSleeping = false;
         await this.captureScreenshot();
         this.isInitialized = true;
         console.log('[BrowserService] Ultra-fast Chromium initialized (960x540, ad-blocker enabled).');
@@ -171,16 +232,143 @@ class BrowserService {
   }
 
   /**
+   * Applies Set-of-Marks (SoM) Numbered Badges to all clickable elements.
+   * Maps badgeId -> { id, x, y, width, height, tag, text }.
+   */
+  async applySetOfMarks() {
+    if (!this.page || this.page.isClosed()) return [];
+    try {
+      const elements = await this.page.evaluate(() => {
+        // Remove existing badges
+        document.querySelectorAll('.aristotle-som-badge').forEach((el) => el.remove());
+
+        const candidates = Array.from(
+          document.querySelectorAll('a, button, input, textarea, select, [role="button"], [onclick], [tabindex="0"]')
+        );
+
+        const results = [];
+        let idCounter = 1;
+
+        for (const el of candidates) {
+          if (idCounter > 50) break; // Limit to 50 for clean reading
+          const rect = el.getBoundingClientRect();
+          if (
+            rect.width >= 10 &&
+            rect.height >= 10 &&
+            rect.bottom > 0 &&
+            rect.top < 540 &&
+            rect.right > 0 &&
+            rect.left < 960
+          ) {
+            const computedStyle = window.getComputedStyle(el);
+            if (
+              computedStyle.display === 'none' ||
+              computedStyle.visibility === 'hidden' ||
+              computedStyle.opacity === '0'
+            ) {
+              continue;
+            }
+
+            const badgeId = idCounter++;
+            const badge = document.createElement('div');
+            badge.className = 'aristotle-som-badge';
+            badge.innerText = `${badgeId}`;
+            badge.style.position = 'absolute';
+            badge.style.left = `${Math.max(0, rect.left + window.scrollX)}px`;
+            badge.style.top = `${Math.max(0, rect.top + window.scrollY)}px`;
+            badge.style.background = '#eab308'; // Amber-500
+            badge.style.color = '#000000';
+            badge.style.fontWeight = '900';
+            badge.style.fontSize = '10px';
+            badge.style.lineHeight = '1';
+            badge.style.padding = '2px 4px';
+            badge.style.borderRadius = '3px';
+            badge.style.border = '1px solid #713f12';
+            badge.style.boxShadow = '0 1px 4px rgba(0,0,0,0.5)';
+            badge.style.zIndex = '2147483647';
+            badge.style.pointerEvents = 'none';
+            badge.style.fontFamily = 'monospace';
+            document.body.appendChild(badge);
+
+            results.push({
+              id: badgeId,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+              width: Math.round(rect.width),
+              height: Math.round(rect.height),
+              tag: el.tagName.toLowerCase(),
+              text: (el.innerText || el.getAttribute('placeholder') || el.getAttribute('aria-label') || '').slice(0, 35).trim(),
+            });
+          }
+        }
+        return results;
+      });
+
+      this.somMap.clear();
+      for (const item of elements) {
+        this.somMap.set(item.id, item);
+      }
+      return elements;
+    } catch (e) {
+      console.warn('[BrowserService] Error applying Set-of-Marks:', e.message);
+      return [];
+    }
+  }
+
+  /**
+   * Removes Set-of-Marks numbered badges from the page.
+   */
+  async removeSetOfMarks() {
+    if (!this.page || this.page.isClosed()) return;
+    try {
+      await this.page.evaluate(() => {
+        document.querySelectorAll('.aristotle-som-badge').forEach((el) => el.remove());
+      });
+      this.somMap.clear();
+    } catch (e) {}
+  }
+
+  /**
+   * Toggles Set-of-Marks numbered badges on or off.
+   */
+  async toggleSoM(enabled) {
+    await this.init();
+    this.showSoMBadges = enabled !== undefined ? !!enabled : !this.showSoMBadges;
+    console.log(`[BrowserService] Set-of-Marks (SoM) Labels: ${this.showSoMBadges ? 'ENABLED' : 'DISABLED'}`);
+
+    if (this.showSoMBadges) {
+      await this.applySetOfMarks();
+    } else {
+      await this.removeSetOfMarks();
+    }
+
+    const screenshot = await this.captureScreenshot();
+    return {
+      status: 'success',
+      action: 'toggle_som',
+      showSoMBadges: this.showSoMBadges,
+      somCount: this.somMap.size,
+      url: this.activeUrl,
+      title: this.pageTitle,
+      screenshot,
+    };
+  }
+
+  /**
    * Captures an ultra-lightweight JPEG screenshot (quality: 55%) returned as base64.
-   * Average size: ~15-25 KB (down from 80KB+), providing near-instant streaming to Gemini Live.
+   * Average size: ~15-25 KB, providing near-instant streaming to Gemini Live.
    */
   async captureScreenshot() {
     if (!this.page || this.page.isClosed()) return null;
     try {
+      if (this.showSoMBadges) {
+        await this.applySetOfMarks();
+      }
       const buffer = await this.page.screenshot({
         type: 'jpeg',
         quality: 55,
         fullPage: false,
+        timeout: 3500,
       });
       const base64 = buffer.toString('base64');
       this.lastScreenshot = base64;
@@ -216,13 +404,12 @@ class BrowserService {
     try {
       await this.page.goto(cleanUrl, {
         waitUntil: 'domcontentloaded',
-        timeout: 7000, // 7-second hard cap prevents lag on infinite-loading pages
+        timeout: 7000,
       });
     } catch (err) {
       console.warn(`[BrowserService] Fast recovery on ${cleanUrl}:`, err.message);
     }
 
-    // Brief wait for initial paint
     await new Promise((r) => setTimeout(r, 400));
 
     this.activeUrl = this.page.url();
@@ -239,23 +426,41 @@ class BrowserService {
       action: 'navigate',
       url: this.activeUrl,
       title: this.pageTitle,
+      showSoMBadges: this.showSoMBadges,
+      somCount: this.somMap.size,
       screenshot,
     };
   }
 
   /**
-   * Clicks an element by coordinates {x, y} or selector/text.
+   * Clicks an element by elementId (SoM badge [1], [2]...), coordinates {x, y}, or selector.
    */
-  async click({ selector, x, y, description = '' }) {
+  async click({ elementId, selector, x, y, description = '' }) {
     await this.init();
 
-    console.log(`[BrowserService] Click action: ${description || selector || `(${x}, ${y})`}`);
-    this.lastAction = { type: 'click', selector, x, y, description, timestamp: Date.now() };
+    let clickX = x;
+    let clickY = y;
+
+    // 1. Resolve via Set-of-Marks Numbered Badge (100% precision)
+    if (elementId != null) {
+      const target = this.somMap.get(Number(elementId));
+      if (target) {
+        clickX = target.x;
+        clickY = target.y;
+        description = description || `Element [${elementId}] (${target.tag}: "${target.text}")`;
+        console.log(`[BrowserService] SoM Direct Click: Target [${elementId}] resolved to (${clickX}, ${clickY})`);
+      } else {
+        console.warn(`[BrowserService] SoM badge [${elementId}] not found in active map.`);
+      }
+    }
+
+    console.log(`[BrowserService] Click action: ${description || selector || `(${clickX}, ${clickY})`}`);
+    this.lastAction = { type: 'click', elementId, selector, x: clickX, y: clickY, description, timestamp: Date.now() };
 
     try {
-      if (typeof x === 'number' && typeof y === 'number') {
-        // Direct vision coordinate click
-        await this.page.mouse.click(x, y);
+      if (typeof clickX === 'number' && typeof clickY === 'number') {
+        // Direct vision/SoM coordinate click
+        await this.page.mouse.click(clickX, clickY);
       } else if (selector) {
         const elem = this.page.locator(selector).first();
         if (await elem.isVisible({ timeout: 2000 })) {
@@ -264,7 +469,7 @@ class BrowserService {
           await this.page.getByText(selector, { exact: false }).first().click({ timeout: 2500 });
         }
       } else {
-        throw new Error('Either coordinates (x, y) or selector is required to click.');
+        throw new Error('Either elementId, coordinates (x, y), or selector is required to click.');
       }
     } catch (err) {
       console.warn(`[BrowserService] Click warning:`, err.message);
@@ -283,21 +488,34 @@ class BrowserService {
       action: 'click',
       url: this.activeUrl,
       title: this.pageTitle,
-      clickCoordinates: typeof x === 'number' && typeof y === 'number' ? { x, y } : null,
+      clickCoordinates: typeof clickX === 'number' && typeof clickY === 'number' ? { x: clickX, y: clickY } : null,
+      elementId,
+      showSoMBadges: this.showSoMBadges,
+      somCount: this.somMap.size,
       screenshot,
     };
   }
 
   /**
-   * Types text into active element or specified input selector.
+   * Types text into active element or specified input elementId/selector.
    */
-  async type({ text = '', selector = '', pressEnter = false }) {
+  async type({ elementId, text = '', selector = '', pressEnter = false }) {
     await this.init();
 
-    console.log(`[BrowserService] Type action: "${text}" (enter: ${pressEnter})`);
-    this.lastAction = { type: 'type', text, selector, pressEnter, timestamp: Date.now() };
+    console.log(`[BrowserService] Type action: "${text}" on ${elementId ? `[Badge #${elementId}]` : selector || 'active'} (enter: ${pressEnter})`);
+    this.lastAction = { type: 'type', elementId, text, selector, pressEnter, timestamp: Date.now() };
 
     try {
+      // 1. Focus input via SoM elementId
+      if (elementId != null) {
+        const target = this.somMap.get(Number(elementId));
+        if (target) {
+          console.log(`[BrowserService] Focusing input [${elementId}] at (${target.x}, ${target.y})`);
+          await this.page.mouse.click(target.x, target.y);
+          await new Promise((r) => setTimeout(r, 150));
+        }
+      }
+
       if (selector) {
         const input = this.page.locator(selector).first();
         await input.fill(text, { timeout: 2500 });
@@ -326,6 +544,8 @@ class BrowserService {
       action: 'type',
       url: this.activeUrl,
       title: this.pageTitle,
+      showSoMBadges: this.showSoMBadges,
+      somCount: this.somMap.size,
       screenshot,
     };
   }
@@ -354,6 +574,8 @@ class BrowserService {
       action: 'scroll',
       url: this.activeUrl,
       title: this.pageTitle,
+      showSoMBadges: this.showSoMBadges,
+      somCount: this.somMap.size,
       screenshot,
     };
   }
@@ -378,7 +600,6 @@ class BrowserService {
       console.warn('[BrowserService] Element-specific clip fallback to viewport:', e.message);
     }
 
-    // Fallback to crisp viewport screenshot
     if (!clipScreenshot) {
       clipScreenshot = await this.captureScreenshot();
     }
@@ -480,7 +701,6 @@ class BrowserService {
     try {
       if (this.isReaderMode) {
         await this.page.evaluate(() => {
-          // Hide navigation, sidebars, banners, footers, and ads
           const hideSelectors = [
             'header', 'footer', 'nav', 'aside', 'iframe',
             '.advertisement', '.ad', '.sidebar', '.social-share',
@@ -490,7 +710,6 @@ class BrowserService {
             document.querySelectorAll(sel).forEach((el) => (el.style.display = 'none'));
           });
 
-          // Style body for clean, elegant reading
           document.body.style.maxWidth = '780px';
           document.body.style.margin = '0 auto';
           document.body.style.padding = '24px';
@@ -501,7 +720,6 @@ class BrowserService {
           document.body.style.lineHeight = '1.7';
         });
       } else {
-        // Reload page to restore original layout
         await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
       }
     } catch (e) {
@@ -591,6 +809,9 @@ class BrowserService {
       screenshot: this.lastScreenshot,
       lastAction: this.lastAction,
       isReaderMode: this.isReaderMode,
+      showSoMBadges: this.showSoMBadges,
+      somCount: this.somMap.size,
+      isSleeping: this.isSleeping,
     };
   }
 
@@ -599,6 +820,10 @@ class BrowserService {
    */
   async close() {
     try {
+      if (this.idleTimer) {
+        clearTimeout(this.idleTimer);
+        this.idleTimer = null;
+      }
       if (this.context) {
         await this.context.close().catch(() => {});
         this.context = null;
@@ -612,6 +837,8 @@ class BrowserService {
       this.initPromise = null;
       this.lastScreenshot = null;
       this.isReaderMode = false;
+      this.isSleeping = false;
+      this.somMap.clear();
       console.log('[BrowserService] Browser session closed cleanly.');
     } catch (e) {
       console.error('[BrowserService] Error during browser teardown:', e);

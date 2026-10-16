@@ -259,21 +259,25 @@ export class GeminiLiveClient {
               },
               {
                 name: 'browser_click',
-                description: 'Click an element, link, or button on the live browser page using visible screen coordinates {x, y} from the webpage screenshot or CSS selector / text.',
+                description: 'Click an element, link, or button on the live browser page using either its numbered badge ID [1], [2], [3] (Set-of-Marks), visible screen coordinates {x, y}, or CSS selector / text.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
+                    elementId: {
+                      type: 'INTEGER',
+                      description: 'Numbered badge ID [1], [2], [3]... visible on the target element in the webpage screenshot (preferred for 100% precision)',
+                    },
                     description: {
                       type: 'STRING',
                       description: 'Description of the element being clicked (e.g. "Search button", "Getting Started link")',
                     },
                     x: {
                       type: 'NUMBER',
-                      description: 'X coordinate (horizontal position 0 to 1280) of the element on the webpage screenshot',
+                      description: 'X coordinate (horizontal position 0 to 960) of the element on the webpage screenshot',
                     },
                     y: {
                       type: 'NUMBER',
-                      description: 'Y coordinate (vertical position 0 to 720) of the element on the webpage screenshot',
+                      description: 'Y coordinate (vertical position 0 to 540) of the element on the webpage screenshot',
                     },
                     selector: {
                       type: 'STRING',
@@ -285,10 +289,14 @@ export class GeminiLiveClient {
               },
               {
                 name: 'browser_type',
-                description: 'Type text into an input field or search box on the live browser page.',
+                description: 'Type text into an input field or search box on the live browser page, targeting it via its numbered badge ID or selector.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
+                    elementId: {
+                      type: 'INTEGER',
+                      description: 'Optional numbered badge ID of the input field to type into',
+                    },
                     text: {
                       type: 'STRING',
                       description: 'The text string to type into the active input',
@@ -389,6 +397,20 @@ export class GeminiLiveClient {
                     },
                   },
                   required: ['action'],
+                },
+              },
+              {
+                name: 'browser_toggle_labels',
+                description: 'Toggle Set-of-Marks (SoM) numbered badges [1], [2], [3] on all interactive buttons, links, and inputs on the webpage for 100% accurate clicking.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    enabled: {
+                      type: 'BOOLEAN',
+                      description: 'True to display numbered badges [1], [2], [3] on all interactive elements, False to hide them',
+                    },
+                  },
+                  required: ['enabled'],
                 },
               },
             ],
@@ -699,7 +721,8 @@ export class GeminiLiveClient {
         call.name === 'browser_clip_to_whiteboard' ||
         call.name === 'browser_highlight' ||
         call.name === 'browser_reader_mode' ||
-        call.name === 'browser_history_nav'
+        call.name === 'browser_history_nav' ||
+        call.name === 'browser_toggle_labels'
       ) {
         console.log(`[GeminiLiveClient #${this.clientId}] Executing browser tool ${call.name}:`, call.args);
 
@@ -709,6 +732,7 @@ export class GeminiLiveClient {
         } else if (call.name === 'browser_click') {
           actionPayload = {
             action: 'click',
+            elementId: call.args?.elementId,
             selector: call.args?.selector,
             x: call.args?.x,
             y: call.args?.y,
@@ -717,6 +741,7 @@ export class GeminiLiveClient {
         } else if (call.name === 'browser_type') {
           actionPayload = {
             action: 'type',
+            elementId: call.args?.elementId,
             text: call.args?.text,
             selector: call.args?.selector,
             pressEnter: call.args?.pressEnter !== false,
@@ -748,6 +773,11 @@ export class GeminiLiveClient {
         } else if (call.name === 'browser_history_nav') {
           actionPayload = {
             action: call.args?.action === 'forward' ? 'forward' : 'back',
+          };
+        } else if (call.name === 'browser_toggle_labels') {
+          actionPayload = {
+            action: 'toggle_som',
+            enabled: call.args?.enabled !== false,
           };
         }
 
@@ -792,9 +822,12 @@ export class GeminiLiveClient {
                 screenshot: data.screenshot,
                 action: data.action,
                 clickCoordinates: data.clickCoordinates,
+                elementId: data.elementId,
                 boundingBox: data.boundingBox,
                 label: data.label,
                 isReaderMode: data.isReaderMode,
+                showSoMBadges: data.showSoMBadges,
+                somCount: data.somCount,
               });
             }
           } else {

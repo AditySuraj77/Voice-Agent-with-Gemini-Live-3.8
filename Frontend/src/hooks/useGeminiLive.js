@@ -114,6 +114,7 @@ You have autonomous control of a live web browser connected directly to your vis
   - SUPERPOWER 2 - AI VISUAL LASER HIGHLIGHTER: When referring to a specific sentence, formula, or definition, call \`browser_highlight(text: "...", label: "...")\` to draw an animated laser highlight box around the text so ${studentName} sees exactly what you are pointing to!
   - SUPERPOWER 3 - CLEAN READER MODE: If an article is cluttered with ads or menus, call \`browser_reader_mode(enabled: true)\` to instantly strip out all clutter and show clean, distraction-free typography!
   - SUPERPOWER 4 - HISTORY NAVIGATION: If ${studentName} asks to go back or forward ("pichle page par jao", "go back"), call \`browser_history_nav(action: "back")\`.
+  - SUPERPOWER 5 - SET-OF-MARKS (SoM) NUMBERED BADGES: Clickable buttons, links, and input fields can have yellow numbered badges [1], [2], [3]... When clicking or typing, pass \`elementId\` (e.g. \`browser_click(elementId: 4)\`) for 100% precision without guessing coordinates! Call \`browser_toggle_labels(enabled: true)\` to turn them on.
 - Talk naturally as you browse! Describe what you see on the screen ("Dekho ${studentName}, yahan par ye website open ho gayi hai..."), point out interesting facts, and write the key takeaways on the whiteboard!
 
 CRITICAL THINKING TIME & PATIENCE RULE:
@@ -393,6 +394,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           boundingBox: frameData.boundingBox,
           label: frameData.label,
           isReaderMode: frameData.isReaderMode,
+          showSoMBadges: frameData.showSoMBadges,
+          somCount: frameData.somCount,
         }));
       },
       onClearWhiteboard: () => {
@@ -808,6 +811,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           boundingBox: data.boundingBox,
           label: data.label,
           isReaderMode: data.isReaderMode,
+          showSoMBadges: data.showSoMBadges,
+          somCount: data.somCount,
         }));
 
         // If diagram clipped via manual action, add directly to whiteboard
