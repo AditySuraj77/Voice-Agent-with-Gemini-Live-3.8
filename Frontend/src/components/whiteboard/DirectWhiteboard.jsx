@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Trash2, BookOpen, Check, Download, Printer, ArrowDown, History, PenTool } from 'lucide-react';
+import { Trash2, BookOpen, Check, Download, Printer, ArrowDown, History } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
 import { MathFormula } from './MathFormula.jsx';
-import { MathPlotter } from './MathPlotter.jsx';
-import { StudentCanvas } from './StudentCanvas.jsx';
 import { InlineFormattedNote } from './InlineFormattedNote.jsx';
 import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
 
@@ -25,13 +23,11 @@ export function DirectWhiteboard({
   isBrowserOpen = false,
   onToggleBrowser,
   onOpenHistory,
-  onSendCanvasToTeacher,
 }) {
   const containerRef = useRef(null);
   const bottomAnchorRef = useRef(null);
   const isUserScrolledUpRef = useRef(false);
   const [showScrollBottomPill, setShowScrollBottomPill] = useState(false);
-  const [isStudentScratchpadOpen, setIsStudentScratchpadOpen] = useState(false);
   const prevItemsLengthRef = useRef(0);
 
   // Track manual scroll to know if user is reading previous notes
@@ -112,20 +108,6 @@ export function DirectWhiteboard({
               </button>
             )}
 
-            {/* Toggle Student Scratchpad Canvas */}
-            <button
-              onClick={() => setIsStudentScratchpadOpen((prev) => !prev)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
-                isStudentScratchpadOpen
-                  ? 'bg-amber-100 text-amber-900 font-semibold border border-amber-300'
-                  : 'text-stone-600 hover:text-amber-700 hover:bg-amber-50'
-              }`}
-              title="Toggle Student Pen & Drawing Scratchpad"
-            >
-              <PenTool className="w-3.5 h-3.5 text-amber-600" />
-              <span>✏️ Scratchpad</span>
-            </button>
-
             {/* Download Markdown Notes (only if items present) */}
             {items.length > 0 && (
               <button
@@ -175,11 +157,6 @@ export function DirectWhiteboard({
             )}
           </div>
         </div>
-
-        {/* Student Pen & Drawing Scratchpad */}
-        {isStudentScratchpadOpen && (
-          <StudentCanvas onSendCanvasToTeacher={onSendCanvasToTeacher} />
-        )}
 
         {/* Empty Canvas State */}
         {items.length === 0 ? (
@@ -246,16 +223,6 @@ export function DirectWhiteboard({
                         <MathFormula formula={item.formula} displayMode={true} />
                       </div>
                     </div>
-                  )}
-
-                  {/* 3.1. Interactive Function & Math Curve Plotter (SVG Graph) */}
-                  {(item.plotExpression || (item.cardType === 'plot' && item.formula)) && (
-                    <MathPlotter
-                      expression={item.plotExpression || item.formula}
-                      xRange={item.xRange || [-5, 5]}
-                      yRange={item.yRange || [-5, 5]}
-                      title={item.plotTitle || item.topic}
-                    />
                   )}
 
                   {/* 4. Notes / Step-by-Step Derivations written directly on surface */}

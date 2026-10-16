@@ -90,10 +90,9 @@ On the whiteboard, write ONLY:
 1. Topic heading (\`topic\`)
 2. Core definitions, steps, or bullet points (\`notes\`)
 3. Mathematical formulas or equations (\`formula\`, e.g. "342 = 300 + 40 + 2" or "F = m · a")
-4. Math Curve / Function Plots: When explaining graphs, parabolas, curves, trigonometry, or calculus (e.g. y = x^2, sin(x), 2x+1, x^3 - 3x), pass \`plotExpression\` (e.g. "x^2", "sin(x)", "2*x + 1") to render an interactive visual coordinate graph on the student's board!
-5. Code blocks (\`code\`) with exact programming language (\`language\`, e.g. "c", "rust", "python", "javascript")
-6. Socratic questions for the student (\`question\`)
-7. Verified student answers with checkmark (\`studentAnswer\`, e.g. "${studentName}: 3247 ✓" or "${studentName}: 4 valence electrons ✓")
+4. Code blocks (\`code\`) with exact programming language (\`language\`, e.g. "c", "rust", "python", "javascript")
+5. Socratic questions for the student (\`question\`)
+6. Verified student answers with checkmark (\`studentAnswer\`, e.g. "${studentName}: 3247 ✓" or "${studentName}: 4 valence electrons ✓")
 
 IMPORTANT WHITEBOARD PRESERVATION RULE:
 - NEVER wipe or replace previous notes when moving to a new topic or step!
@@ -446,12 +445,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           id: 'wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
           topic,
           notes,
-          cardType: args.cardType || (args.plotExpression ? 'plot' : args.image ? 'image' : args.formula ? 'formula' : args.code ? 'code' : 'concept'),
+          cardType: args.cardType || (args.image ? 'image' : args.formula ? 'formula' : args.code ? 'code' : 'concept'),
           formula: args.formula || null,
-          plotExpression: args.plotExpression || null,
-          xRange: Array.isArray(args.xRange) ? args.xRange : null,
-          yRange: Array.isArray(args.yRange) ? args.yRange : null,
-          plotTitle: args.plotTitle || null,
           code: args.code || (args.component === 'code' ? args.content : null),
           language: (args.language || '').toLowerCase().trim() || null,
           question: args.question || null,
@@ -482,10 +477,6 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               ...lastItem,
               notes: mergedNotes,
               formula: args.formula || lastItem.formula,
-              plotExpression: args.plotExpression || lastItem.plotExpression,
-              xRange: Array.isArray(args.xRange) ? args.xRange : lastItem.xRange,
-              yRange: Array.isArray(args.yRange) ? args.yRange : lastItem.yRange,
-              plotTitle: args.plotTitle || lastItem.plotTitle,
               code: args.code || lastItem.code,
               language: (args.language || '').toLowerCase().trim() || lastItem.language,
               question: args.question || lastItem.question,
@@ -860,18 +851,6 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     }
   }, []);
 
-  /**
-   * Sends student's handwritten math calculation or drawing to Gemini Teacher for visual inspection
-   */
-  const sendCanvasDrawing = useCallback((base64Jpeg) => {
-    if (liveClientRef.current && liveClientRef.current.isConnected && base64Jpeg) {
-      liveClientRef.current.sendImageChunk(base64Jpeg);
-      liveClientRef.current.sendContextNotification(
-        `[STUDENT SUBMITTED HANDWRITTEN SCRATCHPAD]: Student has drawn math steps or a diagram on their canvas. Please look at the image, review their working/answer, and give helpful feedback in your spoken voice and on the whiteboard!`
-      );
-    }
-  }, []);
-
   return {
     sessionStatus,
     conversationState,
@@ -890,7 +869,6 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     whiteboardItems,
     setWhiteboardItems,
     clearWhiteboard,
-    sendCanvasDrawing,
     startSession,
     endSession,
     toggleMute,

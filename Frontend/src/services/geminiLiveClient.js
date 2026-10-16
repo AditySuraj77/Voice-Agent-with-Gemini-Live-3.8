@@ -192,14 +192,6 @@ export class GeminiLiveClient {
                       type: 'STRING',
                       description: 'Mathematical or scientific equation (e.g., "F = m * a", "342 = 300 + 40 + 2")',
                     },
-                    plotExpression: {
-                      type: 'STRING',
-                      description: 'Mathematical function to plot as an interactive SVG curve on the student board (e.g. "x^2", "sin(x)", "2*x + 1", "x^3 - 3*x", "cos(x)")',
-                    },
-                    plotTitle: {
-                      type: 'STRING',
-                      description: 'Optional title/label for the plotted mathematical curve',
-                    },
                     code: {
                       type: 'STRING',
                       description: 'Optional programming code snippet if teaching programming or algorithms',

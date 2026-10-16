@@ -48,7 +48,6 @@ export default function App() {
     whiteboardItems,
     setWhiteboardItems,
     clearWhiteboard,
-    sendCanvasDrawing,
     startSession,
     endSession,
     toggleMute,
@@ -170,7 +169,6 @@ export default function App() {
                 }
               }}
               onOpenHistory={() => setIsHistoryModalOpen(true)}
-              onSendCanvasToTeacher={sendCanvasDrawing}
             />
           </div>
         )}

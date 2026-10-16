@@ -46,7 +46,6 @@ export class AudioRecorder {
     this.isRecording = false;
     this.isMuted = false;
     this._lastVolTime = 0;
-    this._vadHangoverFrames = 0;
   }
 
   /**
@@ -55,33 +54,18 @@ export class AudioRecorder {
   processAudioSlice(inputData) {
     if (!this.isRecording || this.isMuted) return;
 
-    // Local Voice Activity Detection (VAD) & Noise Gate
-    // Calculate RMS energy of current audio buffer
-    let sumSquares = 0;
-    for (let i = 0; i < inputData.length; i++) {
-      sumSquares += inputData[i] * inputData[i];
-    }
-    const rms = Math.sqrt(sumSquares / inputData.length);
-
     // Throttled volume estimation for UI activity indicator (max ~5/sec instead of flooding 12+/sec)
     if (this.onVolumeChange) {
       const now = performance.now();
       if (now - this._lastVolTime > 200) {
         this._lastVolTime = now;
+        let sumSquares = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sumSquares += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sumSquares / inputData.length);
         this.onVolumeChange(Math.min(1, rms * 5)); // Scaled volume level (0 to 1)
       }
-    }
-
-    // Noise gate threshold: RMS below 0.006 is background static/fan hum
-    const SPEECH_THRESHOLD = 0.006;
-    if (rms >= SPEECH_THRESHOLD) {
-      // User is speaking, reset hangover frames to keep sending natural word endings
-      this._vadHangoverFrames = 4; // ~350ms of audio hangover
-    } else if (this._vadHangoverFrames > 0) {
-      this._vadHangoverFrames--;
-    } else {
-      // Background silence/hum: suppress packet transmission to save bandwidth & prevent accidental interruptions
-      return;
     }
 
     // Downsample input from browser rate (e.g. 48kHz) to Gemini 16kHz
