@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Trash2, BookOpen, Check, Download, Printer, ArrowDown } from 'lucide-react';
+import { Trash2, BookOpen, Check, Download, Printer, ArrowDown, History } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
 import { MathFormula } from './MathFormula.jsx';
+import { MathPlotter } from './MathPlotter.jsx';
 import { InlineFormattedNote } from './InlineFormattedNote.jsx';
 import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
 
@@ -22,6 +23,7 @@ export function DirectWhiteboard({
   onToggleCodeLab,
   isBrowserOpen = false,
   onToggleBrowser,
+  onOpenHistory,
 }) {
   const containerRef = useRef(null);
   const bottomAnchorRef = useRef(null);
@@ -131,6 +133,18 @@ export function DirectWhiteboard({
               </button>
             )}
 
+            {/* Past Study Session History Drawer */}
+            {onOpenHistory && (
+              <button
+                onClick={onOpenHistory}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-600 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
+                title="Past Study Sessions"
+              >
+                <History className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden sm:inline">History</span>
+              </button>
+            )}
+
             {/* Erase Board (only if items present) */}
             {items.length > 0 && onClearBoard && (
               <button
@@ -210,6 +224,16 @@ export function DirectWhiteboard({
                         <MathFormula formula={item.formula} displayMode={true} />
                       </div>
                     </div>
+                  )}
+
+                  {/* 3.1. Interactive Function & Math Curve Plotter (SVG Graph) */}
+                  {(item.plotExpression || (item.cardType === 'plot' && item.formula)) && (
+                    <MathPlotter
+                      expression={item.plotExpression || item.formula}
+                      xRange={item.xRange || [-5, 5]}
+                      yRange={item.yRange || [-5, 5]}
+                      title={item.plotTitle || item.topic}
+                    />
                   )}
 
                   {/* 4. Notes / Step-by-Step Derivations written directly on surface */}
