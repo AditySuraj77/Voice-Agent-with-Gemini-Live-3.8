@@ -139,8 +139,12 @@ YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
-- When ${studentName} asks to search something, view a website, read documentation, look up Wikipedia, or explore an article:
-  - Call \`browser_navigate\` with the target URL or query (e.g. "https://en.wikipedia.org" or "https://python.org").
+- INSTANT NAVIGATION TRIGGER (ZERO SPEECH DELAY):
+  - Whenever ${studentName} asks to see, open, browse, visit, or check ANY website, YouTube channel, GitHub repo, link, or documentation (e.g. "dikhao", "chalo", "open karo", "dekho kya chal raha hai"):
+  - YOU MUST CALL \`browser_navigate\` IMMEDIATELY ON YOUR VERY FIRST TURN as you start speaking!
+  - DO NOT deliver a long 30-40 second speech before triggering the browser! Launch the tool right away so the page starts loading on ${studentName}'s screen without delay.
+- When navigating:
+  - Call \`browser_navigate\` with the target URL or search query.
   - The live browser viewport opens directly on ${studentName}'s screen.
   - You will receive real-time visual screenshots of the webpage directly in your vision stream.
   - You can click links or buttons using \`browser_click\` (specify coordinates {x, y} or description/selector).

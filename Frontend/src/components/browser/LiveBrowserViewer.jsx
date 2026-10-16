@@ -270,6 +270,16 @@ export function LiveBrowserViewer({
               style={{ maxHeight: 'calc(100vh - 120px)' }}
             />
 
+            {/* Visual Loading Overlay when navigating or executing actions */}
+            {browserState.isLoading && (
+              <div className="absolute inset-0 bg-stone-950/40 backdrop-blur-[2px] flex items-center justify-center z-40 transition-all pointer-events-none animate-fadeIn">
+                <div className="px-3.5 py-1.5 rounded-xl bg-stone-900/90 border border-cyan-500/40 text-cyan-300 flex items-center gap-2 shadow-xl">
+                  <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                  <span className="text-xs font-medium">Navigating live webpage...</span>
+                </div>
+              </div>
+            )}
+
             {/* AI Click Coordinates Visual Ripple Highlight */}
             {clickEffect && imageRef.current && (
               <div

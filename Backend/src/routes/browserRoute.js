@@ -75,7 +75,8 @@ router.post('/browser/action', async (req, res) => {
  */
 router.get('/browser/viewport', async (req, res) => {
   try {
-    const state = await browserService.getViewportState();
+    const force = req.query.force === 'true';
+    const state = await browserService.getViewportState(force);
     return res.json({
       success: true,
       ...state,

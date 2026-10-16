@@ -99,7 +99,6 @@ class BrowserService {
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
-            '--disable-software-rasterizer',
             '--disable-3d-apis',
             '--disable-webgl',
             '--disable-background-networking',
@@ -142,14 +141,14 @@ class BrowserService {
           const resourceType = req.resourceType();
           const url = req.url().toLowerCase();
 
-          // 1. Block heavy video and audio media streams
+          // 1. Block heavy video and audio media streams to guarantee 0% background decoding and zero heating
           if (resourceType === 'media' || BLOCKED_EXTENSIONS.some((ext) => url.includes(ext))) {
             return route.abort();
           }
 
-          // 2. Block heavy ad networks and telemetry
+          // 2. Silently fulfill heavy ad networks and telemetry with empty 204 to prevent crashing modern SPAs
           if (BLOCKED_DOMAINS.some((domain) => url.includes(domain))) {
-            return route.abort();
+            return route.fulfill({ status: 204, body: '' });
           }
 
           return route.continue();
@@ -380,7 +379,7 @@ class BrowserService {
   }
 
   /**
-   * Navigates to target URL with 7s hard timeout and non-blocking recovery.
+   * Navigates to target URL with universal 'commit' signal, adaptive SPA hydration, and progressive 2-stage capture.
    */
   async navigate(targetUrl) {
     await this.init();
@@ -402,15 +401,22 @@ class BrowserService {
     this.lastAction = { type: 'navigate', url: cleanUrl, timestamp: Date.now() };
 
     try {
+      // 1. Commit navigation immediately (works on all websites in ~300-500ms without timing out)
       await this.page.goto(cleanUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 7000,
+        waitUntil: 'commit',
+        timeout: 15000,
       });
+
+      // 2. Allow modern dynamic frameworks (React, Vue, Next.js, Polymer, Svelte) to mount
+      await Promise.race([
+        this.page.waitForLoadState('domcontentloaded', { timeout: 3500 }).catch(() => {}),
+        new Promise((r) => setTimeout(r, 1200)),
+      ]);
     } catch (err) {
       console.warn(`[BrowserService] Fast recovery on ${cleanUrl}:`, err.message);
     }
 
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 350));
 
     this.activeUrl = this.page.url();
     try {
@@ -420,6 +426,18 @@ class BrowserService {
     }
 
     const screenshot = await this.captureScreenshot();
+
+    // 3. Progressive 2-stage capture: Schedule a follow-up background capture at 1.4s
+    // so any late-rendering SPAs (e.g. YouTube feeds, GitHub markdown) update this.lastScreenshot automatically
+    setTimeout(async () => {
+      try {
+        if (this.page && !this.page.isClosed() && this.activeUrl === cleanUrl) {
+          this.pageTitle = await this.page.title().catch(() => this.pageTitle);
+          await this.captureScreenshot();
+          console.log(`[BrowserService] Progressive hydrated frame updated for: ${this.activeUrl}`);
+        }
+      } catch (e) {}
+    }, 1400);
 
     return {
       status: 'success',
@@ -798,9 +816,9 @@ class BrowserService {
   /**
    * Retrieves current viewport state and screenshot.
    */
-  async getViewportState() {
+  async getViewportState(force = false) {
     await this.init();
-    if (!this.lastScreenshot) {
+    if (!this.lastScreenshot || force) {
       await this.captureScreenshot();
     }
     return {

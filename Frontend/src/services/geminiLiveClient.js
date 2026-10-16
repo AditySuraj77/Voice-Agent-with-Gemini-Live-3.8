@@ -830,6 +830,33 @@ export class GeminiLiveClient {
                 somCount: data.somCount,
               });
             }
+
+            // Progressive auto-hydration follow-up for dynamic SPAs (YouTube, GitHub, complex web apps)
+            if (call.name === 'browser_navigate' && this.backendUrl) {
+              setTimeout(async () => {
+                try {
+                  const vpRes = await fetch(`${this.backendUrl}/api/browser/viewport`);
+                  if (vpRes.ok) {
+                    const vpData = await vpRes.json();
+                    if (vpData.screenshot && vpData.url === data.url) {
+                      if (this.onBrowserFrame) {
+                        this.onBrowserFrame({
+                          url: vpData.url,
+                          title: vpData.title,
+                          screenshot: vpData.screenshot,
+                          action: 'auto_hydrate',
+                          isReaderMode: vpData.isReaderMode,
+                          showSoMBadges: vpData.showSoMBadges,
+                          somCount: vpData.somCount,
+                        });
+                      }
+                      this.sendImageChunk(vpData.screenshot);
+                      console.log('[GeminiLiveClient] Auto-hydrated progressive frame received and streamed.');
+                    }
+                  }
+                } catch (e) {}
+              }, 1500);
+            }
           } else {
             actionResult = { status: 'error', message: `Browser action failed with HTTP status ${res.status}` };
           }
