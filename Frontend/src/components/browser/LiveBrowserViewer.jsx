@@ -90,7 +90,10 @@ export function LiveBrowserViewer({
   ];
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0f1d] text-stone-200 font-sans text-xs overflow-hidden select-none border-l border-stone-800 shadow-2xl">
+    <div
+      data-testid="live-browser-viewer"
+      className="flex flex-col h-full bg-[#0a0f1d] text-stone-200 font-sans text-xs overflow-hidden select-none border-l border-stone-800 shadow-2xl"
+    >
       {/* 1. Browser Window Chrome Header */}
       <div className="px-3 py-2 bg-[#141b2d] border-b border-stone-800 flex items-center justify-between gap-2 shrink-0 flex-wrap">
         <div className="flex items-center gap-1.5 shrink-0">
@@ -338,7 +341,10 @@ export function LiveBrowserViewer({
       </div>
 
       {/* 3. Bottom Status / Information Bar */}
-      <div className="px-3 py-1.5 bg-[#141b2d] border-t border-stone-800 flex items-center justify-between text-[11px] text-stone-400 shrink-0 font-mono">
+      <div
+        data-testid="live-browser-status-bar"
+        className="px-3 py-1.5 bg-[#141b2d] border-t border-stone-800 flex items-center justify-between text-[11px] text-stone-400 shrink-0 font-mono"
+      >
         <div className="flex items-center gap-2 truncate max-w-md">
           <span className="font-semibold text-stone-300 truncate">
             {browserState.title || 'Live Web Viewport'}
