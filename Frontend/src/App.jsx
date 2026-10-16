@@ -48,7 +48,6 @@ export default function App() {
     whiteboardItems,
     setWhiteboardItems,
     clearWhiteboard,
-    inspectWhiteboardSnapshot,
     startSession,
     endSession,
     toggleMute,
@@ -170,7 +169,6 @@ export default function App() {
                 }
               }}
               onOpenHistory={() => setIsHistoryModalOpen(true)}
-              onInspectAnnotations={inspectWhiteboardSnapshot}
             />
           </div>
         )}
