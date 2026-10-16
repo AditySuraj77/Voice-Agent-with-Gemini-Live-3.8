@@ -102,6 +102,14 @@ IMPORTANT WHITEBOARD PRESERVATION RULE:
 ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
 YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
 
+CRITICAL STUDENT HANDWRITING & ANNOTATION INSPECTION:
+- The student can write handwritten math steps, solve equations, or draw circles/arrows with a Pen or Highlighter directly on the whiteboard surface!
+- When you receive a whiteboard vision frame or notification that the student wrote/highlighted on the board:
+  - CAREFULLY examine their handwritten steps, calculations, or circled words.
+  - Verify if their mathematical derivation or answer is correct.
+  - If they made a mistake, gently guide them to the exact step where it occurred.
+  - Always praise correct working and give your conversational explanation warmly in your spoken voice and on the whiteboard!
+
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
 - When ${studentName} asks to search something, view a website, read documentation, look up Wikipedia, or explore an article:
@@ -851,6 +859,19 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     }
   }, []);
 
+  /**
+   * Sends the full composite whiteboard screenshot (notes + student hand-drawn pen/highlights)
+   * to Gemini Live visual input for immediate real-time inspection and spoken feedback.
+   */
+  const inspectWhiteboardSnapshot = useCallback((base64Jpeg) => {
+    if (liveClientRef.current && liveClientRef.current.isConnected && base64Jpeg) {
+      liveClientRef.current.sendImageChunk(base64Jpeg);
+      liveClientRef.current.sendContextNotification(
+        `[STUDENT ANNOTATED ON WHITEBOARD]: The student has written hand-drawn steps or highlighted parts of the whiteboard notes with pen. Look carefully at what they wrote/marked on the board, verify their steps/calculations, and give helpful feedback in your spoken voice and on the whiteboard!`
+      );
+    }
+  }, []);
+
   return {
     sessionStatus,
     conversationState,
@@ -869,6 +890,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     whiteboardItems,
     setWhiteboardItems,
     clearWhiteboard,
+    inspectWhiteboardSnapshot,
     startSession,
     endSession,
     toggleMute,
