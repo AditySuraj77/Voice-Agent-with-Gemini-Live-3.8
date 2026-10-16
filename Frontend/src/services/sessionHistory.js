@@ -88,6 +88,12 @@ export function startNewSession() {
   sessionStorage.removeItem(CURRENT_SESSION_ID_KEY);
 }
 
+export function setActiveSessionId(sessionId) {
+  if (sessionId) {
+    sessionStorage.setItem(CURRENT_SESSION_ID_KEY, sessionId);
+  }
+}
+
 export function deleteSession(id) {
   try {
     const sessions = getAllSessions().filter((s) => s.id !== id);

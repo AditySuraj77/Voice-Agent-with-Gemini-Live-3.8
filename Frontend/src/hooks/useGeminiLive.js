@@ -48,9 +48,29 @@ function isSameOrRelatedTopic(topicA, topicB) {
 }
 
 /**
+ * Formats a clear, structured summary of whiteboard items (topics, notes, formulas, code)
+ * so Gemini Live has 100% full awareness of what the student sees on the board.
+ */
+function formatWhiteboardSummary(items = []) {
+  if (!items || items.length === 0) return '';
+  return items
+    .map((item, idx) => {
+      const parts = [];
+      if (item.topic) parts.push(`Topic: "${item.topic}"`);
+      if (item.notes && item.notes.length > 0) parts.push(`Notes: ${item.notes.join('; ')}`);
+      if (item.formula) parts.push(`Formula: ${item.formula}`);
+      if (item.code) parts.push(`Code (${item.language || 'code'}): ${item.code.slice(0, 150)}`);
+      if (item.question) parts.push(`Question: ${item.question}`);
+      if (item.studentAnswer) parts.push(`Answer: ${item.studentAnswer}`);
+      return `[Board Item ${idx + 1}] ${parts.join(' | ')}`;
+    })
+    .join('\n');
+}
+
+/**
  * Builds rich, adaptive, human-like system prompt for Aristotle AI Voice Tutor.
  */
-function buildTeacherSystemInstruction(studentProfile, recentTopicsSummary = '') {
+function buildTeacherSystemInstruction(studentProfile, recentTopicsSummary = '', whiteboardSummary = '') {
   const studentName = studentProfile?.name || 'Bhai or Bro';
   const studentGrade = studentProfile?.grade || 'Class 1-12 / Middle School , College';
   const studentInterests = studentProfile?.interests || 'Cricket, Science experiments, Video games';
@@ -66,7 +86,21 @@ STUDENT IDENTITY & PROFILE (ALREADY LOADED & CONFIRMED):
 - Interests & Hobbies: "${studentInterests}". Freely relate concepts, word problems, and real-world analogies to these interests (e.g. physics of cricket bowling/batting, gaming framerates, coding logic, robotics)!
 - Language Preference: "${studentLang}". Speak naturally and warmly in this style.
 - Goal: "${studentGoal}".
-${recentTopicsSummary ? `\nPREVIOUS WHITEBOARD TOPICS DISCUSSED IN THIS CONTINUOUS SESSION:\n${recentTopicsSummary}\n` : ''}
+
+ACTIVE WHITEBOARD CONTENTS & RESTORED STUDY SESSION MEMORY:
+${whiteboardSummary ? `The student's whiteboard is CURRENTLY LOADED with notes from their study session:
+${whiteboardSummary}
+
+CRITICAL RULES FOR RESTORED SESSION & MEMORY:
+1. You ALREADY have complete visibility and continuous memory of all notes, topics, and formulas listed above! They are visible right now on ${studentName}'s screen.
+2. NEVER say "I don't have access to past session history", "har naye session me data save nahi hota", "mujhe purana session yaad nahi", or ask the student to remind you what they were learning!
+3. When ${studentName} says "hum kya padh rahe the", "wahin se shuru karte hain", "continue karo", or highlights/points to items on the board:
+   - Immediately acknowledge the exact topics or formulas on their board (e.g. ${recentTopicsSummary ? `"${recentTopicsSummary}"` : 'the notes above'}).
+   - Pick up and resume teaching directly from where you left off without asking for hints!
+4. If notes are already on the board when the voice call starts:
+   - Greet ${studentName} warmly and explicitly acknowledge the active topic (e.g. "Welcome back ${studentName}! Main dekh raha hoon whiteboard par hum ${recentTopicsSummary ? recentTopicsSummary.split(', ').pop() : 'hamare topic'} par the. Chalo wahin se aage badhte hain!").
+   - DO NOT overwrite or ignore these notes!` : `The whiteboard is currently clear for a fresh topic.`}
+
 You can teach ANY subject (Math, Physics, Chemistry, Biology, Computer Science, History, Hindi, English, Economics, etc.).
 
 CRITICAL CONVERSATIONAL PACING & HUMAN-LIKE DEPTH:
@@ -233,10 +267,32 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   };
 
   /**
-   * Manually clears the whiteboard.
+   * Manually clears the whiteboard and alerts Gemini Live.
    */
   const clearWhiteboard = useCallback(() => {
     setWhiteboardItems([]);
+    whiteboardItemsRef.current = [];
+    if (liveClientRef.current && liveClientRef.current.isConnected) {
+      liveClientRef.current.sendContextNotification(
+        `[WHITEBOARD CLEARED]: The student has erased the whiteboard to start a fresh topic.`
+      );
+    }
+  }, []);
+
+  /**
+   * Restores previous study session notes onto whiteboard and synchronizes context with Gemini Live.
+   */
+  const restoreSessionContext = useCallback((pastItems = [], sessionTitle = '') => {
+    setWhiteboardItems(pastItems);
+    whiteboardItemsRef.current = pastItems;
+
+    if (liveClientRef.current && liveClientRef.current.isConnected && pastItems.length > 0) {
+      const summary = formatWhiteboardSummary(pastItems);
+      const sName = studentProfileRef.current?.name || 'Adi';
+      liveClientRef.current.sendContextNotification(
+        `[STUDENT RESTORED PAST STUDY SESSION]: ${sName} just loaded their previous study session${sessionTitle ? ` titled "${sessionTitle}"` : ''} onto the whiteboard.\nThe whiteboard is now populated with these notes and topics:\n${summary}\n\nYou can see all of these notes on the whiteboard right now. When ${sName} asks "hum kya padh rahe the" or asks to resume, immediately reference these specific topics/formulas and continue teaching from here without asking them to remind you! NEVER say "mujhe yaad nahi" or "har naye session me data save nahi hota".`
+      );
+    }
   }, []);
 
   /**
@@ -252,7 +308,12 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
       .slice(-6)
       .join(', ');
 
-    const teacherSystemInstruction = buildTeacherSystemInstruction(studentProfileRef.current, recentTopics);
+    const whiteboardSummary = formatWhiteboardSummary(whiteboardItemsRef.current);
+    const teacherSystemInstruction = buildTeacherSystemInstruction(
+      studentProfileRef.current,
+      recentTopics,
+      whiteboardSummary
+    );
 
     liveClientRef.current = new GeminiLiveClient({
       backendUrl: BACKEND_URL,
@@ -275,13 +336,22 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
         const sName = studentProfileRef.current?.name || 'Adi';
         setTimeout(() => {
           if (liveClientRef.current && liveClientRef.current.isConnected) {
+            const currentWbItems = whiteboardItemsRef.current || [];
             if (!isRotation) {
               const sGrade = studentProfileRef.current?.grade || 'Class 8-10 / Middle School';
               const sInterests = studentProfileRef.current?.interests || 'Cricket, Science experiments, Video games';
               const sLang = studentProfileRef.current?.preferredLanguage || 'Hinglish (Hindi + English mix)';
-              liveClientRef.current.sendContextNotification(
-                `[STUDENT PROFILE HANDSHAKE]: The student's name is "${sName}", Grade: "${sGrade}", Interests: "${sInterests}", Language: "${sLang}". You ALREADY know them. Greet them warmly by name.`
-              );
+
+              if (currentWbItems.length > 0) {
+                const wbSummary = formatWhiteboardSummary(currentWbItems);
+                liveClientRef.current.sendContextNotification(
+                  `[STUDENT PROFILE & RESTORED STUDY SESSION HANDSHAKE]: The student's name is "${sName}", Grade: "${sGrade}", Interests: "${sInterests}", Language: "${sLang}".\nCRITICAL CONTEXT: ${sName}'s whiteboard is ALREADY LOADED with notes from their study session:\n${wbSummary}\n\nYou ALREADY know all these notes and topics! When greeting ${sName}, acknowledge that you see their notes on the board (e.g. on "${recentTopics}") and ask if they'd like to pick up right where they left off. NEVER say "mujhe yaad nahi" or "har naye session me data save nahi hota".`
+                );
+              } else {
+                liveClientRef.current.sendContextNotification(
+                  `[STUDENT PROFILE HANDSHAKE]: The student's name is "${sName}", Grade: "${sGrade}", Interests: "${sInterests}", Language: "${sLang}". You ALREADY know them. Greet them warmly by name.`
+                );
+              }
             } else {
               liveClientRef.current.sendContextNotification(
                 `[SESSION CONTINUATION]: Seamlessly continuing tutoring session with ${sName}. Whiteboard has notes on: ${recentTopics || 'various topics'}. Pick up right where we left off. DO NOT repeat greetings.`
@@ -870,6 +940,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     whiteboardItems,
     setWhiteboardItems,
     clearWhiteboard,
+    restoreSessionContext,
     startSession,
     endSession,
     toggleMute,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { History, X, Trash2, Calendar, FileText, ChevronRight, PlusCircle } from 'lucide-react';
-import { getAllSessions, deleteSession, clearAllHistory, startNewSession } from '../../services/sessionHistory.js';
+import { getAllSessions, deleteSession, clearAllHistory, startNewSession, setActiveSessionId } from '../../services/sessionHistory.js';
 
 /**
  * Slide-over drawer to browse, restore, and review previous multi-day study sessions
@@ -99,7 +99,8 @@ export function SessionHistoryModal({
               <div
                 key={session.id}
                 onClick={() => {
-                  if (onRestoreSession) onRestoreSession(session.items);
+                  setActiveSessionId(session.id);
+                  if (onRestoreSession) onRestoreSession(session.items, session.title);
                   onClose();
                 }}
                 className="group p-4 rounded-xl bg-white border border-stone-200 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer relative"

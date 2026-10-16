@@ -48,6 +48,7 @@ export default function App() {
     whiteboardItems,
     setWhiteboardItems,
     clearWhiteboard,
+    restoreSessionContext,
     startSession,
     endSession,
     toggleMute,
@@ -329,8 +330,8 @@ export default function App() {
       <SessionHistoryModal
         isOpen={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
-        onRestoreSession={(pastItems) => {
-          setWhiteboardItems(pastItems);
+        onRestoreSession={(pastItems, sessionTitle) => {
+          restoreSessionContext(pastItems, sessionTitle);
         }}
         onStartFreshSession={() => {
           clearWhiteboard();
