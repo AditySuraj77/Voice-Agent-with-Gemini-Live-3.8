@@ -5,6 +5,7 @@ import { DirectWhiteboard } from './components/whiteboard/DirectWhiteboard.jsx';
 import { LiveBrowserViewer } from './components/browser/LiveBrowserViewer.jsx';
 import { ControlsBar } from './components/ControlsBar.jsx';
 import { StudentProfileModal } from './components/profile/StudentProfileModal.jsx';
+import { SessionHistoryModal } from './components/history/SessionHistoryModal.jsx';
 import { getStudentProfile, saveStudentProfile } from './services/studentProfile.js';
 import { AlertCircle, X, GripVertical, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const CodeLab = lazy(() =>
 export default function App() {
   const [studentProfile, setStudentProfile] = useState(() => getStudentProfile());
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   // Preload Monaco Editor in the background so Code Lab opens with 0ms delay
   useEffect(() => {
@@ -44,7 +46,9 @@ export default function App() {
     isMuted,
     error,
     whiteboardItems,
+    setWhiteboardItems,
     clearWhiteboard,
+    sendCanvasDrawing,
     startSession,
     endSession,
     toggleMute,
@@ -165,6 +169,8 @@ export default function App() {
                   setBrowserState((prev) => ({ ...prev, isOpen: true }));
                 }
               }}
+              onOpenHistory={() => setIsHistoryModalOpen(true)}
+              onSendCanvasToTeacher={sendCanvasDrawing}
             />
           </div>
         )}
@@ -319,6 +325,18 @@ export default function App() {
         onClose={() => setIsProfileModalOpen(false)}
         profile={studentProfile}
         onSaveProfile={handleSaveProfile}
+      />
+
+      {/* Multi-Day Session History Modal */}
+      <SessionHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        onRestoreSession={(pastItems) => {
+          setWhiteboardItems(pastItems);
+        }}
+        onStartFreshSession={() => {
+          clearWhiteboard();
+        }}
       />
     </div>
   );

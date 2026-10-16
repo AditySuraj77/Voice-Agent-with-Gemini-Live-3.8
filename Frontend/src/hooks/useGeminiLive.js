@@ -860,6 +860,18 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     }
   }, []);
 
+  /**
+   * Sends student's handwritten math calculation or drawing to Gemini Teacher for visual inspection
+   */
+  const sendCanvasDrawing = useCallback((base64Jpeg) => {
+    if (liveClientRef.current && liveClientRef.current.isConnected && base64Jpeg) {
+      liveClientRef.current.sendImageChunk(base64Jpeg);
+      liveClientRef.current.sendContextNotification(
+        `[STUDENT SUBMITTED HANDWRITTEN SCRATCHPAD]: Student has drawn math steps or a diagram on their canvas. Please look at the image, review their working/answer, and give helpful feedback in your spoken voice and on the whiteboard!`
+      );
+    }
+  }, []);
+
   return {
     sessionStatus,
     conversationState,
@@ -878,6 +890,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     whiteboardItems,
     setWhiteboardItems,
     clearWhiteboard,
+    sendCanvasDrawing,
     startSession,
     endSession,
     toggleMute,
