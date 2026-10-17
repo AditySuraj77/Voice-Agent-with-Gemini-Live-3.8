@@ -10,6 +10,7 @@ import { MathFormula } from './MathFormula.jsx';
 import { InlineFormattedNote } from './InlineFormattedNote.jsx';
 import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
 import { captureElementWithOverlay } from '../../utils/whiteboardSnapshot.js';
+import { saveActiveSession } from '../../services/sessionHistory.js';
 
 /**
  * Direct Whiteboard Canvas
@@ -34,6 +35,7 @@ export function DirectWhiteboard({
   aiHighlightedTopic = null,
   aiLaserPoint = null,
   onInspectAnnotations = null,
+  restoredCanvasSnapshot = null,
 }) {
   const containerRef = useRef(null);
   const contentWrapperRef = useRef(null);
@@ -60,6 +62,33 @@ export function DirectWhiteboard({
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef(null);
   const autoInspectTimerRef = useRef(null);
+  const hasDrawnRef = useRef(false);
+  const saveCanvasTimerRef = useRef(null);
+
+  // Auto-save handwritten canvas drawing snapshot to session history
+  const scheduleSaveCanvasToHistory = useCallback(() => {
+    if (saveCanvasTimerRef.current) {
+      clearTimeout(saveCanvasTimerRef.current);
+    }
+    saveCanvasTimerRef.current = setTimeout(() => {
+      const canvas = overlayCanvasRef.current;
+      if (!canvas) return;
+      try {
+        const snapshot = hasDrawnRef.current ? canvas.toDataURL('image/png') : null;
+        saveActiveSession(items, studentProfile, { canvasSnapshot: snapshot });
+      } catch (e) {
+        console.warn('[DirectWhiteboard] Could not save canvas snapshot to history:', e);
+      }
+    }, 400);
+  }, [items, studentProfile]);
+
+  useEffect(() => {
+    return () => {
+      if (saveCanvasTimerRef.current) {
+        clearTimeout(saveCanvasTimerRef.current);
+      }
+    };
+  }, []);
 
   // Resize canvas to match scrollable content dimensions
   const updateCanvasSize = useCallback(() => {
@@ -191,8 +220,11 @@ export function DirectWhiteboard({
     setCanUndo(undoStackRef.current.length > 0);
 
     // Recheck if anything is drawn
-    setHasDrawn(undoStackRef.current.length > 0);
-  }, []);
+    const stillHasDrawings = undoStackRef.current.length > 0;
+    setHasDrawn(stillHasDrawings);
+    hasDrawnRef.current = stillHasDrawings;
+    scheduleSaveCanvasToHistory();
+  }, [scheduleSaveCanvasToHistory]);
 
   // Perform Redo
   const handleRedo = useCallback(() => {
@@ -210,7 +242,9 @@ export function DirectWhiteboard({
     ctx.putImageData(nextSnapshot, 0, 0);
     setCanRedo(redoStackRef.current.length > 0);
     setHasDrawn(true);
-  }, []);
+    hasDrawnRef.current = true;
+    scheduleSaveCanvasToHistory();
+  }, [scheduleSaveCanvasToHistory]);
 
   // Global Keyboard shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
   useEffect(() => {
@@ -267,7 +301,9 @@ export function DirectWhiteboard({
       ctx.stroke();
       ctx.restore();
       setHasDrawn(true);
+      hasDrawnRef.current = true;
       scheduleAutoInspect();
+      scheduleSaveCanvasToHistory();
       return;
     }
 
@@ -285,7 +321,9 @@ export function DirectWhiteboard({
       ctx.stroke();
       ctx.restore();
       setHasDrawn(true);
+      hasDrawnRef.current = true;
       scheduleAutoInspect();
+      scheduleSaveCanvasToHistory();
       return;
     }
 
@@ -324,6 +362,7 @@ export function DirectWhiteboard({
     ctx.stroke();
     lastPointRef.current = coords;
     setHasDrawn(true);
+    hasDrawnRef.current = true;
   };
 
   const handleDrawEnd = () => {
@@ -331,6 +370,7 @@ export function DirectWhiteboard({
       isDrawingRef.current = false;
       lastPointRef.current = null;
       scheduleAutoInspect();
+      scheduleSaveCanvasToHistory();
     }
   };
 
@@ -341,10 +381,50 @@ export function DirectWhiteboard({
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasDrawn(false);
+    hasDrawnRef.current = false;
     if (autoInspectTimerRef.current) {
       clearTimeout(autoInspectTimerRef.current);
     }
+    scheduleSaveCanvasToHistory();
   };
+
+  // Restore or clear handwritten canvas drawing from session history
+  useEffect(() => {
+    if (restoredCanvasSnapshot === undefined || restoredCanvasSnapshot === null) return;
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const snapshotUrl =
+      typeof restoredCanvasSnapshot === 'string'
+        ? restoredCanvasSnapshot
+        : restoredCanvasSnapshot?.snapshot || null;
+
+    if (!snapshotUrl || restoredCanvasSnapshot?.clear) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setHasDrawn(false);
+      hasDrawnRef.current = false;
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      setCanUndo(false);
+      setCanRedo(false);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      updateCanvasSize();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      setHasDrawn(true);
+      hasDrawnRef.current = true;
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      setCanUndo(false);
+      setCanRedo(false);
+    };
+    img.src = snapshotUrl;
+  }, [restoredCanvasSnapshot, updateCanvasSize]);
 
   return (
     <div
@@ -722,8 +802,8 @@ export function DirectWhiteboard({
               </button>
             )}
 
-            {/* Erase Board (only if items present) */}
-            {items.length > 0 && onClearBoard && (
+            {/* Erase Board (if items or hand-drawings present) */}
+            {(items.length > 0 || hasDrawn) && onClearBoard && (
               <button
                 type="button"
                 onClick={onClearBoard}

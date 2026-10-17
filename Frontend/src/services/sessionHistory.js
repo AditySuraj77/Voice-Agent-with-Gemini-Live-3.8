@@ -19,8 +19,14 @@ export function getAllSessions() {
   }
 }
 
-export function saveActiveSession(items = [], studentProfile = {}) {
-  if (!items || items.length === 0) return null;
+export function saveActiveSession(items = [], studentProfile = {}, options = {}) {
+  const canvasSnapshot = typeof options === 'string' ? options : options?.canvasSnapshot || null;
+  const hasItems = Array.isArray(items) && items.length > 0;
+  const hasDrawing = Boolean(canvasSnapshot);
+
+  // If there are neither typed notes nor handwritten drawings, nothing to save
+  if (!hasItems && !hasDrawing) return null;
+
   try {
     const sessions = getAllSessions();
     let currentId = sessionStorage.getItem(CURRENT_SESSION_ID_KEY);
@@ -34,24 +40,36 @@ export function saveActiveSession(items = [], studentProfile = {}) {
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     // Extract key topics for the session title
-    const topics = items
-      .map((item) => item.topic)
-      .filter(Boolean)
-      .slice(0, 3);
+    const topics = hasItems
+      ? items
+          .map((item) => item.topic)
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
 
-    const title = topics.length > 0 ? topics.join(' • ') : `Study Session - ${dateStr}`;
+    const title =
+      topics.length > 0
+        ? topics.join(' • ')
+        : hasDrawing && !hasItems
+        ? `Handwritten Notes • ${dateStr}`
+        : `Study Session - ${dateStr}`;
 
     let sessionEntry;
     if (currentId) {
       const existingIdx = sessions.findIndex((s) => s.id === currentId);
       if (existingIdx !== -1) {
+        // Retain existing canvasSnapshot if current update didn't supply a new one
+        const resolvedSnapshot =
+          canvasSnapshot !== null ? canvasSnapshot : (sessions[existingIdx].canvasSnapshot || null);
+
         sessions[existingIdx] = {
           ...sessions[existingIdx],
-          title,
+          title: hasItems ? title : (sessions[existingIdx].title || title),
           updatedAt: now.toISOString(),
           timeStr,
-          itemsCount: items.length,
-          items,
+          itemsCount: (items || []).length,
+          items: items || [],
+          canvasSnapshot: resolvedSnapshot,
         };
         sessionEntry = sessions[existingIdx];
       }
@@ -68,15 +86,33 @@ export function saveActiveSession(items = [], studentProfile = {}) {
         dateStr,
         timeStr,
         studentName: studentProfile?.name || 'Student',
-        itemsCount: items.length,
-        items,
+        itemsCount: (items || []).length,
+        items: items || [],
+        canvasSnapshot: canvasSnapshot || null,
       };
       sessions.unshift(sessionEntry);
     }
 
-    // Keep up to 50 recent sessions
-    const trimmed = sessions.slice(0, 50);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    // Keep up to 30 recent sessions with graceful quota handling
+    try {
+      const trimmed = sessions.slice(0, 30);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } catch (quotaErr) {
+      console.warn('[SessionStorage] LocalStorage quota exceeded, trimming older sessions...', quotaErr);
+      const cleaned = sessions.slice(0, 20).map((s, idx) => {
+        if (idx >= 6) {
+          const { canvasSnapshot: _cs, ...rest } = s;
+          return rest;
+        }
+        return s;
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      } catch (innerErr) {
+        console.error('[SessionStorage] Failed to save even after trimming:', innerErr);
+      }
+    }
+
     return sessionEntry;
   } catch (e) {
     console.error('[SessionStorage] Error saving session:', e);

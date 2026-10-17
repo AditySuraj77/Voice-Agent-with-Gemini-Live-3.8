@@ -206,4 +206,72 @@ test.describe('E2E Verification: Interactive Whiteboard Drawing & Multimodal Ins
     });
     await expect(laserPointer).toBeHidden();
   });
+
+  test('6. Handwriting Canvas Drawing Auto-Saves to History and Restores Accurately', async ({ page }) => {
+    // 1. Activate Pen and draw on the canvas
+    const penBtn = page.getByTestId('tool-pen');
+    await penBtn.click();
+
+    const canvas = page.getByTestId('drawing-canvas-overlay');
+    await expect(canvas).toBeVisible();
+
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+
+    // Draw handwriting strokes (e.g. handwritten equation)
+    await page.mouse.move(box.x + 80, box.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 130, box.y + 110);
+    await page.mouse.move(box.x + 180, box.y + 90);
+    await page.mouse.up();
+
+    // Allow debounced auto-save to persist to localStorage (400ms debounce)
+    await page.waitForTimeout(650);
+
+    // 2. Verify localStorage has saved session with canvasSnapshot
+    const savedSessions = await page.evaluate(() => {
+      const raw = localStorage.getItem('aristotle_session_history_v1');
+      return raw ? JSON.parse(raw) : [];
+    });
+
+    expect(savedSessions.length).toBeGreaterThan(0);
+    const activeSession = savedSessions[0];
+    expect(activeSession.canvasSnapshot).not.toBeNull();
+    expect(activeSession.canvasSnapshot).toContain('data:image/png;base64');
+
+    // 3. Open History Modal
+    const historyBtn = page.getByTitle('Past Study Sessions');
+    await expect(historyBtn).toBeVisible();
+    await historyBtn.click();
+
+    // Verify history drawer shows ink notes indicator
+    const historyItem = page.getByTestId('session-history-item').first();
+    await expect(historyItem).toBeVisible();
+    await expect(historyItem).toContainText('Ink Notes');
+
+    // 4. Start fresh session (clears canvas)
+    const freshBtn = page.getByText('Start Fresh Session');
+    await freshBtn.click();
+
+    // 5. Open history again and restore the session
+    await historyBtn.click();
+    await historyItem.click();
+
+    // Wait a brief moment for image to load onto canvas
+    await page.waitForTimeout(500);
+
+    // Verify canvas has non-empty pixel data restored
+    const hasPixelData = await page.evaluate(() => {
+      const c = document.querySelector('[data-testid="drawing-canvas-overlay"]');
+      if (!c) return false;
+      const ctx = c.getContext('2d');
+      const data = ctx.getImageData(0, 0, c.width, c.height).data;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] > 0) return true;
+      }
+      return false;
+    });
+
+    expect(hasPixelData).toBe(true);
+  });
 });
