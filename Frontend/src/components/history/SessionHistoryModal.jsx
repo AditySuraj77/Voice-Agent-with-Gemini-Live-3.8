@@ -98,9 +98,10 @@ export function SessionHistoryModal({
             sessions.map((session) => (
               <div
                 key={session.id}
+                data-testid="session-history-item"
                 onClick={() => {
                   setActiveSessionId(session.id);
-                  if (onRestoreSession) onRestoreSession(session.items, session.title);
+                  if (onRestoreSession) onRestoreSession(session.items, session.title, session.canvasSnapshot);
                   onClose();
                 }}
                 className="group p-4 rounded-xl bg-white border border-stone-200 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer relative"
@@ -110,13 +111,19 @@ export function SessionHistoryModal({
                     <h4 className="font-serif font-semibold text-sm text-stone-900 truncate group-hover:text-amber-800">
                       {session.title || 'Untitled Session'}
                     </h4>
-                    <div className="flex items-center gap-2 text-[11px] text-stone-400">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-400">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
                         {session.dateStr || 'Recent'} • {session.timeStr || ''}
                       </span>
                       <span>•</span>
                       <span>{session.itemsCount || session.items?.length || 0} notes</span>
+                      {session.canvasSnapshot && (
+                        <>
+                          <span>•</span>
+                          <span className="text-amber-700 font-medium">✍️ Ink Notes</span>
+                        </>
+                      )}
                     </div>
                   </div>
 

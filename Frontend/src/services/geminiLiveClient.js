@@ -18,6 +18,7 @@ export class GeminiLiveClient {
     onToolResponse,
     onWhiteboardCall,
     onClearWhiteboard,
+    onHighlightWhiteboard,
     onMasteryCall,
     onBrowserFrame,
   }) {
@@ -34,6 +35,7 @@ export class GeminiLiveClient {
     this.onToolResponse = onToolResponse;
     this.onWhiteboardCall = onWhiteboardCall;
     this.onClearWhiteboard = onClearWhiteboard;
+    this.onHighlightWhiteboard = onHighlightWhiteboard;
     this.onMasteryCall = onMasteryCall;
     this.onBrowserFrame = onBrowserFrame;
 
@@ -225,6 +227,51 @@ export class GeminiLiveClient {
                   },
                 },
               },
+              {
+                name: 'highlight_whiteboard_card',
+                description: 'Visually highlight or point to a specific topic heading, formula card, or student step on the whiteboard with an AI glowing pulse/border to focus the student\'s attention while explaining or confirming correctness.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    topic: {
+                      type: 'STRING',
+                      description: 'Topic heading or text snippet on the whiteboard item to highlight',
+                    },
+                    reason: {
+                      type: 'STRING',
+                      description: 'Brief reason or encouragement (e.g. "Verified correct step", "Notice this formula")',
+                    },
+                  },
+                  required: ['topic'],
+                },
+              },
+              {
+                name: 'laser_point_canvas',
+                description: 'Visually point a glowing AI laser pointer, circle a specific step or formula, or drop a feedback mark directly onto the student\'s handwritten whiteboard canvas while speaking.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    x: {
+                      type: 'NUMBER',
+                      description: 'Horizontal percentage coordinate on the canvas (0 to 100, where 50 is center)',
+                    },
+                    y: {
+                      type: 'NUMBER',
+                      description: 'Vertical percentage coordinate on the canvas (0 to 100, where 50 is center)',
+                    },
+                    label: {
+                      type: 'STRING',
+                      description: 'Brief guidance label (e.g. "Check this term", "Correct step ✓", "Look here")',
+                    },
+                    style: {
+                      type: 'STRING',
+                      description: 'Style of visual indicator: "laser" (glowing pulse), "circle" (ring), "check" (green check), "cross" (red mark)',
+                    },
+                  },
+                  required: ['x', 'y'],
+                },
+              },
+
               {
                 name: 'search_web',
                 description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
@@ -504,10 +551,53 @@ export class GeminiLiveClient {
   }
 
   /**
+   * Sends a visual inspection turn directly with inlineData image parts and text prompt.
+   * This guarantees Gemini evaluates the visual image in the current active conversational turn.
+   * @param {Object} options
+   * @param {string} options.base64Jpeg - Base64 encoded JPEG image data
+   * @param {string} options.promptText - Prompt text guiding the model on what to inspect
+   */
+  sendVisualInspectionTurn({ base64Jpeg, promptText }) {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+    const parts = [];
+    if (base64Jpeg) {
+      parts.push({
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: base64Jpeg,
+        },
+      });
+    }
+    if (promptText) {
+      parts.push({
+        text: promptText,
+      });
+    }
+
+    const payload = {
+      clientContent: {
+        turns: [
+          {
+            role: 'user',
+            parts,
+          },
+        ],
+        turnComplete: true,
+      },
+    };
+
+    this.sendJson(payload);
+    console.log(`[GeminiLiveClient #${this.clientId}] Sent visual inspection turn with inline image and prompt.`);
+  }
+
+  /**
    * Sends background environmental context update (e.g. Code Lab code change, execution result, student profile).
    * @param {string} contextText
+   * @param {Object} [options]
+   * @param {boolean} [options.turnComplete=false]
    */
-  sendContextNotification(contextText) {
+  sendContextNotification(contextText, { turnComplete = false } = {}) {
     if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
     const payload = {
@@ -518,12 +608,12 @@ export class GeminiLiveClient {
             parts: [{ text: contextText }],
           },
         ],
-        turnComplete: false,
+        turnComplete: Boolean(turnComplete),
       },
     };
 
     this.sendJson(payload);
-    console.log(`[GeminiLiveClient #${this.clientId}] Sent live context update: "${contextText.slice(0, 100)}..."`);
+    console.log(`[GeminiLiveClient #${this.clientId}] Sent live context update (turnComplete: ${turnComplete}): "${contextText.slice(0, 100)}..."`);
   }
 
   /**
@@ -679,6 +769,30 @@ export class GeminiLiveClient {
           name: call.name,
           response: {
             result: { status: 'success', message: 'Whiteboard erased successfully.' },
+          },
+        });
+      } else if (call.name === 'highlight_whiteboard_card') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing highlight_whiteboard_card call:`, call.args);
+        if (this.onHighlightWhiteboard) {
+          this.onHighlightWhiteboard(call.args);
+        }
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: { status: 'success', message: `Highlighted topic "${call.args?.topic || ''}" on whiteboard.` },
+          },
+        });
+      } else if (call.name === 'laser_point_canvas') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing laser_point_canvas call:`, call.args);
+        if (this.onLaserPointCanvas) {
+          this.onLaserPointCanvas(call.args);
+        }
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: { status: 'success', message: 'Pointed laser indicator on whiteboard canvas.' },
           },
         });
       } else if (call.name === 'search_web') {

@@ -49,6 +49,9 @@ export default function App() {
     setWhiteboardItems,
     clearWhiteboard,
     restoreSessionContext,
+    aiHighlightedTopic,
+    aiLaserPoint,
+    inspectWhiteboardSnapshot,
     startSession,
     endSession,
     toggleMute,
@@ -76,6 +79,7 @@ export default function App() {
   }, [browserState?.isOpen]);
 
   const [dismissError, setDismissError] = useState(false);
+  const [restoredCanvasSnapshot, setRestoredCanvasSnapshot] = useState(null);
 
   const handleSaveProfile = (newProfile) => {
     saveStudentProfile(newProfile);
@@ -144,7 +148,10 @@ export default function App() {
           >
             <DirectWhiteboard
               items={whiteboardItems}
-              onClearBoard={clearWhiteboard}
+              onClearBoard={() => {
+                clearWhiteboard();
+                setRestoredCanvasSnapshot({ snapshot: null, clear: true, id: Date.now() });
+              }}
               studentProfile={studentProfile}
               onOpenInCodeLab={handleOpenInCodeLab}
               isCodeLabOpen={isRightPanelOpen && activeRightTab === 'codelab'}
@@ -170,6 +177,10 @@ export default function App() {
                 }
               }}
               onOpenHistory={() => setIsHistoryModalOpen(true)}
+              aiHighlightedTopic={aiHighlightedTopic}
+              aiLaserPoint={aiLaserPoint}
+              onInspectAnnotations={inspectWhiteboardSnapshot}
+              restoredCanvasSnapshot={restoredCanvasSnapshot}
             />
           </div>
         )}
@@ -330,11 +341,13 @@ export default function App() {
       <SessionHistoryModal
         isOpen={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
-        onRestoreSession={(pastItems, sessionTitle) => {
+        onRestoreSession={(pastItems, sessionTitle, canvasSnapshot) => {
           restoreSessionContext(pastItems, sessionTitle);
+          setRestoredCanvasSnapshot({ snapshot: canvasSnapshot, id: Date.now() });
         }}
         onStartFreshSession={() => {
           clearWhiteboard();
+          setRestoredCanvasSnapshot({ snapshot: null, clear: true, id: Date.now() });
         }}
       />
     </div>

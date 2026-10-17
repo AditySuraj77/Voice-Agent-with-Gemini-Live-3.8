@@ -136,6 +136,20 @@ IMPORTANT WHITEBOARD PRESERVATION RULE:
 ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
 YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
 
+CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
+- The student ${studentName} writes, solves math, and draws shapes or graphs directly on the whiteboard canvas with a pen/marker!
+- When ${studentName} writes or draws on the whiteboard, you receive real-time visual screenshots of their whiteboard canvas directly in your vision stream and turn parts.
+- CRITICAL VISION FOCUS: Look SPECIFICALLY at the student's HAND-DRAWN BLACK INK STROKES (their handwriting, handwritten numbers, math calculations like "5 + 6" or "x + 6", coordinate axes X & Y, geometric curves, loops, checkmarks ✓, or handwritten equations).
+- NEVER call \`write_on_whiteboard\` with notes like "Whiteboard is empty!" or "Please draw something" if ${studentName} has drawn anything on the canvas. Inspect the drawing visually!
+- DO NOT read out or repeat old printed textbook notes or sample equations (e.g. do NOT say "4x + 2 = 10" unless ${studentName} actually hand-wrote that equation with their pen)!
+- Look directly at what is drawn by ${studentName} and speak out loud in your warm voice to tell them what you see:
+  1. If they drew axes: acknowledge "Haan ${studentName}, main dekh raha hoon aapne X aur Y axes banaye hain graph ke liye!"
+  2. If they wrote a formula or calculation (e.g. "5 + 6" or "x + 5"): say "Aapne ${studentName} board par likha hai, iska meaning / solution yeh hai..."!
+  3. If they wrote a variable "x": acknowledge "Haan ${studentName}, main dekh raha hoon aapne variable x likha hai!"
+  4. If they drew a curve, tick, or shape: describe that exact drawing!
+  6. TWO-WAY HIGHLIGHTING & LASER POINTER:
+     - Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
+     - TWO-WAY LASER POINTER ON CANVAS: When discussing ${studentName}'s handwritten equations, graphs, or drawings, call \`laser_point_canvas(x: 0-100, y: 0-100, label: "...", style: "laser"|"circle"|"check"|"cross")\` to shine an animated AI laser pointer or checkmark directly on that exact part of their drawing!
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
@@ -200,6 +214,35 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
 
   // Live Whiteboard notes dynamically populated as the Teacher explains
   const [whiteboardItems, setWhiteboardItems] = useState([]);
+  const [aiHighlightedTopic, setAiHighlightedTopic] = useState(null);
+  const [aiLaserPoint, setAiLaserPoint] = useState(null);
+  const highlightTimerRef = useRef(null);
+  const laserTimerRef = useRef(null);
+
+  // Test/E2E hook: allows simulated or tool-dispatched laser point triggers in tests
+  useEffect(() => {
+    const handleTestLaser = (e) => {
+      if (e?.detail) {
+        setAiLaserPoint({
+          x: typeof e.detail.x === 'number' ? e.detail.x : 50,
+          y: typeof e.detail.y === 'number' ? e.detail.y : 50,
+          label: e.detail.label || '',
+          style: e.detail.style || 'laser',
+          id: Date.now(),
+        });
+        if (laserTimerRef.current) clearTimeout(laserTimerRef.current);
+        if (e.detail.duration !== 0) {
+          laserTimerRef.current = setTimeout(() => {
+            setAiLaserPoint(null);
+          }, e.detail.duration || 6000);
+        }
+      } else if (e?.detail === null) {
+        setAiLaserPoint(null);
+      }
+    };
+    window.addEventListener('ai-laser-point-test', handleTestLaser);
+    return () => window.removeEventListener('ai-laser-point-test', handleTestLaser);
+  }, []);
 
   // Turn and speech synchronization refs
   const hasTurnWhiteboardUpdateRef = useRef(false);
@@ -491,6 +534,33 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
       onClearWhiteboard: () => {
         console.log('[useGeminiLive] clear_whiteboard tool executed.');
         setWhiteboardItems([]);
+      },
+      onHighlightWhiteboard: (args) => {
+        const topic = args?.topic || '';
+        console.log('[useGeminiLive] AI highlighted whiteboard card:', topic, args?.reason);
+        setAiHighlightedTopic({
+          topic,
+          reason: args?.reason || '',
+          timestamp: Date.now(),
+        });
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => {
+          setAiHighlightedTopic(null);
+        }, 7000);
+      },
+      onLaserPointCanvas: (args) => {
+        console.log('[useGeminiLive] AI pointed laser on canvas:', args);
+        setAiLaserPoint({
+          x: typeof args?.x === 'number' ? args.x : 50,
+          y: typeof args?.y === 'number' ? args.y : 50,
+          label: args?.label || '',
+          style: args?.style || 'laser',
+          id: Date.now(),
+        });
+        if (laserTimerRef.current) clearTimeout(laserTimerRef.current);
+        laserTimerRef.current = setTimeout(() => {
+          setAiLaserPoint(null);
+        }, 6000);
       },
       onWhiteboardCall: (args) => {
         console.log('[useGeminiLive] Whiteboard tool executed:', args);
@@ -937,6 +1007,24 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     }
   }, []);
 
+  /**
+   * Sends student's hand-drawn whiteboard snapshot to Gemini Live visual vision stream
+   * for immediate inspection and spoken review.
+   */
+  const inspectWhiteboardSnapshot = useCallback((base64Jpeg) => {
+    if (liveClientRef.current && liveClientRef.current.isConnected && base64Jpeg) {
+      const sName = studentProfileRef.current?.name || 'Adi';
+      setConversationState('thinking');
+      // 1. Send both as streaming image chunk for vision buffer
+      liveClientRef.current.sendImageChunk(base64Jpeg);
+      // 2. Also send as inlineData inside the active conversational turn with turnComplete: true
+      liveClientRef.current.sendVisualInspectionTurn({
+        base64Jpeg,
+        promptText: `[STUDENT WHITEBOARD DRAWING INSPECTION]: Look at the attached image showing ${sName}'s handwritten canvas strokes (drawn in dark pen/marker). Specifically examine what ${sName} drew/wrote (e.g. math numbers, letters like 'x', equations like 'x+5', coordinate axes, graphs, lines, or checkmarks). Speak out loud to ${sName} describing what you see, confirming if it's correct or what it means. DO NOT call write_on_whiteboard saying "whiteboard is empty"—the image shows their active handwritten strokes!`,
+      });
+    }
+  }, []);
+
   return {
     sessionStatus,
     conversationState,
@@ -956,6 +1044,9 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     setWhiteboardItems,
     clearWhiteboard,
     restoreSessionContext,
+    aiHighlightedTopic,
+    aiLaserPoint,
+    inspectWhiteboardSnapshot,
     startSession,
     endSession,
     toggleMute,

@@ -65,6 +65,50 @@ export const GEMINI_TOOLS = [
         },
       },
       {
+        name: 'highlight_whiteboard_card',
+        description: 'Visually highlight or point to a specific topic heading, formula card, or student step on the whiteboard with an AI glowing pulse/border to focus the student\'s attention while explaining or confirming correctness.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            topic: {
+              type: 'STRING',
+              description: 'Topic heading or text snippet on the whiteboard item to highlight',
+            },
+            reason: {
+              type: 'STRING',
+              description: 'Brief reason or encouragement (e.g. "Verified correct step", "Notice this formula")',
+            },
+          },
+          required: ['topic'],
+        },
+      },
+      {
+        name: 'laser_point_canvas',
+        description: 'Visually point a glowing AI laser pointer, circle a specific step or formula, or drop a feedback mark directly onto the student\'s handwritten whiteboard canvas while speaking.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            x: {
+              type: 'NUMBER',
+              description: 'Horizontal percentage coordinate on the canvas (0 to 100, where 50 is center)',
+            },
+            y: {
+              type: 'NUMBER',
+              description: 'Vertical percentage coordinate on the canvas (0 to 100, where 50 is center)',
+            },
+            label: {
+              type: 'STRING',
+              description: 'Brief guidance label (e.g. "Check this term", "Correct step ✓", "Look here")',
+            },
+            style: {
+              type: 'STRING',
+              description: 'Style of visual indicator: "laser" (glowing pulse), "circle" (ring), "check" (green check), "cross" (red mark)',
+            },
+          },
+          required: ['x', 'y'],
+        },
+      },
+      {
         name: 'search_web',
         description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
         parameters: {
