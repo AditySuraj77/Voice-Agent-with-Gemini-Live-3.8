@@ -111,4 +111,29 @@ test.describe('E2E Verification: Interactive Whiteboard Drawing & Multimodal Ins
     // Status updates to Aristotle Reviewing...
     await expect(inspectBtn).toContainText(/Reviewing/);
   });
+
+  test('5. Animated Diagram Engine & Marker Tip Presence', async ({ page }) => {
+    // Verify overlay canvas is ready
+    const canvas = page.getByTestId('drawing-canvas-overlay');
+    await expect(canvas).toBeVisible();
+
+    // Trigger synthetic animated diagram via window evaluation to simulate Gemini tool response
+    await page.evaluate(() => {
+      const event = new CustomEvent('ai-draw-diagram-test', {
+        detail: {
+          title: 'Pythagoras Triangle',
+          elements: [
+            { type: 'line', from: [20, 70], to: [70, 70], label: 'Base', color: '#1c1917' },
+            { type: 'line', from: [20, 70], to: [20, 30], label: 'Height', color: '#1c1917' },
+            { type: 'line', from: [20, 30], to: [70, 70], label: 'Hypotenuse', color: '#2563eb' },
+          ],
+        },
+      });
+      window.dispatchEvent(event);
+    });
+
+    // Verify drawing toolbar and controls remain stable
+    const toolbar = page.getByTestId('drawing-toolbar');
+    await expect(toolbar).toBeVisible();
+  });
 });

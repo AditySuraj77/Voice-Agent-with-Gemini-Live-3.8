@@ -148,9 +148,12 @@ CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
   3. If they wrote a variable "x": acknowledge "Haan ${studentName}, main dekh raha hoon aapne variable x likha hai!"
   4. If they drew a curve, tick, or shape: describe that exact drawing!
   5. If correct, praise them; if there is a mistake, point it out gently.
-  6. TWO-WAY HIGHLIGHTING & LASER POINTER:
-     - Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
      - TWO-WAY LASER POINTER ON CANVAS: When discussing ${studentName}'s handwritten equations, graphs, or drawings, call \`laser_point_canvas(x: 0-100, y: 0-100, label: "...", style: "laser"|"circle"|"check"|"cross")\` to shine an animated AI laser pointer or checkmark directly on that exact part of their drawing!
+  7. DYNAMIC STEP-BY-STEP DIAGRAM DRAWING ON WHITEBOARD CANVAS:
+     - Whenever teaching geometry (triangles, circles, angles), physics schematics (circuits, lenses, ray diagrams, vectors), coordinate geometry ($X-Y$ axes, curves, parabolas), or when ${studentName} asks "diagram banao", "draw karke dikhao", or "triangle kaise hota hai":
+     - YOU MUST CALL \`draw_animated_diagram\` AS YOU SPEAK!
+     - Pass structured elements (lines, arcs, circles, rects, text) with percentage coordinates (0 to 100) and clear labels.
+     - Speak naturally in sync as the pen strokes animate on ${studentName}'s whiteboard!
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
@@ -217,6 +220,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   const [whiteboardItems, setWhiteboardItems] = useState([]);
   const [aiHighlightedTopic, setAiHighlightedTopic] = useState(null);
   const [aiLaserPoint, setAiLaserPoint] = useState(null);
+  const [activeAnimatedDiagram, setActiveAnimatedDiagram] = useState(null);
   const highlightTimerRef = useRef(null);
   const laserTimerRef = useRef(null);
 
@@ -537,6 +541,17 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
         laserTimerRef.current = setTimeout(() => {
           setAiLaserPoint(null);
         }, 6000);
+      },
+      onDrawAnimatedDiagram: (args) => {
+        console.log('[useGeminiLive] AI drawing animated diagram on canvas:', args);
+        if (args && args.elements && Array.isArray(args.elements)) {
+          setActiveAnimatedDiagram({
+            title: args.title || 'Dynamic Diagram',
+            caption: args.caption || '',
+            elements: args.elements,
+            timestamp: Date.now(),
+          });
+        }
       },
       onWhiteboardCall: (args) => {
         console.log('[useGeminiLive] Whiteboard tool executed:', args);
@@ -1022,6 +1037,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     restoreSessionContext,
     aiHighlightedTopic,
     aiLaserPoint,
+    activeAnimatedDiagram,
+    setActiveAnimatedDiagram,
     inspectWhiteboardSnapshot,
     startSession,
     endSession,
