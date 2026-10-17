@@ -219,6 +219,31 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   const highlightTimerRef = useRef(null);
   const laserTimerRef = useRef(null);
 
+  // Test/E2E hook: allows simulated or tool-dispatched laser point triggers in tests
+  useEffect(() => {
+    const handleTestLaser = (e) => {
+      if (e?.detail) {
+        setAiLaserPoint({
+          x: typeof e.detail.x === 'number' ? e.detail.x : 50,
+          y: typeof e.detail.y === 'number' ? e.detail.y : 50,
+          label: e.detail.label || '',
+          style: e.detail.style || 'laser',
+          id: Date.now(),
+        });
+        if (laserTimerRef.current) clearTimeout(laserTimerRef.current);
+        if (e.detail.duration !== 0) {
+          laserTimerRef.current = setTimeout(() => {
+            setAiLaserPoint(null);
+          }, e.detail.duration || 6000);
+        }
+      } else if (e?.detail === null) {
+        setAiLaserPoint(null);
+      }
+    };
+    window.addEventListener('ai-laser-point-test', handleTestLaser);
+    return () => window.removeEventListener('ai-laser-point-test', handleTestLaser);
+  }, []);
+
   // Turn and speech synchronization refs
   const hasTurnWhiteboardUpdateRef = useRef(false);
   const currentTurnAssistantTextRef = useRef('');
