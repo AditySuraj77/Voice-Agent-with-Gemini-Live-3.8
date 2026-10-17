@@ -1,17 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Trash2, BookOpen, Check, Download, Printer, ArrowDown, History } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Trash2, BookOpen, Check, Download, Printer, ArrowDown, History,
+  Pen, Highlighter, Eraser, Eye, Sparkles, CheckCircle2, XCircle
+} from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
 import { MathFormula } from './MathFormula.jsx';
 import { InlineFormattedNote } from './InlineFormattedNote.jsx';
 import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
+import { captureElementWithOverlay } from '../../utils/whiteboardSnapshot.js';
 
 /**
  * Direct Whiteboard Canvas
- * Replicates authentic Aristotle AI teaching canvas:
- * Content is written DIRECTLY on the paper surface without cards, borders, or boxes.
- * Headings, math equations, derivations, tables, code blocks, and student checkmarks
- * flow naturally like a real teacher writing on a blackboard/notebook.
+ * Features:
+ * - Content is written DIRECTLY on the paper surface without cards, borders, or boxes.
+ * - Interactive in-place drawing overlay (Pen, Highlighter, Quick Tick/Cross stamps, Eraser).
+ * - Real-time multimodal inspection: debounced and one-click snapshot streaming to Gemini Live vision.
+ * - Two-Way AI Highlighting: Gemini visually points to topics/formulas with an animated glowing ring.
  */
 export function DirectWhiteboard({
   items = [],
@@ -23,18 +28,70 @@ export function DirectWhiteboard({
   isBrowserOpen = false,
   onToggleBrowser,
   onOpenHistory,
+  aiHighlightedTopic = null,
+  onInspectAnnotations = null,
 }) {
   const containerRef = useRef(null);
+  const contentWrapperRef = useRef(null);
+  const overlayCanvasRef = useRef(null);
   const bottomAnchorRef = useRef(null);
+
   const isUserScrolledUpRef = useRef(false);
   const [showScrollBottomPill, setShowScrollBottomPill] = useState(false);
   const prevItemsLengthRef = useRef(0);
 
-  // Track manual scroll to know if user is reading previous notes
+  // Drawing overlay state
+  const [activeDrawTool, setActiveDrawTool] = useState('none'); // 'none' | 'pen' | 'highlighter' | 'tick' | 'cross' | 'eraser'
+  const [hasDrawn, setHasDrawn] = useState(false);
+  const [isInspecting, setIsInspecting] = useState(false);
+
+  const isDrawingRef = useRef(false);
+  const lastPointRef = useRef(null);
+  const autoInspectTimerRef = useRef(null);
+
+  // Resize canvas to match scrollable content dimensions
+  const updateCanvasSize = useCallback(() => {
+    const canvas = overlayCanvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const targetWidth = Math.max(container.scrollWidth, container.clientWidth, 800);
+    const targetHeight = Math.max(container.scrollHeight, container.clientHeight, 1000);
+
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      // Save current drawings before resize
+      let tempCanvas = null;
+      if (canvas.width > 0 && canvas.height > 0) {
+        tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
+      }
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      if (tempCanvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(tempCanvas, 0, 0);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    updateCanvasSize();
+    const timer = setTimeout(updateCanvasSize, 100);
+    window.addEventListener('resize', updateCanvasSize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateCanvasSize);
+    };
+  }, [items.length, updateCanvasSize]);
+
+  // Track manual scroll
   const handleScroll = () => {
     if (!containerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    // If user is within 120px of the bottom, consider them "at bottom"
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 120;
     isUserScrolledUpRef.current = !isAtBottom;
     setShowScrollBottomPill(!isAtBottom);
@@ -48,7 +105,6 @@ export function DirectWhiteboard({
     }
   };
 
-  // Only auto-scroll when new items arrive AND the user is NOT reading earlier notes
   useEffect(() => {
     const isNewItemAdded = items.length > prevItemsLengthRef.current;
     prevItemsLengthRef.current = items.length;
@@ -60,6 +116,145 @@ export function DirectWhiteboard({
     }
   }, [items.length]);
 
+  // Helper to get precise canvas coordinates
+  const getCanvasCoords = (e) => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+  };
+
+  // Inspect handwritten steps & marks with Gemini
+  const handleInspect = useCallback(async () => {
+    if (!onInspectAnnotations || isInspecting) return;
+    setIsInspecting(true);
+    try {
+      const base64Jpeg = await captureElementWithOverlay(contentWrapperRef.current, overlayCanvasRef.current);
+      if (base64Jpeg) {
+        onInspectAnnotations(base64Jpeg);
+      }
+    } catch (e) {
+      console.error('[DirectWhiteboard] Failed to capture annotations:', e);
+    } finally {
+      setTimeout(() => setIsInspecting(false), 2500);
+    }
+  }, [onInspectAnnotations, isInspecting]);
+
+  // Trigger debounced auto-inspection after student finishes writing/marking
+  const scheduleAutoInspect = useCallback(() => {
+    if (!onInspectAnnotations) return;
+    if (autoInspectTimerRef.current) {
+      clearTimeout(autoInspectTimerRef.current);
+    }
+    autoInspectTimerRef.current = setTimeout(() => {
+      handleInspect();
+    }, 1800); // 1.8s debounce after last stroke
+  }, [onInspectAnnotations, handleInspect]);
+
+  const handleDrawStart = (e) => {
+    if (activeDrawTool === 'none') return;
+    const coords = getCanvasCoords(e);
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Quick Stamp: Tick mark
+    if (activeDrawTool === 'tick') {
+      ctx.save();
+      ctx.strokeStyle = '#059669'; // Emerald
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(coords.x - 8, coords.y);
+      ctx.lineTo(coords.x - 2, coords.y + 7);
+      ctx.lineTo(coords.x + 12, coords.y - 9);
+      ctx.stroke();
+      ctx.restore();
+      setHasDrawn(true);
+      scheduleAutoInspect();
+      return;
+    }
+
+    // Quick Stamp: Cross mark
+    if (activeDrawTool === 'cross') {
+      ctx.save();
+      ctx.strokeStyle = '#e11d48'; // Rose
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(coords.x - 8, coords.y - 8);
+      ctx.lineTo(coords.x + 8, coords.y + 8);
+      ctx.moveTo(coords.x + 8, coords.y - 8);
+      ctx.lineTo(coords.x - 8, coords.y + 8);
+      ctx.stroke();
+      ctx.restore();
+      setHasDrawn(true);
+      scheduleAutoInspect();
+      return;
+    }
+
+    isDrawingRef.current = true;
+    lastPointRef.current = coords;
+  };
+
+  const handleDrawMove = (e) => {
+    if (!isDrawingRef.current || !lastPointRef.current || activeDrawTool === 'none') return;
+    const coords = getCanvasCoords(e);
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    ctx.beginPath();
+    ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+    ctx.lineTo(coords.x, coords.y);
+
+    if (activeDrawTool === 'pen') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = '#1c1917'; // Authentic stone ink
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    } else if (activeDrawTool === 'highlighter') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)'; // Fluorescent highlighter yellow
+      ctx.lineWidth = 20;
+      ctx.lineCap = 'square';
+    } else if (activeDrawTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = 26;
+      ctx.lineCap = 'round';
+    }
+
+    ctx.stroke();
+    lastPointRef.current = coords;
+    setHasDrawn(true);
+  };
+
+  const handleDrawEnd = () => {
+    if (isDrawingRef.current) {
+      isDrawingRef.current = false;
+      lastPointRef.current = null;
+      scheduleAutoInspect();
+    }
+  };
+
+  const handleClearAnnotations = () => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
+    if (autoInspectTimerRef.current) {
+      clearTimeout(autoInspectTimerRef.current);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -67,9 +262,40 @@ export function DirectWhiteboard({
       className="flex-1 overflow-y-auto px-6 py-10 md:px-12 md:py-12 bg-[#fbf8f3] text-stone-800 font-serif select-text pb-36 print:p-0 print:bg-white relative"
       data-testid="direct-whiteboard"
     >
-      <div className="max-w-3xl mx-auto space-y-8">
-        {/* Top Board Action Bar (Clean Export, Print, CodeLab Toggle & Erase Icons) */}
-        <div className="flex items-center justify-between border-b border-stone-200/60 pb-2.5 print:hidden">
+      {/* 
+        Transparent In-Place Annotation Canvas:
+        Sits directly over the paper surface. Pointer-events are enabled when drawing tool is active,
+        allowing the student to write equations, circle words, or highlight formulas directly on the notes.
+      */}
+      <canvas
+        ref={overlayCanvasRef}
+        onMouseDown={handleDrawStart}
+        onMouseMove={handleDrawMove}
+        onMouseUp={handleDrawEnd}
+        onMouseLeave={handleDrawEnd}
+        onTouchStart={handleDrawStart}
+        onTouchMove={handleDrawMove}
+        onTouchEnd={handleDrawEnd}
+        className="absolute inset-0 z-10 block"
+        data-testid="drawing-canvas-overlay"
+        style={{
+          pointerEvents: activeDrawTool !== 'none' ? 'auto' : 'none',
+          cursor:
+            activeDrawTool === 'pen'
+              ? 'crosshair'
+              : activeDrawTool === 'highlighter'
+              ? 'text'
+              : activeDrawTool === 'tick' || activeDrawTool === 'cross'
+              ? 'pointer'
+              : activeDrawTool === 'eraser'
+              ? 'cell'
+              : 'default',
+        }}
+      />
+
+      <div ref={contentWrapperRef} className="max-w-3xl mx-auto space-y-8 relative">
+        {/* Top Board Action Bar (Always clickable above drawing canvas) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-2.5 print:hidden relative z-20">
           <div className="text-xs font-sans text-stone-400">
             <span>Today's Board Notes</span>
             {studentProfile?.name && (
@@ -77,10 +303,11 @@ export function DirectWhiteboard({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {/* Toggle Code Lab */}
             {onToggleCodeLab && (
               <button
+                type="button"
                 onClick={onToggleCodeLab}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
                   isCodeLabOpen
@@ -96,6 +323,7 @@ export function DirectWhiteboard({
             {/* Toggle Live Browser */}
             {onToggleBrowser && (
               <button
+                type="button"
                 onClick={onToggleBrowser}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
                   isBrowserOpen
@@ -108,11 +336,136 @@ export function DirectWhiteboard({
               </button>
             )}
 
+            {/* In-Place Interactive Drawing Tools (Pen, Highlighter, Tick, Cross, Eraser) */}
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-stone-200/50 border border-stone-300/40"
+              data-testid="drawing-toolbar"
+            >
+              {/* Pen */}
+              <button
+                type="button"
+                onClick={() => setActiveDrawTool((prev) => (prev === 'pen' ? 'none' : 'pen'))}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
+                  activeDrawTool === 'pen'
+                    ? 'bg-stone-900 text-white font-semibold shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                }`}
+                title="Pen: Write steps or solve math on whiteboard"
+                data-testid="tool-pen"
+              >
+                <Pen className="w-3 h-3" />
+                <span className="hidden sm:inline">Pen</span>
+              </button>
 
+              {/* Highlighter */}
+              <button
+                type="button"
+                onClick={() => setActiveDrawTool((prev) => (prev === 'highlighter' ? 'none' : 'highlighter'))}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
+                  activeDrawTool === 'highlighter'
+                    ? 'bg-amber-400 text-stone-950 font-bold shadow-xs'
+                    : 'text-stone-600 hover:text-amber-800 hover:bg-amber-100/60'
+                }`}
+                title="Highlighter: Highlight formulas or key notes"
+                data-testid="tool-highlighter"
+              >
+                <Highlighter className="w-3 h-3" />
+                <span className="hidden sm:inline">Highlight</span>
+              </button>
+
+              {/* Tick Stamp */}
+              <button
+                type="button"
+                onClick={() => setActiveDrawTool((prev) => (prev === 'tick' ? 'none' : 'tick'))}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
+                  activeDrawTool === 'tick'
+                    ? 'bg-emerald-600 text-white font-semibold shadow-xs'
+                    : 'text-stone-600 hover:text-emerald-700 hover:bg-emerald-50'
+                }`}
+                title="Tick Stamp: Click on canvas to stamp a checkmark (✓)"
+                data-testid="tool-tick"
+              >
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span className="hidden sm:inline">Tick</span>
+              </button>
+
+              {/* Cross Stamp */}
+              <button
+                type="button"
+                onClick={() => setActiveDrawTool((prev) => (prev === 'cross' ? 'none' : 'cross'))}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
+                  activeDrawTool === 'cross'
+                    ? 'bg-rose-600 text-white font-semibold shadow-xs'
+                    : 'text-stone-600 hover:text-rose-700 hover:bg-rose-50'
+                }`}
+                title="Cross Stamp: Click on canvas to stamp an X mark (✗)"
+                data-testid="tool-cross"
+              >
+                <XCircle className="w-3 h-3 text-rose-300" />
+                <span className="hidden sm:inline">Cross</span>
+              </button>
+
+              {hasDrawn && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveDrawTool((prev) => (prev === 'eraser' ? 'none' : 'eraser'))}
+                    className={`p-1 rounded-full text-xs font-sans transition-all cursor-pointer ${
+                      activeDrawTool === 'eraser'
+                        ? 'bg-stone-800 text-white'
+                        : 'text-stone-500 hover:text-stone-800'
+                    }`}
+                    title="Eraser: Erase markings"
+                    data-testid="tool-eraser"
+                  >
+                    <Eraser className="w-3 h-3" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearAnnotations}
+                    className="text-[11px] font-sans px-1 text-stone-400 hover:text-rose-600 cursor-pointer"
+                    title="Clear hand-drawn markings"
+                    data-testid="tool-clear-drawings"
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Check Handwritten Working with Gemini Teacher */}
+            {hasDrawn && onInspectAnnotations && (
+              <button
+                type="button"
+                onClick={handleInspect}
+                disabled={isInspecting}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold transition-all cursor-pointer animate-fadeIn ${
+                  isInspecting
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-stone-900 hover:bg-stone-950 text-white shadow-xs'
+                }`}
+                title="Have Gemini inspect your handwritten steps"
+                data-testid="inspect-whiteboard-btn"
+              >
+                {isInspecting ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-300 stroke-[3]" />
+                    <span>Sir is Checking...</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Check with Sir</span>
+                  </>
+                )}
+              </button>
+            )}
 
             {/* Download Markdown Notes (only if items present) */}
             {items.length > 0 && (
               <button
+                type="button"
                 onClick={() => exportWhiteboardToMarkdown(items, studentProfile)}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-600 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
                 title="Download Study Notes (.md)"
@@ -125,6 +478,7 @@ export function DirectWhiteboard({
             {/* Print / Save as PDF (only if items present) */}
             {items.length > 0 && (
               <button
+                type="button"
                 onClick={printWhiteboard}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-600 hover:text-stone-900 hover:bg-stone-200/60 transition-colors cursor-pointer"
                 title="Print / Save PDF"
@@ -137,6 +491,7 @@ export function DirectWhiteboard({
             {/* Past Study Session History Drawer */}
             {onOpenHistory && (
               <button
+                type="button"
                 onClick={onOpenHistory}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-600 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
                 title="Past Study Sessions"
@@ -149,6 +504,7 @@ export function DirectWhiteboard({
             {/* Erase Board (only if items present) */}
             {items.length > 0 && onClearBoard && (
               <button
+                type="button"
                 onClick={onClearBoard}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer ml-1"
                 title="Clear Whiteboard"
@@ -170,11 +526,11 @@ export function DirectWhiteboard({
               Whiteboard is ready
             </h3>
             <p className="text-sm text-stone-500 max-w-md leading-relaxed font-sans">
-              नीचे माइक ऑन करें या सवाल टाइप करें। आपके टीचर बोलते-बोलते सारे फॉर्मूले, मुख्य बिंदु और स्टेप्स सीधे व्हाइटबोर्ड पर लिखते जाएँगे।
+              ऊपर Pen या Highlighter चुनें और बोर्ड पर कुछ भी लिखें या टिक करें। जेमिनी आपकी हैंडराइटिंग और स्टेप्स को देखकर लाइव वॉइस में चेक करेगा!
             </p>
           </div>
         ) : (
-          /* Direct Canvas Content — NO CARDS, Written Directly on the Surface with Ink Stream */
+          /* Direct Canvas Content */
           <div className="space-y-8 animate-fadeIn">
             {items.map((item, index) => {
               const notesList = Array.isArray(item.notes)
@@ -183,21 +539,43 @@ export function DirectWhiteboard({
                 ? [item.notes]
                 : [];
 
-              // Deduplicate notes that merely repeat the formula or are redundant with item.formula
               const cleanNotesList = notesList.filter((note) => {
                 if (!item.formula) return true;
-                const n = note.replace(/[\s\(\)\,\.\;\:\-\_]/g, '').toLowerCase();
-                const f = item.formula.replace(/[\s\(\)\,\.\;\:\-\_]/g, '').toLowerCase();
+                const n = note.replace(/[\s(),.;:\-_]/g, '').toLowerCase();
+                const f = item.formula.replace(/[\s(),.;:\-_]/g, '').toLowerCase();
                 if (!n) return false;
                 return n !== f && !f.includes(n);
               });
 
-              // Check if item was just added (latest item gets typewriter effect)
               const isLatest = index === items.length - 1;
 
+              // Check if Gemini is actively highlighting this topic / card
+              const isAiHighlighted =
+                aiHighlightedTopic &&
+                aiHighlightedTopic.topic &&
+                item.topic &&
+                (item.topic.toLowerCase().includes(aiHighlightedTopic.topic.toLowerCase()) ||
+                  aiHighlightedTopic.topic.toLowerCase().includes(item.topic.toLowerCase()));
+
               return (
-                <div key={item.id || index} className="space-y-4">
-                  {/* 1. Verified Student Answer with Checkmark (e.g. "Adi: 3247 ✓") */}
+                <div
+                  key={item.id || index}
+                  className={`space-y-4 transition-all duration-500 rounded-2xl ${
+                    isAiHighlighted
+                      ? 'p-4 bg-amber-50/70 border-2 border-amber-400 shadow-md ring-4 ring-amber-300/30'
+                      : ''
+                  }`}
+                  data-testid={`whiteboard-item-${index}`}
+                >
+                  {/* Two-Way AI Highlight Badge */}
+                  {isAiHighlighted && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400 text-stone-950 text-xs font-sans font-bold w-fit shadow-xs animate-bounce">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Sir Pointing Here: {aiHighlightedTopic.reason || 'Pay attention to this'}</span>
+                    </div>
+                  )}
+
+                  {/* 1. Verified Student Answer with Checkmark */}
                   {item.studentAnswer && (
                     <div className="text-sm md:text-base font-sans font-medium text-emerald-800 flex items-center gap-2">
                       <span>{item.studentAnswer.replace(/[✓✔\s]+$/, '')}</span>
@@ -205,7 +583,7 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 2. Topic Heading / Concept Title */}
+                  {/* 2. Topic Heading */}
                   {item.topic && (
                     <div className="border-b border-stone-300/70 pb-1.5">
                       <h2 className="text-lg md:text-xl font-bold text-stone-900 font-serif tracking-tight">
@@ -218,7 +596,7 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 3. Highlighted Math / Scientific Formula written directly on board with KaTeX */}
+                  {/* 3. Highlighted Math / Scientific Formula */}
                   {item.formula && (
                     <div className="py-3 my-2 text-center bg-stone-100/50 rounded-xl px-4 border border-stone-200/50 shadow-2xs">
                       <div className="text-xl md:text-2xl font-bold text-stone-900 font-serif tracking-wide overflow-x-auto py-1">
@@ -227,7 +605,7 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 4. Notes / Step-by-Step Derivations written directly on surface */}
+                  {/* 4. Notes / Step-by-Step Derivations */}
                   {cleanNotesList.length > 0 && (
                     <div className="space-y-2 text-sm md:text-base text-stone-800 font-serif leading-relaxed">
                       {cleanNotesList.map((note, idx) => {
@@ -297,7 +675,7 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 7. Interactive Code Snippet with Dynamic Language and Runner */}
+                  {/* 7. Interactive Code Snippet */}
                   {item.code && (
                     <InteractiveCodeBlock
                       code={item.code}
@@ -306,7 +684,7 @@ export function DirectWhiteboard({
                     />
                   )}
 
-                  {/* 7. Socratic Question written directly on board to prompt student */}
+                  {/* 8. Socratic Question */}
                   {item.question && (
                     <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
                       <span>
@@ -326,7 +704,7 @@ export function DirectWhiteboard({
         )}
       </div>
 
-      {/* Floating Pill: Jump to latest notes when user has scrolled up to review */}
+      {/* Floating Pill: Jump to latest notes */}
       {showScrollBottomPill && (
         <button
           type="button"

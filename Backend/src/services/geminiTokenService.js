@@ -65,6 +65,24 @@ export const GEMINI_TOOLS = [
         },
       },
       {
+        name: 'highlight_whiteboard_card',
+        description: 'Visually highlight or point to a specific topic heading, formula card, or student step on the whiteboard with an AI glowing pulse/border to focus the student\'s attention while explaining or confirming correctness.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            topic: {
+              type: 'STRING',
+              description: 'Topic heading or text snippet on the whiteboard item to highlight',
+            },
+            reason: {
+              type: 'STRING',
+              description: 'Brief reason or encouragement (e.g. "Verified correct step", "Notice this formula")',
+            },
+          },
+          required: ['topic'],
+        },
+      },
+      {
         name: 'search_web',
         description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
         parameters: {

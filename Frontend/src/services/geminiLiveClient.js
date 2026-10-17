@@ -18,6 +18,7 @@ export class GeminiLiveClient {
     onToolResponse,
     onWhiteboardCall,
     onClearWhiteboard,
+    onHighlightWhiteboard,
     onMasteryCall,
     onBrowserFrame,
   }) {
@@ -34,6 +35,7 @@ export class GeminiLiveClient {
     this.onToolResponse = onToolResponse;
     this.onWhiteboardCall = onWhiteboardCall;
     this.onClearWhiteboard = onClearWhiteboard;
+    this.onHighlightWhiteboard = onHighlightWhiteboard;
     this.onMasteryCall = onMasteryCall;
     this.onBrowserFrame = onBrowserFrame;
 
@@ -223,6 +225,24 @@ export class GeminiLiveClient {
                       description: 'Optional reason for clearing the board',
                     },
                   },
+                },
+              },
+              {
+                name: 'highlight_whiteboard_card',
+                description: 'Visually highlight or point to a specific topic heading, formula card, or student step on the whiteboard with an AI glowing pulse/border to focus the student\'s attention while explaining or confirming correctness.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    topic: {
+                      type: 'STRING',
+                      description: 'Topic heading or text snippet on the whiteboard item to highlight',
+                    },
+                    reason: {
+                      type: 'STRING',
+                      description: 'Brief reason or encouragement (e.g. "Verified correct step", "Notice this formula")',
+                    },
+                  },
+                  required: ['topic'],
                 },
               },
               {
@@ -679,6 +699,18 @@ export class GeminiLiveClient {
           name: call.name,
           response: {
             result: { status: 'success', message: 'Whiteboard erased successfully.' },
+          },
+        });
+      } else if (call.name === 'highlight_whiteboard_card') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing highlight_whiteboard_card call:`, call.args);
+        if (this.onHighlightWhiteboard) {
+          this.onHighlightWhiteboard(call.args);
+        }
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: { status: 'success', message: `Highlighted topic "${call.args?.topic || ''}" on whiteboard.` },
           },
         });
       } else if (call.name === 'search_web') {

@@ -49,6 +49,8 @@ export default function App() {
     setWhiteboardItems,
     clearWhiteboard,
     restoreSessionContext,
+    aiHighlightedTopic,
+    inspectWhiteboardSnapshot,
     startSession,
     endSession,
     toggleMute,
@@ -170,6 +172,8 @@ export default function App() {
                 }
               }}
               onOpenHistory={() => setIsHistoryModalOpen(true)}
+              aiHighlightedTopic={aiHighlightedTopic}
+              onInspectAnnotations={inspectWhiteboardSnapshot}
             />
           </div>
         )}

@@ -136,6 +136,13 @@ IMPORTANT WHITEBOARD PRESERVATION RULE:
 ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
 YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
 
+CRITICAL STUDENT WHITEBOARD DRAWINGS & INSPECTION:
+- The student ${studentName} can write, draw math equations, mark steps, highlight notes, or place ticks (✓) / crosses (✗) directly on their whiteboard!
+- When ${studentName} writes, solves, or marks on the whiteboard, you receive real-time visual screenshots of their whiteboard in your vision stream.
+- CAREFULLY INSPECT their handwriting, math calculations, formulas, and checkmarks:
+  1. VERIFY THEIR WORK OUT LOUD: Immediately tell ${studentName} in a warm, encouraging voice if their step or answer is correct (e.g. "Haan ${studentName}! Aapne bilkul sahi calculate kiya hai!", "Bilkul theek tick lagaya hai!").
+  2. POINT OUT MISTAKES GENTLY: If there is a calculation error, sign mistake (+/-), or syntax issue, guide them step-by-step to correct it.
+  3. TWO-WAY AI HIGHLIGHTING: Whenever you want to draw ${studentName}'s attention to a specific formula, note, or verified step, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
@@ -200,6 +207,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
 
   // Live Whiteboard notes dynamically populated as the Teacher explains
   const [whiteboardItems, setWhiteboardItems] = useState([]);
+  const [aiHighlightedTopic, setAiHighlightedTopic] = useState(null);
+  const highlightTimerRef = useRef(null);
 
   // Turn and speech synchronization refs
   const hasTurnWhiteboardUpdateRef = useRef(false);
@@ -491,6 +500,19 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
       onClearWhiteboard: () => {
         console.log('[useGeminiLive] clear_whiteboard tool executed.');
         setWhiteboardItems([]);
+      },
+      onHighlightWhiteboard: (args) => {
+        const topic = args?.topic || '';
+        console.log('[useGeminiLive] AI highlighted whiteboard card:', topic, args?.reason);
+        setAiHighlightedTopic({
+          topic,
+          reason: args?.reason || '',
+          timestamp: Date.now(),
+        });
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => {
+          setAiHighlightedTopic(null);
+        }, 7000);
       },
       onWhiteboardCall: (args) => {
         console.log('[useGeminiLive] Whiteboard tool executed:', args);
@@ -937,6 +959,20 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     }
   }, []);
 
+  /**
+   * Sends student's hand-drawn whiteboard snapshot to Gemini Live visual vision stream
+   * for immediate inspection and spoken review.
+   */
+  const inspectWhiteboardSnapshot = useCallback((base64Jpeg) => {
+    if (liveClientRef.current && liveClientRef.current.isConnected && base64Jpeg) {
+      liveClientRef.current.sendImageChunk(base64Jpeg);
+      const sName = studentProfileRef.current?.name || 'Adi';
+      liveClientRef.current.sendContextNotification(
+        `[STUDENT WHITEBOARD ANNOTATION]: ${sName} has written hand-drawn steps, math equations, or marked with a tick/highlighter on their whiteboard. Look carefully at what they wrote/marked, verify their steps/calculations, and give helpful feedback in your spoken voice and on the whiteboard!`
+      );
+    }
+  }, []);
+
   return {
     sessionStatus,
     conversationState,
@@ -956,6 +992,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     setWhiteboardItems,
     clearWhiteboard,
     restoreSessionContext,
+    aiHighlightedTopic,
+    inspectWhiteboardSnapshot,
     startSession,
     endSession,
     toggleMute,
