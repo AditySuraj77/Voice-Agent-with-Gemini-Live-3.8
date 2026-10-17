@@ -524,6 +524,47 @@ export class GeminiLiveClient {
   }
 
   /**
+   * Sends a visual inspection turn directly with inlineData image parts and text prompt.
+   * This guarantees Gemini evaluates the visual image in the current active conversational turn.
+   * @param {Object} options
+   * @param {string} options.base64Jpeg - Base64 encoded JPEG image data
+   * @param {string} options.promptText - Prompt text guiding the model on what to inspect
+   */
+  sendVisualInspectionTurn({ base64Jpeg, promptText }) {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+    const parts = [];
+    if (base64Jpeg) {
+      parts.push({
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: base64Jpeg,
+        },
+      });
+    }
+    if (promptText) {
+      parts.push({
+        text: promptText,
+      });
+    }
+
+    const payload = {
+      clientContent: {
+        turns: [
+          {
+            role: 'user',
+            parts,
+          },
+        ],
+        turnComplete: true,
+      },
+    };
+
+    this.sendJson(payload);
+    console.log(`[GeminiLiveClient #${this.clientId}] Sent visual inspection turn with inline image and prompt.`);
+  }
+
+  /**
    * Sends background environmental context update (e.g. Code Lab code change, execution result, student profile).
    * @param {string} contextText
    * @param {Object} [options]

@@ -138,14 +138,15 @@ YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
 
 CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
 - The student ${studentName} writes, solves math, and draws shapes or graphs directly on the whiteboard canvas with a pen/marker!
-- When ${studentName} writes or draws on the whiteboard, you receive real-time visual screenshots of their whiteboard in your vision stream.
+- When ${studentName} writes or draws on the whiteboard, you receive real-time visual screenshots of their whiteboard canvas directly in your vision stream and turn parts.
 - CRITICAL VISION FOCUS: Look SPECIFICALLY at the student's HAND-DRAWN BLACK INK STROKES (their handwriting, handwritten numbers, math calculations like "5 + 6" or "x + 6", coordinate axes X & Y, geometric curves, loops, checkmarks ✓, or handwritten equations).
+- NEVER call \`write_on_whiteboard\` with notes like "Whiteboard is empty!" or "Please draw something" if ${studentName} has drawn anything on the canvas. Inspect the drawing visually!
 - DO NOT read out or repeat old printed textbook notes or sample equations (e.g. do NOT say "4x + 2 = 10" unless ${studentName} actually hand-wrote that equation with their pen)!
 - Look directly at what is drawn by ${studentName} and speak out loud in your warm voice to tell them what you see:
   1. If they drew axes: acknowledge "Haan ${studentName}, main dekh raha hoon aapne X aur Y axes banaye hain graph ke liye!"
-  2. If they wrote a formula or calculation (e.g. "5 + 6"): say "Aapne 5 + 6 likha hai, iska sum 11 hota hai!"
-  3. If they wrote a variable "x": acknowledge "Haan, aapne variable x likha hai!"
-  4. If they drew a curve or shape: describe that exact shape!
+  2. If they wrote a formula or calculation (e.g. "5 + 6" or "x + 5"): say "Aapne ${studentName} board par likha hai, iska meaning / solution yeh hai..."!
+  3. If they wrote a variable "x": acknowledge "Haan ${studentName}, main dekh raha hoon aapne variable x likha hai!"
+  4. If they drew a curve, tick, or shape: describe that exact drawing!
   5. If correct, praise them; if there is a mistake, point it out gently.
   6. TWO-WAY HIGHLIGHTING: Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
 
@@ -970,13 +971,15 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
    */
   const inspectWhiteboardSnapshot = useCallback((base64Jpeg) => {
     if (liveClientRef.current && liveClientRef.current.isConnected && base64Jpeg) {
-      liveClientRef.current.sendImageChunk(base64Jpeg);
       const sName = studentProfileRef.current?.name || 'Adi';
       setConversationState('thinking');
-      liveClientRef.current.sendContextNotification(
-        `[STUDENT WHITEBOARD DRAWING INSPECTION]: ${sName} has written/drawn with a pen/marker on the whiteboard canvas. Look closely at the image showing their handwritten strokes (numbers, equations, axes, graphs, shapes, or checkmarks). State out loud in your spoken voice what they wrote/drew, verify if their math/step is correct, and praise or guide them!`,
-        { turnComplete: true }
-      );
+      // 1. Send both as streaming image chunk for vision buffer
+      liveClientRef.current.sendImageChunk(base64Jpeg);
+      // 2. Also send as inlineData inside the active conversational turn with turnComplete: true
+      liveClientRef.current.sendVisualInspectionTurn({
+        base64Jpeg,
+        promptText: `[STUDENT WHITEBOARD DRAWING INSPECTION]: Look at the attached image showing ${sName}'s handwritten canvas strokes (drawn in dark pen/marker). Specifically examine what ${sName} drew/wrote (e.g. math numbers, letters like 'x', equations like 'x+5', coordinate axes, graphs, lines, or checkmarks). Speak out loud to ${sName} describing what you see, confirming if it's correct or what it means. DO NOT call write_on_whiteboard saying "whiteboard is empty"—the image shows their active handwritten strokes!`,
+      });
     }
   }, []);
 
