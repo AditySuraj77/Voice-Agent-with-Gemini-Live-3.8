@@ -271,69 +271,7 @@ export class GeminiLiveClient {
                   required: ['x', 'y'],
                 },
               },
-              {
-                name: 'draw_animated_diagram',
-                description: 'Draw a step-by-step animated diagram or geometric/physics schematic directly onto the student\'s whiteboard canvas as you speak. The pen marker will smoothly animate each line and curve in sync with your teaching explanation.',
-                parameters: {
-                  type: 'OBJECT',
-                  properties: {
-                    title: {
-                      type: 'STRING',
-                      description: 'Name of the diagram (e.g. "Right-Angled Triangle (Pythagoras Theorem)", "Electric Circuit", "Optics: Ray Diagram", "Cartesian Coordinate Graph")',
-                    },
-                    caption: {
-                      type: 'STRING',
-                      description: 'Short explanatory note or formula related to the diagram',
-                    },
-                    elements: {
-                      type: 'ARRAY',
-                      description: 'Array of geometric elements to draw sequentially with animation',
-                      items: {
-                        type: 'OBJECT',
-                        properties: {
-                          type: {
-                            type: 'STRING',
-                            description: 'Type of element: "line", "arrow", "circle", "arc", "rect", "text"',
-                          },
-                          from: {
-                            type: 'ARRAY',
-                            items: { type: 'NUMBER' },
-                            description: 'Starting [x, y] coordinates in percentage (0 to 100)',
-                          },
-                          to: {
-                            type: 'ARRAY',
-                            items: { type: 'NUMBER' },
-                            description: 'Ending [x, y] coordinates in percentage (0 to 100) for line/arrow',
-                          },
-                          center: {
-                            type: 'ARRAY',
-                            items: { type: 'NUMBER' },
-                            description: 'Center [x, y] coordinates in percentage (0 to 100) for circle/arc',
-                          },
-                          radius: {
-                            type: 'NUMBER',
-                            description: 'Radius in percentage of canvas width (e.g. 5 to 25) for circle/arc',
-                          },
-                          label: {
-                            type: 'STRING',
-                            description: 'Text label shown near this element (e.g. "Hypotenuse (h)", "Base (b)", "90°", "Focal Point (F)")',
-                          },
-                          color: {
-                            type: 'STRING',
-                            description: 'Hex or css color code (e.g. "#1c1917", "#2563eb", "#059669", "#dc2626")',
-                          },
-                          dashed: {
-                            type: 'BOOLEAN',
-                            description: 'Whether the line should be dashed (for normal lines or virtual rays)',
-                          },
-                        },
-                        required: ['type'],
-                      },
-                    },
-                  },
-                  required: ['title', 'elements'],
-                },
-              },
+
               {
                 name: 'search_web',
                 description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
@@ -855,18 +793,6 @@ export class GeminiLiveClient {
           name: call.name,
           response: {
             result: { status: 'success', message: 'Pointed laser indicator on whiteboard canvas.' },
-          },
-        });
-      } else if (call.name === 'draw_animated_diagram') {
-        console.log(`[GeminiLiveClient #${this.clientId}] Executing draw_animated_diagram call:`, call.args);
-        if (this.onDrawAnimatedDiagram) {
-          this.onDrawAnimatedDiagram(call.args);
-        }
-        responses.push({
-          id: call.id,
-          name: call.name,
-          response: {
-            result: { status: 'success', message: `Drawing animated diagram "${call.args?.title || 'diagram'}" on whiteboard canvas.` },
           },
         });
       } else if (call.name === 'search_web') {

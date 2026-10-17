@@ -51,8 +51,6 @@ export default function App() {
     restoreSessionContext,
     aiHighlightedTopic,
     aiLaserPoint,
-    activeAnimatedDiagram,
-    setActiveAnimatedDiagram,
     inspectWhiteboardSnapshot,
     startSession,
     endSession,
@@ -79,17 +77,6 @@ export default function App() {
       setIsRightPanelOpen(true);
     }
   }, [browserState?.isOpen]);
-
-  // Window event listener for E2E testing of live simulated tools
-  useEffect(() => {
-    const handleDiagramTest = (e) => {
-      if (e.detail) {
-        setActiveAnimatedDiagram(e.detail);
-      }
-    };
-    window.addEventListener('ai-draw-diagram-test', handleDiagramTest);
-    return () => window.removeEventListener('ai-draw-diagram-test', handleDiagramTest);
-  }, [setActiveAnimatedDiagram]);
 
   const [dismissError, setDismissError] = useState(false);
 
@@ -188,8 +175,6 @@ export default function App() {
               onOpenHistory={() => setIsHistoryModalOpen(true)}
               aiHighlightedTopic={aiHighlightedTopic}
               aiLaserPoint={aiLaserPoint}
-              activeAnimatedDiagram={activeAnimatedDiagram}
-              onClearAnimatedDiagram={() => setActiveAnimatedDiagram(null)}
               onInspectAnnotations={inspectWhiteboardSnapshot}
             />
           </div>
