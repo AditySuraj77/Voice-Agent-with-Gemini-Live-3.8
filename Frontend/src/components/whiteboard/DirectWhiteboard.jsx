@@ -116,16 +116,18 @@ export function DirectWhiteboard({
     }
   }, [items.length]);
 
-  // Helper to get precise canvas coordinates
+  // Helper to get precise canvas coordinates taking scaling into account
   const getCanvasCoords = (e) => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const scaleX = rect.width ? canvas.width / rect.width : 1;
+    const scaleY = rect.height ? canvas.height / rect.height : 1;
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
     };
   };
 
@@ -217,13 +219,13 @@ export function DirectWhiteboard({
     if (activeDrawTool === 'pen') {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = '#1c1917'; // Authentic stone ink
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 3.5;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
     } else if (activeDrawTool === 'highlighter') {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)'; // Fluorescent highlighter yellow
-      ctx.lineWidth = 20;
+      ctx.lineWidth = 24;
       ctx.lineCap = 'square';
     } else if (activeDrawTool === 'eraser') {
       ctx.globalCompositeOperation = 'destination-out';

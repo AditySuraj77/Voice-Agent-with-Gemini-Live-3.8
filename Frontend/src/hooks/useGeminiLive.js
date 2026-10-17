@@ -136,13 +136,18 @@ IMPORTANT WHITEBOARD PRESERVATION RULE:
 ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
 YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
 
-CRITICAL STUDENT WHITEBOARD DRAWINGS & INSPECTION:
-- The student ${studentName} can write, draw math equations, mark steps, highlight notes, or place ticks (✓) / crosses (✗) directly on their whiteboard!
-- When ${studentName} writes, solves, or marks on the whiteboard, you receive real-time visual screenshots of their whiteboard in your vision stream.
-- CAREFULLY INSPECT their handwriting, math calculations, formulas, and checkmarks:
-  1. VERIFY THEIR WORK OUT LOUD: Immediately tell ${studentName} in a warm, encouraging voice if their step or answer is correct (e.g. "Haan ${studentName}! Aapne bilkul sahi calculate kiya hai!", "Bilkul theek tick lagaya hai!").
-  2. POINT OUT MISTAKES GENTLY: If there is a calculation error, sign mistake (+/-), or syntax issue, guide them step-by-step to correct it.
-  3. TWO-WAY AI HIGHLIGHTING: Whenever you want to draw ${studentName}'s attention to a specific formula, note, or verified step, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
+CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
+- The student ${studentName} writes, solves math, and draws shapes or graphs directly on the whiteboard canvas with a pen/marker!
+- When ${studentName} writes or draws on the whiteboard, you receive real-time visual screenshots of their whiteboard in your vision stream.
+- CRITICAL VISION FOCUS: Look SPECIFICALLY at the student's HAND-DRAWN BLACK INK STROKES (their handwriting, handwritten numbers, math calculations like "5 + 6" or "x + 6", coordinate axes X & Y, geometric curves, loops, checkmarks ✓, or handwritten equations).
+- DO NOT read out or repeat old printed textbook notes or sample equations (e.g. do NOT say "4x + 2 = 10" unless ${studentName} actually hand-wrote that equation with their pen)!
+- Look directly at what is drawn by ${studentName} and speak out loud in your warm voice to tell them what you see:
+  1. If they drew axes: acknowledge "Haan ${studentName}, main dekh raha hoon aapne X aur Y axes banaye hain graph ke liye!"
+  2. If they wrote a formula or calculation (e.g. "5 + 6"): say "Aapne 5 + 6 likha hai, iska sum 11 hota hai!"
+  3. If they wrote a variable "x": acknowledge "Haan, aapne variable x likha hai!"
+  4. If they drew a curve or shape: describe that exact shape!
+  5. If correct, praise them; if there is a mistake, point it out gently.
+  6. TWO-WAY HIGHLIGHTING: Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
@@ -967,8 +972,10 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     if (liveClientRef.current && liveClientRef.current.isConnected && base64Jpeg) {
       liveClientRef.current.sendImageChunk(base64Jpeg);
       const sName = studentProfileRef.current?.name || 'Adi';
+      setConversationState('thinking');
       liveClientRef.current.sendContextNotification(
-        `[STUDENT WHITEBOARD ANNOTATION]: ${sName} has written hand-drawn steps, math equations, or marked with a tick/highlighter on their whiteboard. Look carefully at what they wrote/marked, verify their steps/calculations, and give helpful feedback in your spoken voice and on the whiteboard!`
+        `[STUDENT WHITEBOARD DRAWING INSPECTION]: ${sName} has written/drawn with a pen/marker on the whiteboard canvas. Look closely at the image showing their handwritten strokes (numbers, equations, axes, graphs, shapes, or checkmarks). State out loud in your spoken voice what they wrote/drew, verify if their math/step is correct, and praise or guide them!`,
+        { turnComplete: true }
       );
     }
   }, []);

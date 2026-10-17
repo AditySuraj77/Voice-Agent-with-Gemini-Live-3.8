@@ -526,8 +526,10 @@ export class GeminiLiveClient {
   /**
    * Sends background environmental context update (e.g. Code Lab code change, execution result, student profile).
    * @param {string} contextText
+   * @param {Object} [options]
+   * @param {boolean} [options.turnComplete=false]
    */
-  sendContextNotification(contextText) {
+  sendContextNotification(contextText, { turnComplete = false } = {}) {
     if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
     const payload = {
@@ -538,12 +540,12 @@ export class GeminiLiveClient {
             parts: [{ text: contextText }],
           },
         ],
-        turnComplete: false,
+        turnComplete: Boolean(turnComplete),
       },
     };
 
     this.sendJson(payload);
-    console.log(`[GeminiLiveClient #${this.clientId}] Sent live context update: "${contextText.slice(0, 100)}..."`);
+    console.log(`[GeminiLiveClient #${this.clientId}] Sent live context update (turnComplete: ${turnComplete}): "${contextText.slice(0, 100)}..."`);
   }
 
   /**
