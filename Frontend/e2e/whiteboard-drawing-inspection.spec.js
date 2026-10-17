@@ -132,8 +132,17 @@ test.describe('E2E Verification: Interactive Whiteboard Drawing & Multimodal Ins
       window.dispatchEvent(event);
     });
 
-    // Verify drawing toolbar and controls remain stable
-    const toolbar = page.getByTestId('drawing-toolbar');
-    await expect(toolbar).toBeVisible();
+    // Check that Floating Diagram Title Banner appears
+    const banner = page.getByTestId('animating-diagram-banner');
+    await expect(banner).toBeVisible({ timeout: 5000 });
+    await expect(banner).toContainText('Pythagoras Triangle');
+
+    // Check that Clear drawings button appears since AI drew on canvas
+    const clearBtn = page.getByTestId('tool-clear-drawings');
+    await expect(clearBtn).toBeVisible();
+
+    // Check that Undo button is enabled
+    const undoBtn = page.getByTestId('tool-undo');
+    await expect(undoBtn).toBeEnabled();
   });
 });

@@ -80,6 +80,17 @@ export default function App() {
     }
   }, [browserState?.isOpen]);
 
+  // Window event listener for E2E testing of live simulated tools
+  useEffect(() => {
+    const handleDiagramTest = (e) => {
+      if (e.detail) {
+        setActiveAnimatedDiagram(e.detail);
+      }
+    };
+    window.addEventListener('ai-draw-diagram-test', handleDiagramTest);
+    return () => window.removeEventListener('ai-draw-diagram-test', handleDiagramTest);
+  }, [setActiveAnimatedDiagram]);
+
   const [dismissError, setDismissError] = useState(false);
 
   const handleSaveProfile = (newProfile) => {
