@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trash2, BookOpen, Check, Download, Printer, ArrowDown, History,
   Pen, Highlighter, Eraser, Eye, Sparkles, CheckCircle2, XCircle,
-  Undo2, Redo2, Circle, Radio, Crosshair
+  Undo2, Redo2, Circle, Radio
 } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
 import { MathFormula } from './MathFormula.jsx';
 import { InlineFormattedNote } from './InlineFormattedNote.jsx';
+import { UniversalVisualCard } from './UniversalVisualCard.jsx';
 import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
 import { captureElementWithOverlay } from '../../utils/whiteboardSnapshot.js';
 import { saveActiveSession } from '../../services/sessionHistory.js';
@@ -960,7 +961,15 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 6. Clipped Science/Math Diagram or Web Image */}
+                  {/* 6. Universal Visual Card: Vector SVG or Real Educational Archive Photo */}
+                  {(item.svgCode || item.imageUrl || item.visualType || item.cardType === 'visual') && (
+                    <UniversalVisualCard
+                      item={item}
+                      onOpenInCodeLab={onOpenInCodeLab}
+                    />
+                  )}
+
+                  {/* 7. Clipped Science/Math Diagram or Web Image (from browser) */}
                   {item.image && (
                     <div className="my-3 rounded-2xl overflow-hidden border border-stone-300/80 bg-white shadow-xs max-w-xl mx-auto p-2">
                       <img
@@ -976,7 +985,7 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 7. Interactive Code Snippet */}
+                  {/* 8. Interactive Code Snippet */}
                   {item.code && (
                     <InteractiveCodeBlock
                       code={item.code}
