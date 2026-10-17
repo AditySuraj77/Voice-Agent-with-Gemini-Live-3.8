@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trash2, BookOpen, Check, Download, Printer, ArrowDown, History,
-  Pen, Highlighter, Eraser, Eye, Sparkles, CheckCircle2, XCircle
+  Pen, Highlighter, Eraser, Eye, Sparkles, CheckCircle2, XCircle,
+  Undo2, Redo2, Circle, Radio, Crosshair
 } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
@@ -15,7 +16,9 @@ import { captureElementWithOverlay } from '../../utils/whiteboardSnapshot.js';
  * Features:
  * - Content is written DIRECTLY on the paper surface without cards, borders, or boxes.
  * - Interactive in-place drawing overlay (Pen, Highlighter, Quick Tick/Cross stamps, Eraser).
- * - Real-time multimodal inspection: debounced and one-click snapshot streaming to Gemini Live vision.
+ * - Full Undo / Redo support (with Ctrl+Z / Ctrl+Y shortcuts) and customizable Eraser sizes.
+ * - Smart "Inspect Now" Button with instant inspection + intelligent auto-debounce.
+ * - Two-Way AI Laser Pointer: Gemini visually points to coordinates/equations on the canvas.
  * - Two-Way AI Highlighting: Gemini visually points to topics/formulas with an animated glowing ring.
  */
 export function DirectWhiteboard({
@@ -29,6 +32,7 @@ export function DirectWhiteboard({
   onToggleBrowser,
   onOpenHistory,
   aiHighlightedTopic = null,
+  aiLaserPoint = null,
   onInspectAnnotations = null,
 }) {
   const containerRef = useRef(null);
@@ -42,8 +46,16 @@ export function DirectWhiteboard({
 
   // Drawing overlay state
   const [activeDrawTool, setActiveDrawTool] = useState('none'); // 'none' | 'pen' | 'highlighter' | 'tick' | 'cross' | 'eraser'
+  const [eraserSize, setEraserSize] = useState(26); // 12 (fine), 26 (medium), 48 (large)
+  const [showEraserMenu, setShowEraserMenu] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [isInspecting, setIsInspecting] = useState(false);
+
+  // Undo / Redo stacks (ImageData snapshot or stroke states)
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const undoStackRef = useRef([]); // Array of ImageData
+  const redoStackRef = useRef([]); // Array of ImageData
 
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef(null);
@@ -147,7 +159,80 @@ export function DirectWhiteboard({
     }
   }, [onInspectAnnotations, isInspecting]);
 
-  // Trigger debounced auto-inspection after student finishes writing/marking
+  // Save current canvas state to undo stack before starting a new stroke/stamp
+  const pushUndoSnapshot = useCallback(() => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas || canvas.width === 0 || canvas.height === 0) return;
+    const ctx = canvas.getContext('2d');
+    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    undoStackRef.current.push(snapshot);
+    if (undoStackRef.current.length > 30) {
+      undoStackRef.current.shift(); // Keep last 30 states
+    }
+    redoStackRef.current = []; // Clear redo stack on new action
+    setCanUndo(true);
+    setCanRedo(false);
+  }, []);
+
+  // Perform Undo
+  const handleUndo = useCallback(() => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas || undoStackRef.current.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    
+    // Save current state to redo stack
+    const currentSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    redoStackRef.current.push(currentSnapshot);
+    setCanRedo(true);
+
+    // Pop and restore previous state
+    const previousSnapshot = undoStackRef.current.pop();
+    ctx.putImageData(previousSnapshot, 0, 0);
+    setCanUndo(undoStackRef.current.length > 0);
+
+    // Recheck if anything is drawn
+    setHasDrawn(undoStackRef.current.length > 0);
+  }, []);
+
+  // Perform Redo
+  const handleRedo = useCallback(() => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas || redoStackRef.current.length === 0) return;
+    const ctx = canvas.getContext('2d');
+
+    // Save current state to undo stack
+    const currentSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    undoStackRef.current.push(currentSnapshot);
+    setCanUndo(true);
+
+    // Pop and restore redo state
+    const nextSnapshot = redoStackRef.current.pop();
+    ctx.putImageData(nextSnapshot, 0, 0);
+    setCanRedo(redoStackRef.current.length > 0);
+    setHasDrawn(true);
+  }, []);
+
+  // Global Keyboard shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
+  // Trigger debounced auto-inspection after student finishes writing/marking (2.5s for comfortable multi-step writing)
   const scheduleAutoInspect = useCallback(() => {
     if (!onInspectAnnotations) return;
     if (autoInspectTimerRef.current) {
@@ -155,7 +240,7 @@ export function DirectWhiteboard({
     }
     autoInspectTimerRef.current = setTimeout(() => {
       handleInspect();
-    }, 1800); // 1.8s debounce after last stroke
+    }, 2500); // 2.5s comfortable debounce
   }, [onInspectAnnotations, handleInspect]);
 
   const handleDrawStart = (e) => {
@@ -164,6 +249,9 @@ export function DirectWhiteboard({
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+
+    // Save snapshot for undo before drawing
+    pushUndoSnapshot();
 
     // Quick Stamp: Tick mark
     if (activeDrawTool === 'tick') {
@@ -229,7 +317,7 @@ export function DirectWhiteboard({
       ctx.lineCap = 'square';
     } else if (activeDrawTool === 'eraser') {
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = 26;
+      ctx.lineWidth = eraserSize;
       ctx.lineCap = 'round';
     }
 
@@ -249,6 +337,7 @@ export function DirectWhiteboard({
   const handleClearAnnotations = () => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
+    pushUndoSnapshot();
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasDrawn(false);
@@ -294,6 +383,63 @@ export function DirectWhiteboard({
               : 'default',
         }}
       />
+
+      {/* Two-Way Animated AI Laser Pointer from Gemini Teacher */}
+      {aiLaserPoint && (
+        <div
+          className="absolute z-20 pointer-events-none transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out animate-fadeIn"
+          style={{
+            left: `${Math.min(Math.max(aiLaserPoint.x, 2), 98)}%`,
+            top: `${Math.min(Math.max(aiLaserPoint.y, 2), 98)}%`,
+          }}
+          data-testid="ai-laser-pointer"
+        >
+          {aiLaserPoint.style === 'circle' ? (
+            /* Circle ring indicator */
+            <div className="relative flex items-center justify-center">
+              <span className="w-10 h-10 rounded-full border-2 border-amber-500 animate-ping opacity-75" />
+              <span className="absolute w-8 h-8 rounded-full border-2 border-amber-400 bg-amber-400/20 shadow-lg" />
+              {aiLaserPoint.label && (
+                <div className="absolute top-full mt-1.5 whitespace-nowrap px-2 py-0.5 rounded-full bg-stone-900 text-amber-300 text-[10px] font-sans font-bold shadow-md">
+                  {aiLaserPoint.label}
+                </div>
+              )}
+            </div>
+          ) : aiLaserPoint.style === 'check' ? (
+            /* Checkmark indicator */
+            <div className="relative flex items-center justify-center">
+              <span className="w-9 h-9 rounded-full bg-emerald-500/20 animate-ping" />
+              <CheckCircle2 className="w-7 h-7 text-emerald-600 drop-shadow-md" />
+              {aiLaserPoint.label && (
+                <div className="absolute top-full mt-1 whitespace-nowrap px-2 py-0.5 rounded-full bg-emerald-700 text-white text-[10px] font-sans font-bold shadow-md">
+                  {aiLaserPoint.label}
+                </div>
+              )}
+            </div>
+          ) : aiLaserPoint.style === 'cross' ? (
+            /* Cross indicator */
+            <div className="relative flex items-center justify-center">
+              <span className="w-9 h-9 rounded-full bg-rose-500/20 animate-ping" />
+              <XCircle className="w-7 h-7 text-rose-600 drop-shadow-md" />
+              {aiLaserPoint.label && (
+                <div className="absolute top-full mt-1 whitespace-nowrap px-2 py-0.5 rounded-full bg-rose-700 text-white text-[10px] font-sans font-bold shadow-md">
+                  {aiLaserPoint.label}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Glowing Laser Point (Default) */
+            <div className="relative flex items-center justify-center">
+              <span className="w-8 h-8 rounded-full bg-cyan-400 animate-ping opacity-60" />
+              <span className="absolute w-4 h-4 rounded-full bg-cyan-400 shadow-[0_0_14px_4px_rgba(34,211,238,0.8)] border border-white" />
+              <div className="absolute top-full mt-1.5 whitespace-nowrap px-2 py-0.5 rounded-full bg-stone-950/90 text-cyan-300 text-[10px] font-sans font-bold shadow-md flex items-center gap-1 border border-cyan-500/30">
+                <Sparkles className="w-2.5 h-2.5 text-cyan-300 animate-spin" />
+                <span>{aiLaserPoint.label || 'Aristotle Laser'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div ref={contentWrapperRef} className="max-w-3xl mx-auto space-y-8 relative">
         {/* Top Board Action Bar (Always clickable above drawing canvas) */}
@@ -407,58 +553,131 @@ export function DirectWhiteboard({
                 <span className="hidden sm:inline">Cross</span>
               </button>
 
-              {hasDrawn && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setActiveDrawTool((prev) => (prev === 'eraser' ? 'none' : 'eraser'))}
-                    className={`p-1 rounded-full text-xs font-sans transition-all cursor-pointer ${
-                      activeDrawTool === 'eraser'
-                        ? 'bg-stone-800 text-white'
-                        : 'text-stone-500 hover:text-stone-800'
-                    }`}
-                    title="Eraser: Erase markings"
-                    data-testid="tool-eraser"
-                  >
-                    <Eraser className="w-3 h-3" />
-                  </button>
+              {/* Eraser with Size Options */}
+              <div className="relative flex items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeDrawTool === 'eraser') {
+                      setShowEraserMenu(!showEraserMenu);
+                    } else {
+                      setActiveDrawTool('eraser');
+                    }
+                  }}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
+                    activeDrawTool === 'eraser'
+                      ? 'bg-stone-800 text-white font-semibold'
+                      : 'text-stone-500 hover:text-stone-800 hover:bg-stone-200/60'
+                  }`}
+                  title="Eraser: Erase markings (click again for size)"
+                  data-testid="tool-eraser"
+                >
+                  <Eraser className="w-3 h-3" />
+                  <span className="hidden sm:inline">Eraser</span>
+                  <span className="text-[10px] opacity-75">{eraserSize === 12 ? 'S' : eraserSize === 26 ? 'M' : 'L'}</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={handleClearAnnotations}
-                    className="text-[11px] font-sans px-1 text-stone-400 hover:text-rose-600 cursor-pointer"
-                    title="Clear hand-drawn markings"
-                    data-testid="tool-clear-drawings"
-                  >
-                    Clear
-                  </button>
-                </>
+                {/* Eraser Size Popover */}
+                {showEraserMenu && activeDrawTool === 'eraser' && (
+                  <div className="absolute top-full left-0 mt-1.5 flex items-center gap-1 p-1 bg-white border border-stone-300 rounded-lg shadow-lg z-30 animate-fadeIn">
+                    <button
+                      type="button"
+                      onClick={() => { setEraserSize(12); setShowEraserMenu(false); }}
+                      className={`px-2 py-1 text-[11px] rounded ${eraserSize === 12 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
+                      title="Small Eraser (12px)"
+                    >
+                      Fine (S)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEraserSize(26); setShowEraserMenu(false); }}
+                      className={`px-2 py-1 text-[11px] rounded ${eraserSize === 26 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
+                      title="Medium Eraser (26px)"
+                    >
+                      Medium (M)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEraserSize(48); setShowEraserMenu(false); }}
+                      className={`px-2 py-1 text-[11px] rounded ${eraserSize === 48 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
+                      title="Large Eraser (48px)"
+                    >
+                      Broad (L)
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Undo Button */}
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={!canUndo}
+                className={`p-1 rounded-full text-xs transition-all cursor-pointer ${
+                  canUndo
+                    ? 'text-stone-700 hover:text-stone-950 hover:bg-stone-200/60'
+                    : 'text-stone-300 cursor-not-allowed'
+                }`}
+                title="Undo last stroke (Ctrl + Z)"
+                data-testid="tool-undo"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Redo Button */}
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={!canRedo}
+                className={`p-1 rounded-full text-xs transition-all cursor-pointer ${
+                  canRedo
+                    ? 'text-stone-700 hover:text-stone-950 hover:bg-stone-200/60'
+                    : 'text-stone-300 cursor-not-allowed'
+                }`}
+                title="Redo stroke (Ctrl + Y)"
+                data-testid="tool-redo"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+
+              {hasDrawn && (
+                <button
+                  type="button"
+                  onClick={handleClearAnnotations}
+                  className="text-[11px] font-sans px-1 text-stone-400 hover:text-rose-600 cursor-pointer"
+                  title="Clear hand-drawn markings"
+                  data-testid="tool-clear-drawings"
+                >
+                  Clear
+                </button>
               )}
             </div>
 
-            {/* Check Handwritten Working with Gemini Teacher */}
-            {hasDrawn && onInspectAnnotations && (
+            {/* Smart "Inspect Now" Button with instant inspection + visual status */}
+            {onInspectAnnotations && (
               <button
                 type="button"
                 onClick={handleInspect}
                 disabled={isInspecting}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold transition-all cursor-pointer animate-fadeIn ${
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold transition-all cursor-pointer shadow-xs ${
                   isInspecting
-                    ? 'bg-emerald-700 text-white shadow-xs'
-                    : 'bg-stone-900 hover:bg-stone-950 text-white shadow-xs'
+                    ? 'bg-emerald-700 text-white ring-2 ring-emerald-400/40'
+                    : hasDrawn
+                    ? 'bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold ring-2 ring-amber-300/40'
+                    : 'bg-stone-900 hover:bg-stone-950 text-white'
                 }`}
-                title="Have Gemini inspect your handwritten steps"
+                title="Instantly inspect whiteboard drawing with Aristotle AI (Ctrl + Enter)"
                 data-testid="inspect-whiteboard-btn"
               >
                 {isInspecting ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-emerald-300 stroke-[3]" />
-                    <span>Sir is Checking...</span>
+                    <Check className="w-3.5 h-3.5 text-emerald-300 stroke-[3] animate-pulse" />
+                    <span>Aristotle Reviewing...</span>
                   </>
                 ) : (
                   <>
-                    <Eye className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Check with Sir</span>
+                    <Eye className="w-3.5 h-3.5 text-stone-950" />
+                    <span>✨ Check with Aristotle</span>
                   </>
                 )}
               </button>

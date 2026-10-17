@@ -50,6 +50,7 @@ export default function App() {
     clearWhiteboard,
     restoreSessionContext,
     aiHighlightedTopic,
+    aiLaserPoint,
     inspectWhiteboardSnapshot,
     startSession,
     endSession,
@@ -173,6 +174,7 @@ export default function App() {
               }}
               onOpenHistory={() => setIsHistoryModalOpen(true)}
               aiHighlightedTopic={aiHighlightedTopic}
+              aiLaserPoint={aiLaserPoint}
               onInspectAnnotations={inspectWhiteboardSnapshot}
             />
           </div>

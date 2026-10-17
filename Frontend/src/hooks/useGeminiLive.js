@@ -148,7 +148,9 @@ CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
   3. If they wrote a variable "x": acknowledge "Haan ${studentName}, main dekh raha hoon aapne variable x likha hai!"
   4. If they drew a curve, tick, or shape: describe that exact drawing!
   5. If correct, praise them; if there is a mistake, point it out gently.
-  6. TWO-WAY HIGHLIGHTING: Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
+  6. TWO-WAY HIGHLIGHTING & LASER POINTER:
+     - Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
+     - TWO-WAY LASER POINTER ON CANVAS: When discussing ${studentName}'s handwritten equations, graphs, or drawings, call \`laser_point_canvas(x: 0-100, y: 0-100, label: "...", style: "laser"|"circle"|"check"|"cross")\` to shine an animated AI laser pointer or checkmark directly on that exact part of their drawing!
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
@@ -214,7 +216,9 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   // Live Whiteboard notes dynamically populated as the Teacher explains
   const [whiteboardItems, setWhiteboardItems] = useState([]);
   const [aiHighlightedTopic, setAiHighlightedTopic] = useState(null);
+  const [aiLaserPoint, setAiLaserPoint] = useState(null);
   const highlightTimerRef = useRef(null);
+  const laserTimerRef = useRef(null);
 
   // Turn and speech synchronization refs
   const hasTurnWhiteboardUpdateRef = useRef(false);
@@ -519,6 +523,20 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
         highlightTimerRef.current = setTimeout(() => {
           setAiHighlightedTopic(null);
         }, 7000);
+      },
+      onLaserPointCanvas: (args) => {
+        console.log('[useGeminiLive] AI pointed laser on canvas:', args);
+        setAiLaserPoint({
+          x: typeof args?.x === 'number' ? args.x : 50,
+          y: typeof args?.y === 'number' ? args.y : 50,
+          label: args?.label || '',
+          style: args?.style || 'laser',
+          id: Date.now(),
+        });
+        if (laserTimerRef.current) clearTimeout(laserTimerRef.current);
+        laserTimerRef.current = setTimeout(() => {
+          setAiLaserPoint(null);
+        }, 6000);
       },
       onWhiteboardCall: (args) => {
         console.log('[useGeminiLive] Whiteboard tool executed:', args);
@@ -1003,6 +1021,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     clearWhiteboard,
     restoreSessionContext,
     aiHighlightedTopic,
+    aiLaserPoint,
     inspectWhiteboardSnapshot,
     startSession,
     endSession,

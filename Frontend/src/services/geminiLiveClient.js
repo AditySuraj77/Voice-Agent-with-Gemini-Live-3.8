@@ -246,6 +246,32 @@ export class GeminiLiveClient {
                 },
               },
               {
+                name: 'laser_point_canvas',
+                description: 'Visually point a glowing AI laser pointer, circle a specific step or formula, or drop a feedback mark directly onto the student\'s handwritten whiteboard canvas while speaking.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    x: {
+                      type: 'NUMBER',
+                      description: 'Horizontal percentage coordinate on the canvas (0 to 100, where 50 is center)',
+                    },
+                    y: {
+                      type: 'NUMBER',
+                      description: 'Vertical percentage coordinate on the canvas (0 to 100, where 50 is center)',
+                    },
+                    label: {
+                      type: 'STRING',
+                      description: 'Brief guidance label (e.g. "Check this term", "Correct step ✓", "Look here")',
+                    },
+                    style: {
+                      type: 'STRING',
+                      description: 'Style of visual indicator: "laser" (glowing pulse), "circle" (ring), "check" (green check), "cross" (red mark)',
+                    },
+                  },
+                  required: ['x', 'y'],
+                },
+              },
+              {
                 name: 'search_web',
                 description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
                 parameters: {
@@ -754,6 +780,18 @@ export class GeminiLiveClient {
           name: call.name,
           response: {
             result: { status: 'success', message: `Highlighted topic "${call.args?.topic || ''}" on whiteboard.` },
+          },
+        });
+      } else if (call.name === 'laser_point_canvas') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing laser_point_canvas call:`, call.args);
+        if (this.onLaserPointCanvas) {
+          this.onLaserPointCanvas(call.args);
+        }
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: { status: 'success', message: 'Pointed laser indicator on whiteboard canvas.' },
           },
         });
       } else if (call.name === 'search_web') {
