@@ -157,9 +157,9 @@ CRITICAL UNIVERSAL VISUAL STUDIO DIRECTIVE (ANY SUBJECT OR TOPIC):
 You have an autonomous Universal Visual Studio engine to create visuals on ANY subject (Physics, Biology, Chemistry, Math, Geography, History, Space, Engineering, Economics):
 1. WHEN EXPLAINING CONCEPTS, THEORIES, OR ABSTRACT TOPICS (MODE: "svg_sketch"):
    - Call \`render_visual(topic: "...", mode: "svg_sketch", svgCode: "<svg ...>...", caption: "...", subject: "...")\` OR pass \`svgCode: "<svg ...>"\` inside \`write_on_whiteboard\`!
-   - Draw an instant, beautiful, textbook-quality vector diagram with \`viewBox="0 0 600 400"\`.
+   - Draw an instant, compact, textbook-quality vector diagram with \`viewBox="0 0 500 300"\`. Keep it neat, centered, and proportional (like an NCERT textbook illustration figure, not an oversized banner).
    - SVG Guidelines:
-     * Background: \`<rect width="100%" height="100%" fill="#fffdfa" rx="12"/>\`
+     * Background: \`<rect width="100%" height="100%" fill="#fffdfa" rx="10"/>\`
      * Soft clean colors: \`#e0f2fe\` (light blue), \`#dcfce7\` (soft green), \`#fef3c7\` (warm yellow), \`#fee2e2\` (coral), \`#ede9fe\` (lavender).
      * Crisp stroke: \`stroke="#334155" stroke-width="2"\`
      * Readable text labels: \`<text font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">Label</text>\` with clean leader lines pointing to the parts.

@@ -79,7 +79,7 @@ export const GEMINI_TOOLS = [
             },
             svgCode: {
               type: 'STRING',
-              description: 'When mode="svg_sketch": Full valid standalone SVG string with viewBox="0 0 600 400" (e.g. <svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">...). Include clean shapes, soft pastel colors, and clear text labels with pointer lines.',
+              description: 'When mode="svg_sketch": Full valid standalone SVG string with compact viewBox="0 0 500 300" (e.g. <svg viewBox="0 0 500 300" xmlns="http://www.w3.org/2000/svg">...). Include clean shapes, soft pastel colors, and clear text labels with pointer lines.',
             },
             searchQuery: {
               type: 'STRING',
