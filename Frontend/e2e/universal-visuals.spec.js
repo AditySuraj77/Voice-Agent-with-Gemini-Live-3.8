@@ -59,6 +59,19 @@ test.describe('Universal Visual Studio E2E - Generative SVG & Educational Archiv
     await expect(svgContainer).toBeVisible();
     await expect(svgContainer.locator('svg')).toBeVisible();
     await expect(svgContainer).toContainText('Nucleus');
+
+    // Test Lightbox Zoom and Prominent Close Button
+    const expandBtn = page.getByTestId('expand-visual-btn');
+    await expect(expandBtn).toBeVisible();
+    await expandBtn.click();
+
+    const lightboxModal = page.getByTestId('visual-lightbox-modal');
+    await expect(lightboxModal).toBeVisible();
+
+    const closeBtn = page.getByTestId('lightbox-close-btn');
+    await expect(closeBtn).toBeVisible();
+    await closeBtn.click();
+    await expect(lightboxModal).toBeHidden();
   });
 
   test('2. Educational Archive Photo: Restores and renders high-res photo with caption and attribution', async ({ page }) => {
