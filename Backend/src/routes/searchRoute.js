@@ -1,6 +1,6 @@
 import express from 'express';
 import { searchTavily } from '../services/tavilySearchService.js';
-import { searchEducationalVisual } from '../services/wikimediaService.js';
+import { searchUniversalVisual } from '../services/visualSearchService.js';
 
 const router = express.Router();
 
@@ -49,7 +49,7 @@ router.post('/tools/visual-search', async (req, res) => {
       return res.status(400).json({ error: 'Visual search query exceeds maximum allowed length of 300 characters.' });
     }
 
-    const visualResult = await searchEducationalVisual(cleanQuery, { maxResults: maxResults || 3 });
+    const visualResult = await searchUniversalVisual(cleanQuery, { maxResults: maxResults || 3 });
     return res.json(visualResult);
   } catch (err) {
     console.error('[searchRoute] Error during visual search execution:', err);

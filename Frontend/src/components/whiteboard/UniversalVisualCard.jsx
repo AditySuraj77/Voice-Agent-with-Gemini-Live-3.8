@@ -15,6 +15,7 @@ import { Download, Maximize2, Image as ImageIcon, Sparkles, AlertCircle, Compass
 export function UniversalVisualCard({ item, onOpenInCodeLab }) {
   const [expandedView, setExpandedView] = useState(null); // 'svg' | 'photo' | null
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const hasSvg = Boolean(item.svgCode) || item.visualType === 'svg';
@@ -134,7 +135,8 @@ export function UniversalVisualCard({ item, onOpenInCodeLab }) {
             <ImageIcon className="w-3.5 h-3.5" />
           </span>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-600 truncate">
-            {item.subject ? `${item.subject} • ` : ''}Archive Photo
+            {item.subject ? `${item.subject} • ` : ''}
+            {item.source?.includes('Web') ? 'Web Photograph' : 'Archive Photo'}
           </span>
         </div>
 
@@ -158,27 +160,45 @@ export function UniversalVisualCard({ item, onOpenInCodeLab }) {
           onClick={() => setExpandedView('photo')}
           title="Click to view full size"
         >
-          {!imageLoaded && (
+          {!imageLoaded && !imageError && (
             <div className="absolute inset-0 flex items-center justify-center bg-stone-100 text-stone-400 text-xs gap-2 min-h-[140px]">
               <Compass className="w-4 h-4 animate-spin text-amber-600" />
-              <span>Loading educational archive photo...</span>
+              <span>Loading visual photograph...</span>
             </div>
           )}
-          <img
-            src={item.imageUrl}
-            alt={item.caption || item.topic || 'Educational Visual'}
-            loading="lazy"
-            onLoad={() => setImageLoaded(true)}
-            className={`w-auto h-auto object-contain transition-opacity duration-300 max-h-[250px] ${
-              imageLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
+          {imageError ? (
+            <div className="p-4 text-center text-xs text-stone-500 flex flex-col items-center gap-1.5 min-h-[120px] justify-center">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              <span>Image could not be previewed directly.</span>
+              <a
+                href={item.imageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-amber-700 hover:underline text-[11px] font-medium"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Open original photo ↗
+              </a>
+            </div>
+          ) : (
+            <img
+              src={item.imageUrl}
+              alt={item.caption || item.topic || 'Educational Visual'}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageError(true)}
+              className={`w-auto h-auto object-contain transition-opacity duration-300 max-h-[250px] ${
+                imageLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          )}
         </div>
 
         {/* Photo Source & Attribution */}
         {item.attribution && (
           <div className="mt-1 flex items-center justify-between w-full text-[10px] text-stone-400 px-1">
-            <span className="truncate">Source: {item.source || 'Wikimedia Commons'}</span>
+            <span className="truncate">Source: {item.source || 'Web Search'}</span>
             <span className="truncate">{item.attribution}</span>
           </div>
         )}
@@ -295,11 +315,12 @@ export function UniversalVisualCard({ item, onOpenInCodeLab }) {
                   <img
                     src={item.imageUrl}
                     alt={item.caption || item.topic || 'Educational Visual'}
+                    referrerPolicy="no-referrer"
                     className="w-auto h-auto max-h-[66vh] max-w-full object-contain rounded-xl shadow-xl"
                   />
                   {item.attribution && (
                     <div className="mt-2 text-center text-xs text-stone-400">
-                      <span>Source: {item.source || 'Wikimedia Commons'} • {item.attribution}</span>
+                      <span>Source: {item.source || 'Web Search'} • {item.attribution}</span>
                     </div>
                   )}
                 </div>
