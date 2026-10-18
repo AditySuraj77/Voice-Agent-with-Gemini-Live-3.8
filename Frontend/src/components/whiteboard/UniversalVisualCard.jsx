@@ -39,8 +39,8 @@ export function UniversalVisualCard({ item, onOpenInCodeLab }) {
 
   return (
     <div
-      className={`my-3 rounded-xl border border-stone-200/80 bg-stone-50/70 p-2.5 sm:p-3 shadow-2xs transition-all duration-200 font-sans ${
-        isExpanded ? 'fixed inset-4 sm:inset-12 z-50 overflow-auto bg-stone-900/95 text-stone-100 border-stone-700 shadow-2xl flex flex-col justify-center items-center' : 'max-w-lg mx-auto'
+      className={`my-2 rounded-xl border border-stone-200/80 bg-stone-50/70 p-2.5 sm:p-3 shadow-2xs transition-all duration-200 font-sans ${
+        isExpanded ? 'fixed inset-4 sm:inset-12 z-50 overflow-auto bg-stone-900/95 text-stone-100 border-stone-700 shadow-2xl flex flex-col justify-center items-center' : 'w-full max-w-lg mx-auto'
       }`}
       data-testid="universal-visual-card"
     >

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trash2, BookOpen, Check, Download, Printer, ArrowDown, History,
   Pen, Highlighter, Eraser, Eye, Sparkles, CheckCircle2, XCircle,
-  Undo2, Redo2, Circle, Radio
+  Undo2, Redo2
 } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
@@ -522,7 +522,7 @@ export function DirectWhiteboard({
         </div>
       )}
 
-      <div ref={contentWrapperRef} className="max-w-3xl mx-auto space-y-8 relative">
+      <div ref={contentWrapperRef} className="max-w-3xl lg:max-w-5xl mx-auto space-y-8 relative">
         {/* Top Board Action Bar (Always clickable above drawing canvas) */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-2.5 print:hidden relative z-20">
           <div className="text-xs font-sans text-stone-400">
@@ -859,6 +859,18 @@ export function DirectWhiteboard({
                 (item.topic.toLowerCase().includes(aiHighlightedTopic.topic.toLowerCase()) ||
                   aiHighlightedTopic.topic.toLowerCase().includes(item.topic.toLowerCase()));
 
+              const hasVisual = Boolean(
+                item.svgCode || item.imageUrl || item.visualType || item.cardType === 'visual' || item.image
+              );
+
+              const hasTextContent = Boolean(
+                item.formula ||
+                cleanNotesList.length > 0 ||
+                item.tableData ||
+                item.code ||
+                item.question
+              );
+
               return (
                 <div
                   key={item.id || index}
@@ -898,113 +910,234 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 3. Highlighted Math / Scientific Formula */}
-                  {item.formula && (
-                    <div className="py-3 my-2 text-center bg-stone-100/50 rounded-xl px-4 border border-stone-200/50 shadow-2xs">
-                      <div className="text-xl md:text-2xl font-bold text-stone-900 font-serif tracking-wide overflow-x-auto py-1">
-                        <MathFormula formula={item.formula} displayMode={true} />
-                      </div>
-                    </div>
-                  )}
+                  {/* Body Content: Split Side-by-Side if Visual + Notes both present, else single column */}
+                  {hasVisual && hasTextContent ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pt-1">
+                      {/* Left Column: Formulas, Bullet Notes, Tables, Code, Question */}
+                      <div className="lg:col-span-7 space-y-3 min-w-0">
+                        {/* 3. Highlighted Math / Scientific Formula */}
+                        {item.formula && (
+                          <div className="py-2.5 my-1 text-center bg-stone-100/50 rounded-xl px-3 border border-stone-200/50 shadow-2xs">
+                            <div className="text-lg md:text-xl font-bold text-stone-900 font-serif tracking-wide overflow-x-auto py-1">
+                              <MathFormula formula={item.formula} displayMode={true} />
+                            </div>
+                          </div>
+                        )}
 
-                  {/* 4. Notes / Step-by-Step Derivations */}
-                  {cleanNotesList.length > 0 && (
-                    <div className="space-y-2 text-sm md:text-base text-stone-800 font-serif leading-relaxed">
-                      {cleanNotesList.map((note, idx) => {
-                        const isStepMapping = note.includes('->') || note.includes('→') || note.includes('=');
-                        return (
-                          <div
-                            key={idx}
-                            className={`flex items-start gap-2.5 ${
-                              isStepMapping ? 'font-mono text-sm text-stone-900' : ''
-                            }`}
-                          >
-                            {!isStepMapping && (
-                              <span className="text-stone-400 select-none">•</span>
-                            )}
-                            <span className="flex-1">
-                              <InlineFormattedNote text={note} isLatest={isLatest} />
+                        {/* 4. Notes / Step-by-Step Derivations */}
+                        {cleanNotesList.length > 0 && (
+                          <div className="space-y-2 text-sm md:text-base text-stone-800 font-serif leading-relaxed">
+                            {cleanNotesList.map((note, idx) => {
+                              const isStepMapping = note.includes('->') || note.includes('→') || note.includes('=');
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`flex items-start gap-2.5 ${
+                                    isStepMapping ? 'font-mono text-sm text-stone-900' : ''
+                                  }`}
+                                >
+                                  {!isStepMapping && (
+                                    <span className="text-stone-400 select-none">•</span>
+                                  )}
+                                  <span className="flex-1">
+                                    <InlineFormattedNote text={note} isLatest={isLatest} />
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* 5. Clean Table if tableData present */}
+                        {item.tableData && (
+                          <div className="my-3 overflow-x-auto">
+                            <table className="w-full border-collapse border border-stone-300 font-sans text-xs md:text-sm">
+                              {item.tableData.headers && (
+                                <thead className="bg-[#2a3b5c] text-white">
+                                  <tr>
+                                    {item.tableData.headers.map((h, hIdx) => (
+                                      <th key={hIdx} className="border border-stone-400 px-3 py-2 text-center font-semibold">
+                                        {h}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                              )}
+                              <tbody>
+                                {item.tableData.rows?.map((row, rIdx) => (
+                                  <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-[#fcfbf9]'}>
+                                    {row.map((cell, cIdx) => (
+                                      <td key={cIdx} className="border border-stone-300 px-3 py-2 text-center text-stone-800">
+                                        {cell}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {/* 6. Interactive Code Snippet */}
+                        {item.code && (
+                          <InteractiveCodeBlock
+                            code={item.code}
+                            language={item.language}
+                            onOpenInCodeLab={onOpenInCodeLab}
+                          />
+                        )}
+
+                        {/* 7. Socratic Question */}
+                        {item.question && (
+                          <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
+                            <span>
+                              {isLatest ? (
+                                <TypewriterText text={item.question} speed={14} />
+                              ) : (
+                                item.question
+                              )}
                             </span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* 5. Clean Table if tableData present */}
-                  {item.tableData && (
-                    <div className="my-4 overflow-x-auto">
-                      <table className="w-full border-collapse border border-stone-300 font-sans text-xs md:text-sm">
-                        {item.tableData.headers && (
-                          <thead className="bg-[#2a3b5c] text-white">
-                            <tr>
-                              {item.tableData.headers.map((h, hIdx) => (
-                                <th key={hIdx} className="border border-stone-400 px-3 py-2 text-center font-semibold">
-                                  {h}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
                         )}
-                        <tbody>
-                          {item.tableData.rows?.map((row, rIdx) => (
-                            <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-[#fcfbf9]'}>
-                              {row.map((cell, cIdx) => (
-                                <td key={cIdx} className="border border-stone-300 px-3 py-2 text-center text-stone-800">
-                                  {cell}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      </div>
+
+                      {/* Right Column: Visual Diagram / Photo (Sticky on desktop) */}
+                      <div className="lg:col-span-5 w-full lg:sticky lg:top-4">
+                        {(item.svgCode || item.imageUrl || item.visualType || item.cardType === 'visual') && (
+                          <UniversalVisualCard
+                            item={item}
+                            onOpenInCodeLab={onOpenInCodeLab}
+                          />
+                        )}
+
+                        {item.image && (
+                          <div className="my-2 rounded-2xl overflow-hidden border border-stone-300/80 bg-white shadow-xs max-w-xl mx-auto p-2">
+                            <img
+                              src={item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}`}
+                              alt={item.caption || item.topic || 'Clipped Whiteboard Diagram'}
+                              className="w-full h-auto max-h-80 object-contain rounded-xl select-none"
+                            />
+                            {item.caption && (
+                              <div className="text-center text-xs font-sans text-stone-600 mt-2 font-medium">
+                                📌 {item.caption}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-
-                  {/* 6. Universal Visual Card: Vector SVG or Real Educational Archive Photo */}
-                  {(item.svgCode || item.imageUrl || item.visualType || item.cardType === 'visual') && (
-                    <UniversalVisualCard
-                      item={item}
-                      onOpenInCodeLab={onOpenInCodeLab}
-                    />
-                  )}
-
-                  {/* 7. Clipped Science/Math Diagram or Web Image (from browser) */}
-                  {item.image && (
-                    <div className="my-3 rounded-2xl overflow-hidden border border-stone-300/80 bg-white shadow-xs max-w-xl mx-auto p-2">
-                      <img
-                        src={item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}`}
-                        alt={item.caption || item.topic || 'Clipped Whiteboard Diagram'}
-                        className="w-full h-auto max-h-96 object-contain rounded-xl select-none"
-                      />
-                      {item.caption && (
-                        <div className="text-center text-xs font-sans text-stone-600 mt-2 font-medium">
-                          📌 {item.caption}
+                  ) : (
+                    /* Standard Single-Column Layout (when visual only, or text only) */
+                    <>
+                      {/* 3. Highlighted Math / Scientific Formula */}
+                      {item.formula && (
+                        <div className="py-3 my-2 text-center bg-stone-100/50 rounded-xl px-4 border border-stone-200/50 shadow-2xs">
+                          <div className="text-xl md:text-2xl font-bold text-stone-900 font-serif tracking-wide overflow-x-auto py-1">
+                            <MathFormula formula={item.formula} displayMode={true} />
+                          </div>
                         </div>
                       )}
-                    </div>
-                  )}
 
-                  {/* 8. Interactive Code Snippet */}
-                  {item.code && (
-                    <InteractiveCodeBlock
-                      code={item.code}
-                      language={item.language}
-                      onOpenInCodeLab={onOpenInCodeLab}
-                    />
-                  )}
+                      {/* 4. Notes / Step-by-Step Derivations */}
+                      {cleanNotesList.length > 0 && (
+                        <div className="space-y-2 text-sm md:text-base text-stone-800 font-serif leading-relaxed">
+                          {cleanNotesList.map((note, idx) => {
+                            const isStepMapping = note.includes('->') || note.includes('→') || note.includes('=');
+                            return (
+                              <div
+                                key={idx}
+                                className={`flex items-start gap-2.5 ${
+                                  isStepMapping ? 'font-mono text-sm text-stone-900' : ''
+                                }`}
+                              >
+                                {!isStepMapping && (
+                                  <span className="text-stone-400 select-none">•</span>
+                                )}
+                                <span className="flex-1">
+                                  <InlineFormattedNote text={note} isLatest={isLatest} />
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
 
-                  {/* 8. Socratic Question */}
-                  {item.question && (
-                    <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
-                      <span>
-                        {isLatest ? (
-                          <TypewriterText text={item.question} speed={14} />
-                        ) : (
-                          item.question
-                        )}
-                      </span>
-                    </div>
+                      {/* 5. Clean Table if tableData present */}
+                      {item.tableData && (
+                        <div className="my-4 overflow-x-auto">
+                          <table className="w-full border-collapse border border-stone-300 font-sans text-xs md:text-sm">
+                            {item.tableData.headers && (
+                              <thead className="bg-[#2a3b5c] text-white">
+                                <tr>
+                                  {item.tableData.headers.map((h, hIdx) => (
+                                    <th key={hIdx} className="border border-stone-400 px-3 py-2 text-center font-semibold">
+                                      {h}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                            )}
+                            <tbody>
+                              {item.tableData.rows?.map((row, rIdx) => (
+                                <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-[#fcfbf9]'}>
+                                  {row.map((cell, cIdx) => (
+                                    <td key={cIdx} className="border border-stone-300 px-3 py-2 text-center text-stone-800">
+                                      {cell}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* 6. Universal Visual Card: Vector SVG or Real Educational Archive Photo */}
+                      {(item.svgCode || item.imageUrl || item.visualType || item.cardType === 'visual') && (
+                        <UniversalVisualCard
+                          item={item}
+                          onOpenInCodeLab={onOpenInCodeLab}
+                        />
+                      )}
+
+                      {/* 7. Clipped Science/Math Diagram or Web Image (from browser) */}
+                      {item.image && (
+                        <div className="my-3 rounded-2xl overflow-hidden border border-stone-300/80 bg-white shadow-xs max-w-xl mx-auto p-2">
+                          <img
+                            src={item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}`}
+                            alt={item.caption || item.topic || 'Clipped Whiteboard Diagram'}
+                            className="w-full h-auto max-h-96 object-contain rounded-xl select-none"
+                          />
+                          {item.caption && (
+                            <div className="text-center text-xs font-sans text-stone-600 mt-2 font-medium">
+                              📌 {item.caption}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 8. Interactive Code Snippet */}
+                      {item.code && (
+                        <InteractiveCodeBlock
+                          code={item.code}
+                          language={item.language}
+                          onOpenInCodeLab={onOpenInCodeLab}
+                        />
+                      )}
+
+                      {/* 8. Socratic Question */}
+                      {item.question && (
+                        <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
+                          <span>
+                            {isLatest ? (
+                              <TypewriterText text={item.question} speed={14} />
+                            ) : (
+                              item.question
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               );
