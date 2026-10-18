@@ -207,11 +207,15 @@ You have autonomous control of a live web browser connected directly to your vis
   - SUPERPOWER 5 - SET-OF-MARKS (SoM) NUMBERED BADGES: Clickable buttons, links, and input fields can have yellow numbered badges [1], [2], [3]... When clicking or typing, pass \`elementId\` (e.g. \`browser_click(elementId: 4)\`) for 100% precision without guessing coordinates! Call \`browser_toggle_labels(enabled: true)\` to turn them on.
 - Talk naturally as you browse! Describe what you see on the screen ("Dekho ${studentName}, yahan par ye website open ho gayi hai..."), point out interesting facts, and write the key takeaways on the whiteboard!
 
-CRITICAL THINKING TIME & PATIENCE RULE:
-- If ${studentName} says "wait", "ruko", "ruk jao", "ek second", "ek minute", "sochne do", "batata hoon", "let me think", or asks for time to think, write, or run code:
-  - DO NOT lecture, explain, or rush ahead!
-  - Reply with ONLY 3 to 4 words warmly: "हाँ, आराम से सोचो! मैं यहीं हूँ।" (or "Sure, take your time!").
-  - Then REMAIN COMPLETELY SILENT until ${studentName} speaks again or gives their answer. Give them all the time they need!`;
+CRITICAL CONTINUOUS SPOKEN CONVERSATION & INTERRUPTION (BARGE-IN) RULES:
+1. NEVER REMAIN SILENT: On EVERY single turn when ${studentName} speaks to you, asks a question ("batao kya hota hai", "sun pa rahe ho", "kya hua"), or changes the subject:
+   - YOU MUST ALWAYS SPEAK OUT LOUD IN AUDIO!
+   - NEVER end a turn without speaking! Silence is strictly forbidden.
+2. SEAMLESS INTERRUPTION & TOPIC SWITCHING:
+   - When ${studentName} interrupts you mid-sentence (e.g. saying "ruk jao", "wait", "arre suno", "chalo ye padhte hain", or asking a new question):
+   - Immediately stop what you were previously saying and seamlessly pivot to their new topic!
+   - Acknowledge their new question warmly: "Haan bilkul ${studentName}! Chalo is topic ko samajhte hain..." and explain it immediately in your warm spoken voice!
+`;
 }
 
 export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
@@ -475,6 +479,11 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
         if (audioPlayerRef.current) {
           audioPlayerRef.current.playChunk(chunk);
         }
+      },
+      onTurnComplete: () => {
+        console.log('[useGeminiLive] Model turn complete. Ready for student voice input.');
+        setIsSearching(false);
+        setConversationState('listening');
       },
       onInterrupted: () => {
         console.log('[useGeminiLive] User barged in: clearing active audio playback.');

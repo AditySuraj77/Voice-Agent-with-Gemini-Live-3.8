@@ -42,6 +42,9 @@ export class GeminiLiveClient {
     this.clientId = Math.random().toString(36).slice(2, 6);
     this.msgCounter = 0;
     this.audioChunkCounter = 0;
+    this.turnHasActivity = false;
+    this.lastUserUtterance = '';
+    this.emptyTurnCount = 0;
 
     this.ws = null;
     this.isConnected = false;
@@ -687,6 +690,7 @@ export class GeminiLiveClient {
     }
 
     if (functionCalls.length > 0) {
+      this.turnHasActivity = true;
       this.handleToolCalls(functionCalls);
     }
 
@@ -697,6 +701,7 @@ export class GeminiLiveClient {
     // 1. Barge-in / Interruption signal
     if (serverContent.interrupted) {
       console.log(`[GeminiLiveClient #${this.clientId}] [Event] Barge-in interruption detected from Gemini server (msg #${msgId}).`);
+      this.turnHasActivity = false;
       if (this.onInterrupted) {
         this.onInterrupted();
       }
@@ -708,6 +713,8 @@ export class GeminiLiveClient {
 
     if (finalInput) {
       console.log(`[GeminiLiveClient #${this.clientId}] [User STT Final] "${finalInput}"`);
+      this.lastUserUtterance = finalInput;
+      this.turnHasActivity = false;
       if (this.onTranscript) {
         this.onTranscript({
           sender: 'user',
@@ -737,6 +744,7 @@ export class GeminiLiveClient {
         const part = modelTurn.parts[partIndex];
         // Output audio stream
         if (part.inlineData && part.inlineData.mimeType && part.inlineData.mimeType.startsWith('audio/pcm')) {
+          this.turnHasActivity = true;
           const chunkId = ++this.audioChunkCounter;
           if (this.onAudioChunk && part.inlineData.data) {
             this.onAudioChunk(part.inlineData.data);
@@ -745,6 +753,7 @@ export class GeminiLiveClient {
 
         // Assistant Output Text / Transcript (streamed delta chunks)
         if (part.text) {
+          this.turnHasActivity = true;
           if (this.onTranscript) {
             this.onTranscript({
               sender: 'assistant',
@@ -759,6 +768,7 @@ export class GeminiLiveClient {
     // 4. Output Audio Transcription (Google Gemini Live streams this at serverContent.outputTranscription.text)
     const outputTranscript = serverContent.outputTranscription?.text || serverContent.outputAudioTranscription?.text;
     if (outputTranscript) {
+      this.turnHasActivity = true;
       if (this.onTranscript) {
         this.onTranscript({
           sender: 'assistant',
@@ -768,9 +778,28 @@ export class GeminiLiveClient {
       }
     }
 
-    // 5. Turn Complete
+    // 5. Turn Complete & Anti-Silence Watchdog
     if (serverContent.turnComplete) {
       console.log('[GeminiLiveClient] [Event] Model turn complete.');
+
+      // Anti-Silence Watchdog: Detect empty turn with NO audio, NO text, and NO tools
+      if (!this.turnHasActivity) {
+        this.emptyTurnCount = (this.emptyTurnCount || 0) + 1;
+        console.warn(`[GeminiLiveClient #${this.clientId}] Empty model turn detected (#${this.emptyTurnCount}) without speech or tools! Triggering anti-silence recovery.`);
+
+        // Auto-nudge recovery: force Gemini Live to speak and respond to student's last query
+        if (this.lastUserUtterance && this.emptyTurnCount <= 2) {
+          const studentTopic = this.lastUserUtterance;
+          this.sendContextNotification(
+            `[SYSTEM RECOVERY NUDGE]: Student asked "${studentTopic}". You MUST speak out loud now in audio to explain and guide the student!`
+          );
+        }
+      } else {
+        this.emptyTurnCount = 0;
+      }
+
+      this.turnHasActivity = false;
+
       if (this.onTurnComplete) {
         this.onTurnComplete();
       }
