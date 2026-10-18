@@ -652,6 +652,14 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
             topic &&
             isSameOrRelatedTopic(lastItem.topic, topic)
           ) {
+            const isNewItemVisual = Boolean(newItem.svgCode || newItem.imageUrl || newItem.cardType === 'visual' || newItem.visualType);
+            const isLastItemVisual = Boolean(lastItem.svgCode || lastItem.imageUrl || lastItem.cardType === 'visual' || lastItem.visualType);
+
+            // If BOTH already have a visual diagram/photo, DO NOT merge them into one card! Keep them as separate items.
+            if (isNewItemVisual && isLastItemVisual) {
+              return [...prev, newItem];
+            }
+
             const mergedNotes = [...lastItem.notes];
             for (const note of notes) {
               const noteClean = note.trim().toLowerCase();
