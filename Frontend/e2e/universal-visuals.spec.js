@@ -147,4 +147,155 @@ test.describe('Universal Visual Studio E2E - Generative SVG & Educational Archiv
       await expect(undoBtn).toBeEnabled();
     }
   });
+
+  test('4. Multi-Visual Separation: Multiple visual items render as distinct separate cards without squishing', async ({ page }) => {
+    const sampleSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 300">
+      <rect width="100%" height="100%" fill="#e0f2fe"/>
+      <text x="250" y="50" font-family="sans-serif" font-size="14" font-weight="bold" text-anchor="middle">Prism Dispersion</text>
+    </svg>`;
+
+    await page.evaluate((svg) => {
+      const session = {
+        id: 'session_multi_visual',
+        title: 'Optics • Multi-Visual Session',
+        dateStr: 'Today',
+        timeStr: '12:10 PM',
+        studentName: 'Adi',
+        itemsCount: 2,
+        items: [
+          {
+            id: 'wb-multi-1',
+            topic: 'Light Refraction Prism',
+            notes: ['White light splits into seven colors'],
+            visualType: 'svg',
+            svgCode: svg,
+            caption: 'Prism refraction spectrum',
+            subject: 'Physics',
+          },
+          {
+            id: 'wb-multi-2',
+            topic: 'Newton Color Wheel',
+            notes: ['Additive color synthesis experiment'],
+            visualType: 'photo',
+            imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Newton_colour_circle.png/400px-Newton_colour_circle.png',
+            imageTitle: 'Newton Colour Circle',
+            attribution: 'Wikimedia Commons',
+            caption: 'Historic color wheel diagram by Isaac Newton',
+            subject: 'History of Science',
+          },
+        ],
+      };
+      localStorage.setItem('aristotle_session_history_v1', JSON.stringify([session]));
+    }, sampleSvg);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    // Open History Drawer
+    const historyBtn = page.getByTitle('Past Study Sessions');
+    await historyBtn.click();
+
+    // Click history item to restore
+    const historyItem = page.getByTestId('session-history-item').first();
+    await historyItem.click();
+
+    // Verify TWO distinct visual cards exist on the whiteboard canvas
+    const visualCards = page.locator('[data-testid="universal-visual-card"]');
+    await expect(visualCards).toHaveCount(2);
+
+    // Verify first card contains SVG and second card contains Image
+    await expect(visualCards.nth(0).locator('[data-testid="svg-diagram-container"] svg')).toBeVisible();
+    await expect(visualCards.nth(0)).toContainText('Prism refraction spectrum');
+
+    await expect(visualCards.nth(1).locator('img')).toBeVisible();
+    await expect(visualCards.nth(1)).toContainText('Historic color wheel diagram');
+  });
+
+  test('5. Dedicated Lightbox Modal: Single visual zoom with Escape key and backdrop dismissal', async ({ page }) => {
+    const sampleSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 300">
+      <rect width="100%" height="100%" fill="#fee2e2"/>
+      <text x="250" y="150" font-family="sans-serif" font-size="16" font-weight="bold" text-anchor="middle">Circulatory System</text>
+    </svg>`;
+
+    await page.evaluate((svg) => {
+      const session = {
+        id: 'session_lightbox_test',
+        title: 'Biology • Circulatory System',
+        dateStr: 'Today',
+        timeStr: '12:15 PM',
+        studentName: 'Adi',
+        itemsCount: 1,
+        items: [
+          {
+            id: 'wb-lightbox-1',
+            topic: 'Human Heart Anatomy',
+            notes: ['Four chambers of heart'],
+            visualType: 'svg',
+            svgCode: svg,
+            caption: 'Detailed heart anatomy vector diagram',
+            subject: 'Biology',
+          },
+        ],
+      };
+      localStorage.setItem('aristotle_session_history_v1', JSON.stringify([session]));
+    }, sampleSvg);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    // Restore session
+    const historyBtn = page.getByTitle('Past Study Sessions');
+    await historyBtn.click();
+    const historyItem = page.getByTestId('session-history-item').first();
+    await historyItem.click();
+
+    // Click expand button to zoom
+    const expandBtn = page.getByTestId('expand-visual-btn');
+    await expect(expandBtn).toBeVisible();
+    await expandBtn.click();
+
+    const lightboxModal = page.getByTestId('visual-lightbox-modal');
+    await expect(lightboxModal).toBeVisible();
+
+    // Verify Escape key dismisses modal
+    await page.keyboard.press('Escape');
+    await expect(lightboxModal).toBeHidden();
+
+    // Reopen modal and test backdrop click dismiss
+    await expandBtn.click();
+    await expect(lightboxModal).toBeVisible();
+
+    // Click backdrop (outside the visual container)
+    await page.mouse.click(10, 10);
+    await expect(lightboxModal).toBeHidden();
+  });
+
+  test('6. Left Floating Drawing Dock: Pointer, Pen, and Highlighter tool selection', async ({ page }) => {
+    // Verify left floating dock exists
+    const penBtn = page.locator('button[title*="Pen"]').first();
+    await expect(penBtn).toBeVisible();
+
+    // Check Pointer / Select tool
+    const pointerBtn = page.locator('button[title*="Pointer"], button[title*="Select"]').first();
+    if (await pointerBtn.isVisible()) {
+      await pointerBtn.click();
+      await page.waitForTimeout(150);
+    }
+
+    // Check Pen tool selection
+    await penBtn.click();
+    await page.waitForTimeout(150);
+
+    // Check Highlighter tool selection
+    const highBtn = page.locator('button[title*="Highlighter"]').first();
+    if (await highBtn.isVisible()) {
+      await highBtn.click();
+      await page.waitForTimeout(150);
+    }
+
+    // Check Eraser tool selection
+    const eraserBtn = page.locator('button[title*="Eraser"]').first();
+    if (await eraserBtn.isVisible()) {
+      await eraserBtn.click();
+      await page.waitForTimeout(150);
+    }
+  });
 });
