@@ -49,6 +49,20 @@ export function exportWhiteboardToMarkdown(items = [], studentProfile = {}) {
       }
     }
 
+    if (item.imageUrl) {
+      md += `![${item.caption || item.topic || 'Educational Archive Photo'}](${item.imageUrl})\n\n`;
+      if (item.attribution) {
+        md += `*Source: ${item.attribution}*\n\n`;
+      }
+    }
+
+    if (item.svgCode) {
+      md += `\n**Visual Vector Diagram:**\n\n\`\`\`xml\n${item.svgCode}\n\`\`\`\n\n`;
+      if (item.caption) {
+        md += `*📌 ${item.caption}*\n\n`;
+      }
+    }
+
     if (item.code) {
       const codeLang = (item.language || 'text').toLowerCase();
       md += `\`\`\`${codeLang}\n${item.code}\n\`\`\`\n\n`;

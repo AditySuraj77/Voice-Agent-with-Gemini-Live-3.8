@@ -218,23 +218,29 @@ test.describe('E2E Verification: Interactive Whiteboard Drawing & Multimodal Ins
     const box = await canvas.boundingBox();
     expect(box).not.toBeNull();
 
-    // Draw handwriting strokes (e.g. handwritten equation)
-    await page.mouse.move(box.x + 80, box.y + 80);
+    // Draw handwriting strokes (e.g. handwritten equation) comfortably below toolbar
+    await page.mouse.move(box.x + 150, box.y + 150);
     await page.mouse.down();
-    await page.mouse.move(box.x + 130, box.y + 110);
-    await page.mouse.move(box.x + 180, box.y + 90);
+    await page.mouse.move(box.x + 200, box.y + 180);
     await page.mouse.up();
 
-    // Allow debounced auto-save to persist to localStorage (400ms debounce)
-    await page.waitForTimeout(650);
+    // Ensure stroke registered and clear button appeared
+    const clearBtn = page.getByTestId('tool-clear-drawings');
+    await expect(clearBtn).toBeVisible();
 
-    // 2. Verify localStorage has saved session with canvasSnapshot
+    // 2. Verify localStorage has saved session with canvasSnapshot (robust poll for debounced 400ms auto-save)
+    await expect.poll(async () => {
+      return await page.evaluate(() => {
+        const raw = localStorage.getItem('aristotle_session_history_v1');
+        const list = raw ? JSON.parse(raw) : [];
+        return list.length;
+      });
+    }, { timeout: 5000 }).toBeGreaterThan(0);
+
     const savedSessions = await page.evaluate(() => {
       const raw = localStorage.getItem('aristotle_session_history_v1');
       return raw ? JSON.parse(raw) : [];
     });
-
-    expect(savedSessions.length).toBeGreaterThan(0);
     const activeSession = savedSessions[0];
     expect(activeSession.canvasSnapshot).not.toBeNull();
     expect(activeSession.canvasSnapshot).toContain('data:image/png;base64');

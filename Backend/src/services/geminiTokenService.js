@@ -47,8 +47,54 @@ export const GEMINI_TOOLS = [
               type: 'STRING',
               description: 'Programming language if code is provided: "c", "rust", "python", "javascript", "html", etc.',
             },
+            svgCode: {
+              type: 'STRING',
+              description: 'Optional complete valid standalone SVG diagram (viewBox="0 0 600 400") to illustrate the concept visually alongside the notes',
+            },
+            visualQuery: {
+              type: 'STRING',
+              description: 'Optional search query to fetch an authentic educational photo/map from Wikimedia Commons archive',
+            },
+            caption: {
+              type: 'STRING',
+              description: 'Educational caption for the attached visual illustration',
+            },
           },
           required: ['topic', 'notes'],
+        },
+      },
+      {
+        name: 'render_visual',
+        description: 'MANDATORY FOR ANY SUBJECT: Display an educational visual on the student whiteboard whenever explaining concepts, objects, processes, or historical/scientific topics. Mode "svg_sketch" generates a custom-drawn vector diagram (physics rays, biology cells, atoms, math shapes, geography). Mode "photo_search" retrieves authentic educational photographs (space telescopes, monuments, historical maps, medical scans).',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            topic: {
+              type: 'STRING',
+              description: 'Clear title of the visual (e.g. "Refraction through Prism", "Plant Cell Organelles", "James Webb Space Telescope", "Bohr Model of Carbon")',
+            },
+            mode: {
+              type: 'STRING',
+              description: 'Visual creation mode: "svg_sketch" for custom vector diagrams drawn from scratch, or "photo_search" for authentic real-world photos/maps from educational archives',
+            },
+            svgCode: {
+              type: 'STRING',
+              description: 'When mode="svg_sketch": Full valid standalone SVG string with compact viewBox="0 0 500 300" (e.g. <svg viewBox="0 0 500 300" xmlns="http://www.w3.org/2000/svg">...). Include clean shapes, soft pastel colors, and clear text labels with pointer lines.',
+            },
+            searchQuery: {
+              type: 'STRING',
+              description: 'When mode="photo_search": Precise search query for educational archive (e.g. "James Webb Space Telescope", "Taj Mahal", "Human Heart Anatomy")',
+            },
+            caption: {
+              type: 'STRING',
+              description: 'Short 1-2 sentence educational explanation of what this visual illustrates',
+            },
+            subject: {
+              type: 'STRING',
+              description: 'Academic subject: "physics", "biology", "chemistry", "math", "geography", "history", "astronomy", "engineering", etc.',
+            },
+          },
+          required: ['topic', 'mode'],
         },
       },
       {

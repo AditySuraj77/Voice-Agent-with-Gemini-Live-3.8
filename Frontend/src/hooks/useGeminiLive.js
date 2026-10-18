@@ -62,6 +62,8 @@ function formatWhiteboardSummary(items = []) {
       if (item.code) parts.push(`Code (${item.language || 'code'}): ${item.code.slice(0, 150)}`);
       if (item.question) parts.push(`Question: ${item.question}`);
       if (item.studentAnswer) parts.push(`Answer: ${item.studentAnswer}`);
+      if (item.svgCode || item.visualType === 'svg') parts.push(`Visual: Vector Diagram ("${item.topic || 'Diagram'}")`);
+      if (item.imageUrl || item.visualType === 'photo') parts.push(`Visual: Archive Photo ("${item.imageTitle || item.topic || 'Photo'}")`);
       return `[Board Item ${idx + 1}] ${parts.join(' | ')}`;
     })
     .join('\n');
@@ -151,6 +153,29 @@ CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
      - Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
      - TWO-WAY LASER POINTER ON CANVAS: When discussing ${studentName}'s handwritten equations, graphs, or drawings, call \`laser_point_canvas(x: 0-100, y: 0-100, label: "...", style: "laser"|"circle"|"check"|"cross")\` to shine an animated AI laser pointer or checkmark directly on that exact part of their drawing!
 
+CRITICAL UNIVERSAL VISUAL STUDIO DIRECTIVE (ANY SUBJECT OR TOPIC):
+You have an autonomous Universal Visual Studio engine to create visuals on ANY subject (Physics, Biology, Chemistry, Math, Geography, History, Space, Engineering, Economics):
+1. WHEN EXPLAINING CONCEPTS, THEORIES, OR ABSTRACT TOPICS (MODE: "svg_sketch"):
+   - Call \`render_visual(topic: "...", mode: "svg_sketch", svgCode: "<svg ...>...", caption: "...", subject: "...")\` OR pass \`svgCode: "<svg ...>"\` inside \`write_on_whiteboard\`!
+   - Draw an instant, compact, textbook-quality vector diagram with \`viewBox="0 0 500 300"\`. Keep it neat, centered, and proportional (like an NCERT textbook illustration figure, not an oversized banner).
+   - SVG Guidelines:
+     * Background: \`<rect width="100%" height="100%" fill="#fffdfa" rx="10"/>\`
+     * Soft clean colors: \`#e0f2fe\` (light blue), \`#dcfce7\` (soft green), \`#fef3c7\` (warm yellow), \`#fee2e2\` (coral), \`#ede9fe\` (lavender).
+     * Crisp stroke: \`stroke="#334155" stroke-width="2"\`
+     * Readable text labels: \`<text font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">Label</text>\` with clean leader lines pointing to the parts.
+   - Examples across subjects:
+     * Physics: Light ray refraction through a prism, electrical circuits, free-body force vectors, magnetic field lines, pendulum.
+     * Biology: Plant/animal cell with labeled organelles, human heart 4 chambers & blood flow, neuron axon/dendrites, DNA double helix.
+     * Chemistry: Bohr atomic model with nucleus & electron rings, water molecule H2O covalent bonding, pH scale gradient.
+     * Math: Right triangle with Pythagorean sides & theta, coordinate Cartesian plane with parabola curve y = x^2, Venn diagrams.
+     * Geography: Earth's crust/mantle/core layers, volcano cross-section, water cycle evaporation/precipitation.
+2. WHEN STUDENT ASKS FOR REAL-WORLD OBJECTS, HISTORICAL EVENTS, MONUMENTS, OR SPACE (MODE: "photo_search"):
+   - Call \`render_visual(topic: "...", mode: "photo_search", searchQuery: "...", caption: "...")\` OR pass \`visualQuery: "..."\` in \`write_on_whiteboard\`!
+   - This fetches authentic, high-resolution photographs, historical maps, and medical scans directly from Wikimedia Commons archive.
+   - Examples: "James Webb Space Telescope", "Taj Mahal", "Chandrayaan-3", "Harappan Civilization Seal", "Apollo 11 Saturn V", "Human Brain MRI".
+3. REFER TO THE VISUAL IN YOUR VOICE:
+   - Always connect your spoken words to the visual: "Dekho ${studentName}, maine board par diagram bana diya hai...", "Notice karo is ray ko...", "Is visual me jo green part hai wo..."!
+
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
 - INSTANT NAVIGATION TRIGGER (ZERO SPEECH DELAY):
@@ -182,11 +207,15 @@ You have autonomous control of a live web browser connected directly to your vis
   - SUPERPOWER 5 - SET-OF-MARKS (SoM) NUMBERED BADGES: Clickable buttons, links, and input fields can have yellow numbered badges [1], [2], [3]... When clicking or typing, pass \`elementId\` (e.g. \`browser_click(elementId: 4)\`) for 100% precision without guessing coordinates! Call \`browser_toggle_labels(enabled: true)\` to turn them on.
 - Talk naturally as you browse! Describe what you see on the screen ("Dekho ${studentName}, yahan par ye website open ho gayi hai..."), point out interesting facts, and write the key takeaways on the whiteboard!
 
-CRITICAL THINKING TIME & PATIENCE RULE:
-- If ${studentName} says "wait", "ruko", "ruk jao", "ek second", "ek minute", "sochne do", "batata hoon", "let me think", or asks for time to think, write, or run code:
-  - DO NOT lecture, explain, or rush ahead!
-  - Reply with ONLY 3 to 4 words warmly: "हाँ, आराम से सोचो! मैं यहीं हूँ।" (or "Sure, take your time!").
-  - Then REMAIN COMPLETELY SILENT until ${studentName} speaks again or gives their answer. Give them all the time they need!`;
+CRITICAL CONTINUOUS SPOKEN CONVERSATION & INTERRUPTION (BARGE-IN) RULES:
+1. NEVER REMAIN SILENT: On EVERY single turn when ${studentName} speaks to you, asks a question ("batao kya hota hai", "sun pa rahe ho", "kya hua"), or changes the subject:
+   - YOU MUST ALWAYS SPEAK OUT LOUD IN AUDIO!
+   - NEVER end a turn without speaking! Silence is strictly forbidden.
+2. SEAMLESS INTERRUPTION & TOPIC SWITCHING:
+   - When ${studentName} interrupts you mid-sentence (e.g. saying "ruk jao", "wait", "arre suno", "chalo ye padhte hain", or asking a new question):
+   - Immediately stop what you were previously saying and seamlessly pivot to their new topic!
+   - Acknowledge their new question warmly: "Haan bilkul ${studentName}! Chalo is topic ko samajhte hain..." and explain it immediately in your warm spoken voice!
+`;
 }
 
 export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
@@ -451,6 +480,11 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           audioPlayerRef.current.playChunk(chunk);
         }
       },
+      onTurnComplete: () => {
+        console.log('[useGeminiLive] Model turn complete. Ready for student voice input.');
+        setIsSearching(false);
+        setConversationState('listening');
+      },
       onInterrupted: () => {
         console.log('[useGeminiLive] User barged in: clearing active audio playback.');
         if (audioPlayerRef.current) {
@@ -609,6 +643,12 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           studentAnswer,
           image: args.image || null,
           caption: args.caption || null,
+          visualType: args.visualType || (args.svgCode ? 'svg' : args.imageUrl ? 'photo' : null),
+          svgCode: args.svgCode || null,
+          imageUrl: args.imageUrl || null,
+          imageTitle: args.imageTitle || null,
+          attribution: args.attribution || null,
+          subject: args.subject || null,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
 
@@ -621,6 +661,14 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
             topic &&
             isSameOrRelatedTopic(lastItem.topic, topic)
           ) {
+            const isNewItemVisual = Boolean(newItem.svgCode || newItem.imageUrl || newItem.cardType === 'visual' || newItem.visualType);
+            const isLastItemVisual = Boolean(lastItem.svgCode || lastItem.imageUrl || lastItem.cardType === 'visual' || lastItem.visualType);
+
+            // If BOTH already have a visual diagram/photo, DO NOT merge them into one card! Keep them as separate items.
+            if (isNewItemVisual && isLastItemVisual) {
+              return [...prev, newItem];
+            }
+
             const mergedNotes = [...lastItem.notes];
             for (const note of notes) {
               const noteClean = note.trim().toLowerCase();
@@ -637,6 +685,13 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               language: (args.language || '').toLowerCase().trim() || lastItem.language,
               question: args.question || lastItem.question,
               studentAnswer: studentAnswer || lastItem.studentAnswer,
+              visualType: args.visualType || lastItem.visualType,
+              svgCode: args.svgCode || lastItem.svgCode,
+              imageUrl: args.imageUrl || lastItem.imageUrl,
+              imageTitle: args.imageTitle || lastItem.imageTitle,
+              attribution: args.attribution || lastItem.attribution,
+              subject: args.subject || lastItem.subject,
+              caption: args.caption || lastItem.caption,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
 

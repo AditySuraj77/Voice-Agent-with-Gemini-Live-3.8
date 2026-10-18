@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trash2, BookOpen, Check, Download, Printer, ArrowDown, History,
   Pen, Highlighter, Eraser, Eye, Sparkles, CheckCircle2, XCircle,
-  Undo2, Redo2, Circle, Radio, Crosshair
+  Undo2, Redo2, MousePointer
 } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
 import { MathFormula } from './MathFormula.jsx';
 import { InlineFormattedNote } from './InlineFormattedNote.jsx';
+import { UniversalVisualCard } from './UniversalVisualCard.jsx';
 import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
 import { captureElementWithOverlay } from '../../utils/whiteboardSnapshot.js';
 import { saveActiveSession } from '../../services/sessionHistory.js';
@@ -61,7 +62,6 @@ export function DirectWhiteboard({
 
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef(null);
-  const autoInspectTimerRef = useRef(null);
   const hasDrawnRef = useRef(false);
   const saveCanvasTimerRef = useRef(null);
 
@@ -246,9 +246,11 @@ export function DirectWhiteboard({
     scheduleSaveCanvasToHistory();
   }, [scheduleSaveCanvasToHistory]);
 
-  // Global Keyboard shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
+  // Global Keyboard shortcuts for Undo (Ctrl+Z), Redo (Ctrl+Y), Inspect (Ctrl+Enter), Escape (Pointer)
   useEffect(() => {
     const handleKeyDown = (e) => {
+      const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         if (e.shiftKey) {
           e.preventDefault();
@@ -260,22 +262,26 @@ export function DirectWhiteboard({
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleInspect();
+      } else if (e.key === 'Escape') {
+        setActiveDrawTool('none');
+      } else if (!isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key.toLowerCase() === 'v') {
+          setActiveDrawTool('none');
+        } else if (e.key.toLowerCase() === 'p') {
+          setActiveDrawTool('pen');
+        } else if (e.key.toLowerCase() === 'h') {
+          setActiveDrawTool('highlighter');
+        } else if (e.key.toLowerCase() === 'e') {
+          setActiveDrawTool('eraser');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
-
-  // Trigger debounced auto-inspection after student finishes writing/marking (2.5s for comfortable multi-step writing)
-  const scheduleAutoInspect = useCallback(() => {
-    if (!onInspectAnnotations) return;
-    if (autoInspectTimerRef.current) {
-      clearTimeout(autoInspectTimerRef.current);
-    }
-    autoInspectTimerRef.current = setTimeout(() => {
-      handleInspect();
-    }, 2500); // 2.5s comfortable debounce
-  }, [onInspectAnnotations, handleInspect]);
+  }, [handleUndo, handleRedo, handleInspect]);
 
   const handleDrawStart = (e) => {
     if (activeDrawTool === 'none') return;
@@ -369,7 +375,7 @@ export function DirectWhiteboard({
     if (isDrawingRef.current) {
       isDrawingRef.current = false;
       lastPointRef.current = null;
-      scheduleAutoInspect();
+      // Auto-inspection removed per user request: student controls inspection on-demand
       scheduleSaveCanvasToHistory();
     }
   };
@@ -521,7 +527,229 @@ export function DirectWhiteboard({
         </div>
       )}
 
-      <div ref={contentWrapperRef} className="max-w-3xl mx-auto space-y-8 relative">
+      {/* Fixed Left Floating Toolbar Dock (Always accessible regardless of scroll) */}
+      <aside
+        className="fixed left-2 sm:left-4 top-24 sm:top-28 z-30 flex flex-col items-center gap-1 p-1 sm:p-1.5 bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-2xl shadow-xl transition-all print:hidden"
+        data-testid="drawing-toolbar"
+        aria-label="Whiteboard Drawing Tools"
+      >
+        {/* 1. Pointer / Select Tool (V or Esc) */}
+        <button
+          type="button"
+          onClick={() => setActiveDrawTool('none')}
+          className={`p-1.5 sm:p-2 rounded-xl text-xs font-sans transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+            activeDrawTool === 'none'
+              ? 'bg-stone-900 text-white font-semibold shadow-xs'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+          }`}
+          title="Pointer: Select & normal mouse click (V or Esc)"
+          data-testid="tool-pointer"
+        >
+          <MousePointer className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="text-[9px] font-medium leading-none">Select</span>
+        </button>
+
+        {/* 2. Pen (P) */}
+        <button
+          type="button"
+          onClick={() => setActiveDrawTool((prev) => (prev === 'pen' ? 'none' : 'pen'))}
+          className={`p-1.5 sm:p-2 rounded-xl text-xs font-sans transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+            activeDrawTool === 'pen'
+              ? 'bg-stone-900 text-white font-semibold shadow-xs'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+          }`}
+          title="Pen: Draw or write on whiteboard (P)"
+          data-testid="tool-pen"
+        >
+          <Pen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="text-[9px] font-medium leading-none">Pen</span>
+        </button>
+
+        {/* 3. Highlighter (H) */}
+        <button
+          type="button"
+          onClick={() => setActiveDrawTool((prev) => (prev === 'highlighter' ? 'none' : 'highlighter'))}
+          className={`p-1.5 sm:p-2 rounded-xl text-xs font-sans transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+            activeDrawTool === 'highlighter'
+              ? 'bg-amber-400 text-stone-950 font-bold shadow-xs'
+              : 'text-stone-600 hover:text-amber-800 hover:bg-amber-50'
+          }`}
+          title="Highlighter: Highlight notes or formulas (H)"
+          data-testid="tool-highlighter"
+        >
+          <Highlighter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="text-[9px] font-medium leading-none">Highlight</span>
+        </button>
+
+        {/* 4. Tick Stamp */}
+        <button
+          type="button"
+          onClick={() => setActiveDrawTool((prev) => (prev === 'tick' ? 'none' : 'tick'))}
+          className={`p-1.5 sm:p-2 rounded-xl text-xs font-sans transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+            activeDrawTool === 'tick'
+              ? 'bg-emerald-600 text-white font-semibold shadow-xs'
+              : 'text-stone-600 hover:text-emerald-700 hover:bg-emerald-50'
+          }`}
+          title="Tick Stamp: Click to stamp a checkmark (✓)"
+          data-testid="tool-tick"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="text-[9px] font-medium leading-none">Tick</span>
+        </button>
+
+        {/* 5. Cross Stamp */}
+        <button
+          type="button"
+          onClick={() => setActiveDrawTool((prev) => (prev === 'cross' ? 'none' : 'cross'))}
+          className={`p-1.5 sm:p-2 rounded-xl text-xs font-sans transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+            activeDrawTool === 'cross'
+              ? 'bg-rose-600 text-white font-semibold shadow-xs'
+              : 'text-stone-600 hover:text-rose-700 hover:bg-rose-50'
+          }`}
+          title="Cross Stamp: Click to stamp an X mark (✗)"
+          data-testid="tool-cross"
+        >
+          <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="text-[9px] font-medium leading-none">Cross</span>
+        </button>
+
+        {/* 6. Eraser with Size Options */}
+        <div className="relative flex flex-col items-center">
+          <button
+            type="button"
+            onClick={() => {
+              if (activeDrawTool === 'eraser') {
+                setShowEraserMenu(!showEraserMenu);
+              } else {
+                setActiveDrawTool('eraser');
+              }
+            }}
+            className={`p-1.5 sm:p-2 rounded-xl text-xs font-sans transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+              activeDrawTool === 'eraser'
+                ? 'bg-stone-800 text-white font-semibold shadow-xs'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+            }`}
+            title="Eraser: Erase markings (click again for size)"
+            data-testid="tool-eraser"
+          >
+            <Eraser className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="text-[9px] font-medium leading-none">
+              Eraser <span className="opacity-75">{eraserSize === 12 ? 'S' : eraserSize === 26 ? 'M' : 'L'}</span>
+            </span>
+          </button>
+
+          {/* Eraser Size Popover */}
+          {showEraserMenu && activeDrawTool === 'eraser' && (
+            <div className="absolute left-full ml-2 top-0 flex flex-col gap-1 p-1 bg-white border border-stone-300 rounded-xl shadow-xl z-40 animate-fadeIn min-w-[70px]">
+              <button
+                type="button"
+                onClick={() => { setEraserSize(12); setShowEraserMenu(false); }}
+                title="Small Eraser (12px)"
+                className={`px-2 py-1 text-[11px] rounded ${eraserSize === 12 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
+              >
+                Fine (S)
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEraserSize(26); setShowEraserMenu(false); }}
+                title="Medium Eraser (26px)"
+                className={`px-2 py-1 text-[11px] rounded ${eraserSize === 26 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
+              >
+                Medium (M)
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEraserSize(48); setShowEraserMenu(false); }}
+                title="Large Eraser (48px)"
+                className={`px-2 py-1 text-[11px] rounded ${eraserSize === 48 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
+              >
+                Broad (L)
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="w-6 h-px bg-stone-200 my-0.5" />
+
+        {/* 7. Undo */}
+        <button
+          type="button"
+          onClick={handleUndo}
+          disabled={!canUndo}
+          className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+            canUndo ? 'text-stone-700 hover:text-stone-950 hover:bg-stone-100' : 'text-stone-300 cursor-not-allowed'
+          }`}
+          title="Undo last stroke (Ctrl + Z)"
+          data-testid="tool-undo"
+        >
+          <Undo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        </button>
+
+        {/* 8. Redo */}
+        <button
+          type="button"
+          onClick={handleRedo}
+          disabled={!canRedo}
+          className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+            canRedo ? 'text-stone-700 hover:text-stone-950 hover:bg-stone-100' : 'text-stone-300 cursor-not-allowed'
+          }`}
+          title="Redo stroke (Ctrl + Y)"
+          data-testid="tool-redo"
+        >
+          <Redo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        </button>
+
+        {/* 9. Clear Annotations */}
+        {hasDrawn && (
+          <button
+            type="button"
+            onClick={handleClearAnnotations}
+            className="p-1 rounded-md text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer text-[10px] font-semibold"
+            title="Clear hand-drawn markings"
+            data-testid="tool-clear-drawings"
+          >
+            Clear
+          </button>
+        )}
+
+        {/* Divider */}
+        {onInspectAnnotations && <div className="w-6 h-px bg-stone-200 my-0.5" />}
+
+        {/* 10. Manual "Check with Aristotle" Button (On-demand only!) */}
+        {onInspectAnnotations && (
+          <button
+            type="button"
+            onClick={handleInspect}
+            disabled={isInspecting}
+            className={`p-1.5 sm:p-2 rounded-xl text-xs font-sans font-semibold transition-all cursor-pointer shadow-xs flex flex-col items-center gap-0.5 ${
+              isInspecting
+                ? 'bg-emerald-700 text-white ring-2 ring-emerald-400/40'
+                : hasDrawn
+                ? 'bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold ring-2 ring-amber-300/40'
+                : 'bg-stone-900 hover:bg-stone-950 text-white'
+            }`}
+            title="Check whiteboard with Aristotle AI (Ctrl + Enter)"
+            data-testid="inspect-whiteboard-btn"
+          >
+            {isInspecting ? (
+              <>
+                <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300 stroke-[3] animate-pulse" />
+                <span className="text-[9px] font-bold leading-tight text-center">Aristotle Reviewing...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300" />
+                <span className="text-[9px] font-bold leading-tight text-center">
+                  Check<span className="sr-only"> with Aristotle</span>
+                </span>
+              </>
+            )}
+          </button>
+        )}
+      </aside>
+
+      <div ref={contentWrapperRef} className="max-w-3xl lg:max-w-5xl mx-auto space-y-8 relative px-4 pl-14 sm:pl-16 md:pl-20">
         {/* Top Board Action Bar (Always clickable above drawing canvas) */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-2.5 print:hidden relative z-20">
           <div className="text-xs font-sans text-stone-400">
@@ -561,205 +789,6 @@ export function DirectWhiteboard({
                 title="Toggle Live Voice Browser"
               >
                 <span>🌐 Live Browser</span>
-              </button>
-            )}
-
-            {/* In-Place Interactive Drawing Tools (Pen, Highlighter, Tick, Cross, Eraser) */}
-            <div
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-stone-200/50 border border-stone-300/40"
-              data-testid="drawing-toolbar"
-            >
-              {/* Pen */}
-              <button
-                type="button"
-                onClick={() => setActiveDrawTool((prev) => (prev === 'pen' ? 'none' : 'pen'))}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
-                  activeDrawTool === 'pen'
-                    ? 'bg-stone-900 text-white font-semibold shadow-xs'
-                    : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
-                }`}
-                title="Pen: Write steps or solve math on whiteboard"
-                data-testid="tool-pen"
-              >
-                <Pen className="w-3 h-3" />
-                <span className="hidden sm:inline">Pen</span>
-              </button>
-
-              {/* Highlighter */}
-              <button
-                type="button"
-                onClick={() => setActiveDrawTool((prev) => (prev === 'highlighter' ? 'none' : 'highlighter'))}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
-                  activeDrawTool === 'highlighter'
-                    ? 'bg-amber-400 text-stone-950 font-bold shadow-xs'
-                    : 'text-stone-600 hover:text-amber-800 hover:bg-amber-100/60'
-                }`}
-                title="Highlighter: Highlight formulas or key notes"
-                data-testid="tool-highlighter"
-              >
-                <Highlighter className="w-3 h-3" />
-                <span className="hidden sm:inline">Highlight</span>
-              </button>
-
-              {/* Tick Stamp */}
-              <button
-                type="button"
-                onClick={() => setActiveDrawTool((prev) => (prev === 'tick' ? 'none' : 'tick'))}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
-                  activeDrawTool === 'tick'
-                    ? 'bg-emerald-600 text-white font-semibold shadow-xs'
-                    : 'text-stone-600 hover:text-emerald-700 hover:bg-emerald-50'
-                }`}
-                title="Tick Stamp: Click on canvas to stamp a checkmark (✓)"
-                data-testid="tool-tick"
-              >
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span className="hidden sm:inline">Tick</span>
-              </button>
-
-              {/* Cross Stamp */}
-              <button
-                type="button"
-                onClick={() => setActiveDrawTool((prev) => (prev === 'cross' ? 'none' : 'cross'))}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
-                  activeDrawTool === 'cross'
-                    ? 'bg-rose-600 text-white font-semibold shadow-xs'
-                    : 'text-stone-600 hover:text-rose-700 hover:bg-rose-50'
-                }`}
-                title="Cross Stamp: Click on canvas to stamp an X mark (✗)"
-                data-testid="tool-cross"
-              >
-                <XCircle className="w-3 h-3 text-rose-300" />
-                <span className="hidden sm:inline">Cross</span>
-              </button>
-
-              {/* Eraser with Size Options */}
-              <div className="relative flex items-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (activeDrawTool === 'eraser') {
-                      setShowEraserMenu(!showEraserMenu);
-                    } else {
-                      setActiveDrawTool('eraser');
-                    }
-                  }}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans transition-all cursor-pointer ${
-                    activeDrawTool === 'eraser'
-                      ? 'bg-stone-800 text-white font-semibold'
-                      : 'text-stone-500 hover:text-stone-800 hover:bg-stone-200/60'
-                  }`}
-                  title="Eraser: Erase markings (click again for size)"
-                  data-testid="tool-eraser"
-                >
-                  <Eraser className="w-3 h-3" />
-                  <span className="hidden sm:inline">Eraser</span>
-                  <span className="text-[10px] opacity-75">{eraserSize === 12 ? 'S' : eraserSize === 26 ? 'M' : 'L'}</span>
-                </button>
-
-                {/* Eraser Size Popover */}
-                {showEraserMenu && activeDrawTool === 'eraser' && (
-                  <div className="absolute top-full left-0 mt-1.5 flex items-center gap-1 p-1 bg-white border border-stone-300 rounded-lg shadow-lg z-30 animate-fadeIn">
-                    <button
-                      type="button"
-                      onClick={() => { setEraserSize(12); setShowEraserMenu(false); }}
-                      className={`px-2 py-1 text-[11px] rounded ${eraserSize === 12 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
-                      title="Small Eraser (12px)"
-                    >
-                      Fine (S)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setEraserSize(26); setShowEraserMenu(false); }}
-                      className={`px-2 py-1 text-[11px] rounded ${eraserSize === 26 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
-                      title="Medium Eraser (26px)"
-                    >
-                      Medium (M)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setEraserSize(48); setShowEraserMenu(false); }}
-                      className={`px-2 py-1 text-[11px] rounded ${eraserSize === 48 ? 'bg-stone-900 text-white font-bold' : 'text-stone-700 hover:bg-stone-100'}`}
-                      title="Large Eraser (48px)"
-                    >
-                      Broad (L)
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Undo Button */}
-              <button
-                type="button"
-                onClick={handleUndo}
-                disabled={!canUndo}
-                className={`p-1 rounded-full text-xs transition-all cursor-pointer ${
-                  canUndo
-                    ? 'text-stone-700 hover:text-stone-950 hover:bg-stone-200/60'
-                    : 'text-stone-300 cursor-not-allowed'
-                }`}
-                title="Undo last stroke (Ctrl + Z)"
-                data-testid="tool-undo"
-              >
-                <Undo2 className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Redo Button */}
-              <button
-                type="button"
-                onClick={handleRedo}
-                disabled={!canRedo}
-                className={`p-1 rounded-full text-xs transition-all cursor-pointer ${
-                  canRedo
-                    ? 'text-stone-700 hover:text-stone-950 hover:bg-stone-200/60'
-                    : 'text-stone-300 cursor-not-allowed'
-                }`}
-                title="Redo stroke (Ctrl + Y)"
-                data-testid="tool-redo"
-              >
-                <Redo2 className="w-3.5 h-3.5" />
-              </button>
-
-              {hasDrawn && (
-                <button
-                  type="button"
-                  onClick={handleClearAnnotations}
-                  className="text-[11px] font-sans px-1 text-stone-400 hover:text-rose-600 cursor-pointer"
-                  title="Clear hand-drawn markings"
-                  data-testid="tool-clear-drawings"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {/* Smart "Inspect Now" Button with instant inspection + visual status */}
-            {onInspectAnnotations && (
-              <button
-                type="button"
-                onClick={handleInspect}
-                disabled={isInspecting}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold transition-all cursor-pointer shadow-xs ${
-                  isInspecting
-                    ? 'bg-emerald-700 text-white ring-2 ring-emerald-400/40'
-                    : hasDrawn
-                    ? 'bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold ring-2 ring-amber-300/40'
-                    : 'bg-stone-900 hover:bg-stone-950 text-white'
-                }`}
-                title="Instantly inspect whiteboard drawing with Aristotle AI (Ctrl + Enter)"
-                data-testid="inspect-whiteboard-btn"
-              >
-                {isInspecting ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-300 stroke-[3] animate-pulse" />
-                    <span>Aristotle Reviewing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Eye className="w-3.5 h-3.5 text-stone-950" />
-                    <span>✨ Check with Aristotle</span>
-                  </>
-                )}
               </button>
             )}
 
@@ -817,6 +846,7 @@ export function DirectWhiteboard({
           </div>
         </div>
 
+
         {/* Empty Canvas State */}
         {items.length === 0 ? (
           <div className="py-24 text-center flex flex-col items-center justify-center font-sans">
@@ -858,6 +888,18 @@ export function DirectWhiteboard({
                 (item.topic.toLowerCase().includes(aiHighlightedTopic.topic.toLowerCase()) ||
                   aiHighlightedTopic.topic.toLowerCase().includes(item.topic.toLowerCase()));
 
+              const hasVisual = Boolean(
+                item.svgCode || item.imageUrl || item.visualType || item.cardType === 'visual' || item.image
+              );
+
+              const hasTextContent = Boolean(
+                item.formula ||
+                cleanNotesList.length > 0 ||
+                item.tableData ||
+                item.code ||
+                item.question
+              );
+
               return (
                 <div
                   key={item.id || index}
@@ -897,105 +939,234 @@ export function DirectWhiteboard({
                     </div>
                   )}
 
-                  {/* 3. Highlighted Math / Scientific Formula */}
-                  {item.formula && (
-                    <div className="py-3 my-2 text-center bg-stone-100/50 rounded-xl px-4 border border-stone-200/50 shadow-2xs">
-                      <div className="text-xl md:text-2xl font-bold text-stone-900 font-serif tracking-wide overflow-x-auto py-1">
-                        <MathFormula formula={item.formula} displayMode={true} />
-                      </div>
-                    </div>
-                  )}
+                  {/* Body Content: Split Side-by-Side if Visual + Notes both present, else single column */}
+                  {hasVisual && hasTextContent ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pt-1">
+                      {/* Left Column: Formulas, Bullet Notes, Tables, Code, Question */}
+                      <div className="lg:col-span-7 space-y-3 min-w-0">
+                        {/* 3. Highlighted Math / Scientific Formula */}
+                        {item.formula && (
+                          <div className="py-2.5 my-1 text-center bg-stone-100/50 rounded-xl px-3 border border-stone-200/50 shadow-2xs">
+                            <div className="text-lg md:text-xl font-bold text-stone-900 font-serif tracking-wide overflow-x-auto py-1">
+                              <MathFormula formula={item.formula} displayMode={true} />
+                            </div>
+                          </div>
+                        )}
 
-                  {/* 4. Notes / Step-by-Step Derivations */}
-                  {cleanNotesList.length > 0 && (
-                    <div className="space-y-2 text-sm md:text-base text-stone-800 font-serif leading-relaxed">
-                      {cleanNotesList.map((note, idx) => {
-                        const isStepMapping = note.includes('->') || note.includes('→') || note.includes('=');
-                        return (
-                          <div
-                            key={idx}
-                            className={`flex items-start gap-2.5 ${
-                              isStepMapping ? 'font-mono text-sm text-stone-900' : ''
-                            }`}
-                          >
-                            {!isStepMapping && (
-                              <span className="text-stone-400 select-none">•</span>
-                            )}
-                            <span className="flex-1">
-                              <InlineFormattedNote text={note} isLatest={isLatest} />
+                        {/* 4. Notes / Step-by-Step Derivations */}
+                        {cleanNotesList.length > 0 && (
+                          <div className="space-y-2 text-sm md:text-base text-stone-800 font-serif leading-relaxed">
+                            {cleanNotesList.map((note, idx) => {
+                              const isStepMapping = note.includes('->') || note.includes('→') || note.includes('=');
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`flex items-start gap-2.5 ${
+                                    isStepMapping ? 'font-mono text-sm text-stone-900' : ''
+                                  }`}
+                                >
+                                  {!isStepMapping && (
+                                    <span className="text-stone-400 select-none">•</span>
+                                  )}
+                                  <span className="flex-1">
+                                    <InlineFormattedNote text={note} isLatest={isLatest} />
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* 5. Clean Table if tableData present */}
+                        {item.tableData && (
+                          <div className="my-3 overflow-x-auto">
+                            <table className="w-full border-collapse border border-stone-300 font-sans text-xs md:text-sm">
+                              {item.tableData.headers && (
+                                <thead className="bg-[#2a3b5c] text-white">
+                                  <tr>
+                                    {item.tableData.headers.map((h, hIdx) => (
+                                      <th key={hIdx} className="border border-stone-400 px-3 py-2 text-center font-semibold">
+                                        {h}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                              )}
+                              <tbody>
+                                {item.tableData.rows?.map((row, rIdx) => (
+                                  <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-[#fcfbf9]'}>
+                                    {row.map((cell, cIdx) => (
+                                      <td key={cIdx} className="border border-stone-300 px-3 py-2 text-center text-stone-800">
+                                        {cell}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {/* 6. Interactive Code Snippet */}
+                        {item.code && (
+                          <InteractiveCodeBlock
+                            code={item.code}
+                            language={item.language}
+                            onOpenInCodeLab={onOpenInCodeLab}
+                          />
+                        )}
+
+                        {/* 7. Socratic Question */}
+                        {item.question && (
+                          <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
+                            <span>
+                              {isLatest ? (
+                                <TypewriterText text={item.question} speed={14} />
+                              ) : (
+                                item.question
+                              )}
                             </span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* 5. Clean Table if tableData present */}
-                  {item.tableData && (
-                    <div className="my-4 overflow-x-auto">
-                      <table className="w-full border-collapse border border-stone-300 font-sans text-xs md:text-sm">
-                        {item.tableData.headers && (
-                          <thead className="bg-[#2a3b5c] text-white">
-                            <tr>
-                              {item.tableData.headers.map((h, hIdx) => (
-                                <th key={hIdx} className="border border-stone-400 px-3 py-2 text-center font-semibold">
-                                  {h}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
                         )}
-                        <tbody>
-                          {item.tableData.rows?.map((row, rIdx) => (
-                            <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-[#fcfbf9]'}>
-                              {row.map((cell, cIdx) => (
-                                <td key={cIdx} className="border border-stone-300 px-3 py-2 text-center text-stone-800">
-                                  {cell}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                      </div>
 
-                  {/* 6. Clipped Science/Math Diagram or Web Image */}
-                  {item.image && (
-                    <div className="my-3 rounded-2xl overflow-hidden border border-stone-300/80 bg-white shadow-xs max-w-xl mx-auto p-2">
-                      <img
-                        src={item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}`}
-                        alt={item.caption || item.topic || 'Clipped Whiteboard Diagram'}
-                        className="w-full h-auto max-h-96 object-contain rounded-xl select-none"
-                      />
-                      {item.caption && (
-                        <div className="text-center text-xs font-sans text-stone-600 mt-2 font-medium">
-                          📌 {item.caption}
+                      {/* Right Column: Visual Diagram / Photo (Sticky on desktop) */}
+                      <div className="lg:col-span-5 w-full lg:sticky lg:top-4">
+                        {(item.svgCode || item.imageUrl || item.visualType || item.cardType === 'visual') && (
+                          <UniversalVisualCard
+                            item={item}
+                            onOpenInCodeLab={onOpenInCodeLab}
+                          />
+                        )}
+
+                        {item.image && (
+                          <div className="my-2 rounded-2xl overflow-hidden border border-stone-300/80 bg-white shadow-xs max-w-xl mx-auto p-2">
+                            <img
+                              src={item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}`}
+                              alt={item.caption || item.topic || 'Clipped Whiteboard Diagram'}
+                              className="w-full h-auto max-h-80 object-contain rounded-xl select-none"
+                            />
+                            {item.caption && (
+                              <div className="text-center text-xs font-sans text-stone-600 mt-2 font-medium">
+                                📌 {item.caption}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Standard Single-Column Layout (when visual only, or text only) */
+                    <>
+                      {/* 3. Highlighted Math / Scientific Formula */}
+                      {item.formula && (
+                        <div className="py-3 my-2 text-center bg-stone-100/50 rounded-xl px-4 border border-stone-200/50 shadow-2xs">
+                          <div className="text-xl md:text-2xl font-bold text-stone-900 font-serif tracking-wide overflow-x-auto py-1">
+                            <MathFormula formula={item.formula} displayMode={true} />
+                          </div>
                         </div>
                       )}
-                    </div>
-                  )}
 
-                  {/* 7. Interactive Code Snippet */}
-                  {item.code && (
-                    <InteractiveCodeBlock
-                      code={item.code}
-                      language={item.language}
-                      onOpenInCodeLab={onOpenInCodeLab}
-                    />
-                  )}
+                      {/* 4. Notes / Step-by-Step Derivations */}
+                      {cleanNotesList.length > 0 && (
+                        <div className="space-y-2 text-sm md:text-base text-stone-800 font-serif leading-relaxed">
+                          {cleanNotesList.map((note, idx) => {
+                            const isStepMapping = note.includes('->') || note.includes('→') || note.includes('=');
+                            return (
+                              <div
+                                key={idx}
+                                className={`flex items-start gap-2.5 ${
+                                  isStepMapping ? 'font-mono text-sm text-stone-900' : ''
+                                }`}
+                              >
+                                {!isStepMapping && (
+                                  <span className="text-stone-400 select-none">•</span>
+                                )}
+                                <span className="flex-1">
+                                  <InlineFormattedNote text={note} isLatest={isLatest} />
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
 
-                  {/* 8. Socratic Question */}
-                  {item.question && (
-                    <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
-                      <span>
-                        {isLatest ? (
-                          <TypewriterText text={item.question} speed={14} />
-                        ) : (
-                          item.question
-                        )}
-                      </span>
-                    </div>
+                      {/* 5. Clean Table if tableData present */}
+                      {item.tableData && (
+                        <div className="my-4 overflow-x-auto">
+                          <table className="w-full border-collapse border border-stone-300 font-sans text-xs md:text-sm">
+                            {item.tableData.headers && (
+                              <thead className="bg-[#2a3b5c] text-white">
+                                <tr>
+                                  {item.tableData.headers.map((h, hIdx) => (
+                                    <th key={hIdx} className="border border-stone-400 px-3 py-2 text-center font-semibold">
+                                      {h}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                            )}
+                            <tbody>
+                              {item.tableData.rows?.map((row, rIdx) => (
+                                <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-[#fcfbf9]'}>
+                                  {row.map((cell, cIdx) => (
+                                    <td key={cIdx} className="border border-stone-300 px-3 py-2 text-center text-stone-800">
+                                      {cell}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* 6. Universal Visual Card: Vector SVG or Real Educational Archive Photo */}
+                      {(item.svgCode || item.imageUrl || item.visualType || item.cardType === 'visual') && (
+                        <UniversalVisualCard
+                          item={item}
+                          onOpenInCodeLab={onOpenInCodeLab}
+                        />
+                      )}
+
+                      {/* 7. Clipped Science/Math Diagram or Web Image (from browser) */}
+                      {item.image && (
+                        <div className="my-3 rounded-2xl overflow-hidden border border-stone-300/80 bg-white shadow-xs max-w-xl mx-auto p-2">
+                          <img
+                            src={item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}`}
+                            alt={item.caption || item.topic || 'Clipped Whiteboard Diagram'}
+                            className="w-full h-auto max-h-96 object-contain rounded-xl select-none"
+                          />
+                          {item.caption && (
+                            <div className="text-center text-xs font-sans text-stone-600 mt-2 font-medium">
+                              📌 {item.caption}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 8. Interactive Code Snippet */}
+                      {item.code && (
+                        <InteractiveCodeBlock
+                          code={item.code}
+                          language={item.language}
+                          onOpenInCodeLab={onOpenInCodeLab}
+                        />
+                      )}
+
+                      {/* 8. Socratic Question */}
+                      {item.question && (
+                        <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
+                          <span>
+                            {isLatest ? (
+                              <TypewriterText text={item.question} speed={14} />
+                            ) : (
+                              item.question
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               );

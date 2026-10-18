@@ -42,6 +42,9 @@ export class GeminiLiveClient {
     this.clientId = Math.random().toString(36).slice(2, 6);
     this.msgCounter = 0;
     this.audioChunkCounter = 0;
+    this.turnHasActivity = false;
+    this.lastUserUtterance = '';
+    this.emptyTurnCount = 0;
 
     this.ws = null;
     this.isConnected = false;
@@ -210,8 +213,54 @@ export class GeminiLiveClient {
                       type: 'STRING',
                       description: 'Programming language if code is provided: "c", "rust", "python", "javascript", "html", etc.',
                     },
+                    svgCode: {
+                      type: 'STRING',
+                      description: 'Optional complete valid standalone SVG diagram (viewBox="0 0 600 400") to illustrate the concept visually alongside the notes',
+                    },
+                    visualQuery: {
+                      type: 'STRING',
+                      description: 'Optional search query to fetch an authentic educational photo/map from Wikimedia Commons archive',
+                    },
+                    caption: {
+                      type: 'STRING',
+                      description: 'Educational caption for the attached visual illustration',
+                    },
                   },
                   required: ['topic', 'notes'],
+                },
+              },
+              {
+                name: 'render_visual',
+                description: 'MANDATORY FOR ANY SUBJECT: Display an educational visual on the student whiteboard whenever explaining concepts, objects, processes, or historical/scientific topics. Mode "svg_sketch" generates a custom-drawn vector diagram (physics rays, biology cells, atoms, math shapes, geography). Mode "photo_search" retrieves authentic educational photographs (space telescopes, monuments, historical maps, medical scans).',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    topic: {
+                      type: 'STRING',
+                      description: 'Clear title of the visual (e.g. "Refraction through Prism", "Plant Cell Organelles", "James Webb Space Telescope", "Bohr Model of Carbon")',
+                    },
+                    mode: {
+                      type: 'STRING',
+                      description: 'Visual creation mode: "svg_sketch" for custom vector diagrams drawn from scratch, or "photo_search" for authentic real-world photos/maps from educational archives',
+                    },
+                    svgCode: {
+                      type: 'STRING',
+                      description: 'When mode="svg_sketch": Full valid standalone SVG string with compact viewBox="0 0 500 300" (e.g. <svg viewBox="0 0 500 300" xmlns="http://www.w3.org/2000/svg">...). Include clean shapes, soft pastel colors, and clear text labels with pointer lines.',
+                    },
+                    searchQuery: {
+                      type: 'STRING',
+                      description: 'When mode="photo_search": Precise search query for educational archive (e.g. "James Webb Space Telescope", "Taj Mahal", "Human Heart Anatomy")',
+                    },
+                    caption: {
+                      type: 'STRING',
+                      description: 'Short 1-2 sentence educational explanation of what this visual illustrates',
+                    },
+                    subject: {
+                      type: 'STRING',
+                      description: 'Academic subject: "physics", "biology", "chemistry", "math", "geography", "history", "astronomy", "engineering", etc.',
+                    },
+                  },
+                  required: ['topic', 'mode'],
                 },
               },
               {
@@ -641,6 +690,7 @@ export class GeminiLiveClient {
     }
 
     if (functionCalls.length > 0) {
+      this.turnHasActivity = true;
       this.handleToolCalls(functionCalls);
     }
 
@@ -651,6 +701,7 @@ export class GeminiLiveClient {
     // 1. Barge-in / Interruption signal
     if (serverContent.interrupted) {
       console.log(`[GeminiLiveClient #${this.clientId}] [Event] Barge-in interruption detected from Gemini server (msg #${msgId}).`);
+      this.turnHasActivity = false;
       if (this.onInterrupted) {
         this.onInterrupted();
       }
@@ -662,6 +713,8 @@ export class GeminiLiveClient {
 
     if (finalInput) {
       console.log(`[GeminiLiveClient #${this.clientId}] [User STT Final] "${finalInput}"`);
+      this.lastUserUtterance = finalInput;
+      this.turnHasActivity = false;
       if (this.onTranscript) {
         this.onTranscript({
           sender: 'user',
@@ -691,6 +744,7 @@ export class GeminiLiveClient {
         const part = modelTurn.parts[partIndex];
         // Output audio stream
         if (part.inlineData && part.inlineData.mimeType && part.inlineData.mimeType.startsWith('audio/pcm')) {
+          this.turnHasActivity = true;
           const chunkId = ++this.audioChunkCounter;
           if (this.onAudioChunk && part.inlineData.data) {
             this.onAudioChunk(part.inlineData.data);
@@ -699,6 +753,7 @@ export class GeminiLiveClient {
 
         // Assistant Output Text / Transcript (streamed delta chunks)
         if (part.text) {
+          this.turnHasActivity = true;
           if (this.onTranscript) {
             this.onTranscript({
               sender: 'assistant',
@@ -713,6 +768,7 @@ export class GeminiLiveClient {
     // 4. Output Audio Transcription (Google Gemini Live streams this at serverContent.outputTranscription.text)
     const outputTranscript = serverContent.outputTranscription?.text || serverContent.outputAudioTranscription?.text;
     if (outputTranscript) {
+      this.turnHasActivity = true;
       if (this.onTranscript) {
         this.onTranscript({
           sender: 'assistant',
@@ -722,9 +778,28 @@ export class GeminiLiveClient {
       }
     }
 
-    // 5. Turn Complete
+    // 5. Turn Complete & Anti-Silence Watchdog
     if (serverContent.turnComplete) {
       console.log('[GeminiLiveClient] [Event] Model turn complete.');
+
+      // Anti-Silence Watchdog: Detect empty turn with NO audio, NO text, and NO tools
+      if (!this.turnHasActivity) {
+        this.emptyTurnCount = (this.emptyTurnCount || 0) + 1;
+        console.warn(`[GeminiLiveClient #${this.clientId}] Empty model turn detected (#${this.emptyTurnCount}) without speech or tools! Triggering anti-silence recovery.`);
+
+        // Auto-nudge recovery: force Gemini Live to speak and respond to student's last query
+        if (this.lastUserUtterance && this.emptyTurnCount <= 2) {
+          const studentTopic = this.lastUserUtterance;
+          this.sendContextNotification(
+            `[SYSTEM RECOVERY NUDGE]: Student asked "${studentTopic}". You MUST speak out loud now in audio to explain and guide the student!`
+          );
+        }
+      } else {
+        this.emptyTurnCount = 0;
+      }
+
+      this.turnHasActivity = false;
+
       if (this.onTurnComplete) {
         this.onTurnComplete();
       }
@@ -747,14 +822,100 @@ export class GeminiLiveClient {
     for (const call of functionCalls) {
       if (call.name === 'write_on_whiteboard' || call.name === 'update_whiteboard') {
         console.log(`[GeminiLiveClient #${this.clientId}] Executing ${call.name} call:`, call.args);
+        
+        // Check if there is an attached visualQuery to resolve from Wikimedia Commons
+        const whiteboardArgs = { ...call.args };
+        if (whiteboardArgs.visualQuery && !whiteboardArgs.imageUrl) {
+          try {
+            const visualRes = await fetch(`${this.backendUrl}/api/tools/visual-search`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: whiteboardArgs.visualQuery, maxResults: 1 }),
+            });
+            if (visualRes.ok) {
+              const visualData = await visualRes.json();
+              if (visualData.success && visualData.selectedImage) {
+                whiteboardArgs.visualType = 'photo';
+                whiteboardArgs.imageUrl = visualData.selectedImage.imageUrl;
+                whiteboardArgs.imageTitle = visualData.selectedImage.title;
+                whiteboardArgs.attribution = visualData.selectedImage.attribution;
+              }
+            }
+          } catch (e) {
+            console.warn('[GeminiLiveClient] Failed to fetch visualQuery photo for whiteboard card:', e.message);
+          }
+        }
+
         if (this.onWhiteboardCall) {
-          this.onWhiteboardCall(call.args);
+          this.onWhiteboardCall(whiteboardArgs);
         }
         responses.push({
           id: call.id,
           name: call.name,
           response: {
             result: { status: 'success', message: 'Whiteboard notes updated successfully.' },
+          },
+        });
+      } else if (call.name === 'render_visual') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing render_visual call:`, call.args);
+        const { topic, mode, svgCode, searchQuery, caption, subject } = call.args || {};
+
+        const visualPayload = {
+          topic: topic || 'Educational Visual',
+          caption: caption || '',
+          subject: subject || 'general',
+          cardType: 'visual',
+          notes: caption ? [caption] : [],
+        };
+
+        if (mode === 'photo_search') {
+          const query = searchQuery || topic || '';
+          console.log(`[GeminiLiveClient] Searching educational archive for photo: "${query}"`);
+          try {
+            const res = await fetch(`${this.backendUrl}/api/tools/visual-search`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query, maxResults: 3 }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.success && data.selectedImage) {
+                visualPayload.visualType = 'photo';
+                visualPayload.imageUrl = data.selectedImage.imageUrl;
+                visualPayload.imageTitle = data.selectedImage.title;
+                visualPayload.attribution = data.selectedImage.attribution;
+                visualPayload.caption = caption || data.selectedImage.description || data.selectedImage.title;
+              } else {
+                visualPayload.visualType = 'photo_fallback';
+                visualPayload.message = data.message || `No photo found for "${query}".`;
+              }
+            } else {
+              visualPayload.visualType = 'photo_fallback';
+              visualPayload.message = `Visual search returned HTTP status ${res.status}.`;
+            }
+          } catch (fetchErr) {
+            console.error('[GeminiLiveClient] Visual photo search failed:', fetchErr);
+            visualPayload.visualType = 'photo_fallback';
+            visualPayload.message = `Photo search could not connect to server: ${fetchErr.message}`;
+          }
+        } else {
+          // Default: svg_sketch (Autonomous vector diagram)
+          visualPayload.visualType = 'svg';
+          visualPayload.svgCode = svgCode || '';
+        }
+
+        if (this.onWhiteboardCall) {
+          this.onWhiteboardCall(visualPayload);
+        }
+
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: {
+              status: 'success',
+              message: `Visual ${mode === 'photo_search' ? 'photograph' : 'vector diagram'} "${topic}" successfully displayed on student whiteboard canvas.`,
+            },
           },
         });
       } else if (call.name === 'clear_whiteboard') {
