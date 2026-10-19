@@ -9,7 +9,7 @@ const router = express.Router();
  */
 router.post('/tools/youtube-channel', async (req, res) => {
   try {
-    const { channelName, type = 'videos' } = req.body || {};
+    const { channelName, type = 'videos', query = '' } = req.body || {};
     if (!channelName || typeof channelName !== 'string' || !channelName.trim()) {
       return res.status(400).json({
         success: false,
@@ -18,7 +18,8 @@ router.post('/tools/youtube-channel', async (req, res) => {
     }
 
     const tab = type === 'playlists' ? 'playlists' : 'videos';
-    const result = await fetchChannelTabContent(channelName.trim(), tab);
+    const cleanQuery = typeof query === 'string' ? query.trim() : '';
+    const result = await fetchChannelTabContent(channelName.trim(), tab, cleanQuery);
     return res.json(result);
   } catch (err) {
     console.error('[youtubeRoute] Channel fetch error:', err);

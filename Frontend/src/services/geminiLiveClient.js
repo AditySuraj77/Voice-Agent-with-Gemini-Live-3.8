@@ -323,7 +323,7 @@ export class GeminiLiveClient {
 
               {
                 name: 'search_web',
-                description: 'Search the live web for real-time information, latest news, current events, facts, weather, sports scores, or any query requiring fresh knowledge.',
+                description: 'Search the live web for general facts, latest news, articles, and weather. STRICT RESTRICTION: NEVER call search_web for YouTube videos, YouTube channels, YouTube playlists, or video transcripts/timestamps. For ANY YouTube content, ALWAYS call youtube_channel_search or youtube_fetch_transcript.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
@@ -343,11 +343,15 @@ export class GeminiLiveClient {
                   properties: {
                     channelName: {
                       type: 'STRING',
-                      description: 'The name or handle of the YouTube channel (e.g. "Stanford Online", "OpenAI", "Code Eater", "3Blue1Brown", "Veritasium")',
+                      description: 'The name or handle of the YouTube channel (e.g. "Stanford Online", "OpenAI", "Code Eater", "3Blue1Brown", "Veritasium", "Raj Shamani")',
                     },
                     type: {
                       type: 'STRING',
                       description: 'Type of content to retrieve: "videos" for latest uploaded videos, or "playlists" for channel playlists',
+                    },
+                    query: {
+                      type: 'STRING',
+                      description: 'Optional specific topic, keywords, or playlist name to search on the channel (e.g. "CS329A", "self improving ai agents", "calculus")',
                     },
                   },
                   required: ['channelName'],
@@ -355,17 +359,17 @@ export class GeminiLiveClient {
               },
               {
                 name: 'youtube_fetch_transcript',
-                description: 'MANDATORY FOR VIDEO TRANSCRIPTS, FULL TIMESTAMPS & GROUNDED TEACHING: Search YouTube for any video, or parse a YouTube URL/ID to extract 100% continuous chronological timestamps (from 00:00 to the video end) and full transcript dialogue. Automatically posts an interactive study roadmap to the student whiteboard. Use this whenever the student asks to explore, summarize, get timestamps, or learn from a video without external hallucinations.',
+                description: 'MANDATORY FOR YOUTUBE VIDEOS & TIMESTAMPS: Search YouTube for ANY video, podcast, or lecture (e.g. "Dr Sahar Yousef on Raj Shamani", "Veritasium speed of light"), or parse a YouTube URL/ID. Extracts 100% continuous chronological timestamps (from 00:00 to the video end) and full transcript dialogue. Use this whenever the student asks to explore, summarize, get timestamps, or learn from a video without external hallucinations.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
                     query: {
                       type: 'STRING',
-                      description: 'Topic, video title, or search keywords to find on YouTube (e.g. "speed of light", "ChatGPT Voice")',
+                      description: 'Topic, video title, guest name, or search keywords to find on YouTube (e.g. "Dr Sahar Yousef", "speed of light")',
                     },
                     channelName: {
                       type: 'STRING',
-                      description: 'Optional YouTube channel name (e.g. "Veritasium", "OpenAI", "3Blue1Brown", "Khan Academy")',
+                      description: 'Optional YouTube channel name (e.g. "Raj Shamani", "Veritasium", "Stanford Online", "OpenAI")',
                     },
                     videoUrlOrId: {
                       type: 'STRING',
@@ -845,34 +849,11 @@ export class GeminiLiveClient {
 
     for (const call of functionCalls) {
       if (call.name === 'write_on_whiteboard' || call.name === 'update_whiteboard') {
-        console.log(`[GeminiLiveClient #${this.clientId}] Executing ${call.name} call:`, call.args);
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing ${call.name} call (0ms non-blocking):`, call.args);
         
-        // Check if there is an attached visualQuery to resolve from Wikimedia Commons
         const whiteboardArgs = { ...call.args };
-        if (whiteboardArgs.visualQuery && !whiteboardArgs.imageUrl) {
-          try {
-            const visualRes = await fetch(`${this.backendUrl}/api/tools/visual-search`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ query: whiteboardArgs.visualQuery, maxResults: 1 }),
-            });
-            if (visualRes.ok) {
-              const visualData = await visualRes.json();
-              if (visualData.success && visualData.selectedImage) {
-                whiteboardArgs.visualType = 'photo';
-                whiteboardArgs.imageUrl = visualData.selectedImage.imageUrl;
-                whiteboardArgs.imageTitle = visualData.selectedImage.title;
-                whiteboardArgs.attribution = visualData.selectedImage.attribution;
-              }
-            }
-          } catch (e) {
-            console.warn('[GeminiLiveClient] Failed to fetch visualQuery photo for whiteboard card:', e.message);
-          }
-        }
 
-        if (this.onWhiteboardCall) {
-          this.onWhiteboardCall(whiteboardArgs);
-        }
+        // 0ms IMMEDIATE ACKNOWLEDGEMENT: Never block Gemini Live voice stream!
         responses.push({
           id: call.id,
           name: call.name,
@@ -880,6 +861,33 @@ export class GeminiLiveClient {
             result: { status: 'success', message: 'Whiteboard notes updated successfully.' },
           },
         });
+
+        // Dispatch to whiteboard canvas immediately
+        if (this.onWhiteboardCall) {
+          this.onWhiteboardCall(whiteboardArgs);
+        }
+
+        // Asynchronously resolve visual photo in background if requested without blocking voice
+        if (whiteboardArgs.visualQuery && !whiteboardArgs.imageUrl) {
+          fetch(`${this.backendUrl}/api/tools/visual-search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: whiteboardArgs.visualQuery, maxResults: 1 }),
+          })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((visualData) => {
+              if (visualData?.success && visualData.selectedImage && this.onWhiteboardCall) {
+                this.onWhiteboardCall({
+                  ...whiteboardArgs,
+                  visualType: 'photo',
+                  imageUrl: visualData.selectedImage.imageUrl,
+                  imageTitle: visualData.selectedImage.title,
+                  attribution: visualData.selectedImage.attribution,
+                });
+              }
+            })
+            .catch((e) => console.warn('[GeminiLiveClient] Background visual query search skipped:', e.message));
+        }
       } else if (call.name === 'render_visual') {
         console.log(`[GeminiLiveClient #${this.clientId}] Executing render_visual call:`, call.args);
         const { topic, mode, svgCode, searchQuery, caption, subject } = call.args || {};
@@ -1013,15 +1021,15 @@ export class GeminiLiveClient {
           },
         });
       } else if (call.name === 'youtube_channel_search') {
-        const { channelName = '', type = 'videos' } = call.args || {};
-        console.log(`[GeminiLiveClient #${this.clientId}] Executing YouTube channel search for: "${channelName}" (type: ${type})`);
+        const { channelName = '', type = 'videos', query = '' } = call.args || {};
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing YouTube channel search for: "${channelName}" (type: ${type}${query ? `, query: ${query}` : ''})`);
 
         let resultPayload = '';
         try {
           const res = await fetch(`${this.backendUrl}/api/tools/youtube-channel`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channelName, type }),
+            body: JSON.stringify({ channelName, type, query }),
           });
 
           if (res.ok) {
@@ -1044,7 +1052,7 @@ export class GeminiLiveClient {
 
               // Pin channel summary onto Whiteboard for student
               if (this.onWhiteboardCall) {
-                const noteBullets = data.items.slice(0, 4).map((item) =>
+                const noteBullets = data.items.slice(0, 6).map((item) =>
                   isPlaylists
                     ? `• "${item.title}" ${item.videoCount ? `(${item.videoCount})` : ''}`
                     : `• "${item.title}" (${item.uploaded || 'recent'})`
@@ -1054,10 +1062,6 @@ export class GeminiLiveClient {
                   topic: `📺 ${data.channel} (${isPlaylists ? 'Playlists' : 'Latest Uploads'})`,
                   notes: noteBullets,
                   cardType: 'concept',
-                  visualType: 'photo',
-                  imageUrl: data.items[0]?.thumbnail || 'https://www.youtube.com/favicon.ico',
-                  imageTitle: data.channel,
-                  attribution: `${data.channel} (YouTube Channel)`,
                   caption: `Live from YouTube: "${data.channel}"`,
                 });
               }
@@ -1112,12 +1116,9 @@ export class GeminiLiveClient {
                 this.onWhiteboardCall({
                   topic: `🎬 ${data.video.title}`,
                   notes: noteBullets,
-                  cardType: data.hasTranscript && data.timeline?.length > 0 ? 'video_timeline' : 'concept',
+                  cardType: 'video_timeline',
                   video: data.video,
                   timeline: data.timeline || [],
-                  visualType: 'photo',
-                  imageUrl: data.video.thumbnail,
-                  imageTitle: data.video.title,
                   attribution: `${data.video.channel} (YouTube)`,
                   caption: `YouTube Video: "${data.video.title}" by ${data.video.channel}`,
                 });

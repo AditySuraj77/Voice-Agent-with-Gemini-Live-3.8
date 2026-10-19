@@ -62,14 +62,14 @@ export async function resolveChannelUrl(channelName) {
 /**
  * Fetches real-time latest videos or playlists directly from a YouTube channel page.
  */
-export async function fetchChannelTabContent(channelName, tab = 'videos') {
+export async function fetchChannelTabContent(channelName, tab = 'videos', query = '') {
   const channelUrl = await resolveChannelUrl(channelName);
   if (!channelUrl) {
     throw new Error(`Could not locate YouTube channel "${channelName}".`);
   }
 
   const targetUrl = `${channelUrl}/${tab}`;
-  console.log(`[YouTubeService] Fetching real-time channel ${tab} from: ${targetUrl}`);
+  console.log(`[YouTubeService] Fetching real-time channel ${tab} from: ${targetUrl}${query ? ` (filter: "${query}")` : ''}`);
 
   try {
     const res = await fetch(targetUrl, {
@@ -152,6 +152,32 @@ export async function fetchChannelTabContent(channelName, tab = 'videos') {
           }
         }
       }
+
+      // Always supplement with targeted direct YouTube search if query given or if channel playlist list is partial
+      try {
+        const directSearchQuery = query
+          ? `${channelName} ${query} playlist`
+          : `${channelName} playlist`;
+        const directPlaylists = await searchYouTubeDirect(directSearchQuery, 'playlist');
+        for (const dp of directPlaylists) {
+          if (!results.some((r) => r.playlistId === dp.playlistId || r.title.toLowerCase() === dp.title.toLowerCase())) {
+            results.push(dp);
+          }
+        }
+      } catch (e) {
+        console.warn('[YouTubeService] Supplementary playlist search failed:', e.message);
+      }
+    }
+
+    // If query was specified, prioritize items matching query keywords
+    let sortedResults = results;
+    if (query && query.trim()) {
+      const qTokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+      sortedResults = [...results].sort((a, b) => {
+        const scoreA = qTokens.reduce((acc, tok) => acc + (a.title.toLowerCase().includes(tok) ? 1 : 0), 0);
+        const scoreB = qTokens.reduce((acc, tok) => acc + (b.title.toLowerCase().includes(tok) ? 1 : 0), 0);
+        return scoreB - scoreA;
+      });
     }
 
     return {
@@ -159,43 +185,29 @@ export async function fetchChannelTabContent(channelName, tab = 'videos') {
       channel: channelTitle,
       channelUrl,
       tab,
-      count: results.length,
-      items: results.slice(0, 12),
+      count: sortedResults.length,
+      items: sortedResults.slice(0, 16),
     };
   } catch (err) {
     console.warn(`[YouTubeService] Direct scraping failed for ${channelName} (${tab}), attempting fallback:`, err.message);
 
-    // Fallback using youtube-sr search
+    // Fallback using direct search
     try {
-      const searchRes = await YouTube.search(`${channelName} ${tab === 'playlists' ? 'playlist' : ''}`, {
-        limit: 8,
-        type: tab === 'playlists' ? 'playlist' : 'video',
-      });
-
-      const fallbackItems = (searchRes || []).map((v) => ({
-        title: v.title,
-        videoId: v.id,
-        url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
-        thumbnail: v.thumbnail?.url || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
-        uploaded: v.uploadedAt || '',
-        views: v.views ? `${v.views} views` : '',
-        duration: v.durationFormatted || '',
-      }));
-
-      return {
-        success: true,
-        channel: channelName,
-        tab,
-        count: fallbackItems.length,
-        items: fallbackItems,
-      };
-    } catch (fallbackErr) {
-      return {
-        success: false,
-        channel: channelName,
-        message: `Could not load ${tab} for "${channelName}": ${fallbackErr.message}`,
-        items: [],
-      };
+      const fallbackSearch = query
+        ? `${channelName} ${query} ${tab === 'playlists' ? 'playlist' : ''}`.trim()
+        : `${channelName} ${tab === 'playlists' ? 'playlist' : ''}`.trim();
+      const directSearchItems = await searchYouTubeDirect(fallbackSearch, tab === 'playlists' ? 'playlist' : 'video');
+      if (directSearchItems.length > 0) {
+        return {
+          success: true,
+          channel: channelName,
+          tab,
+          count: directSearchItems.length,
+          items: directSearchItems.slice(0, 12),
+        };
+      }
+    } catch (fbErr) {
+      console.warn('[YouTubeService] Fallback direct search failed:', fbErr.message);
     }
   }
 }
@@ -262,11 +274,126 @@ export async function getTranscript(videoId) {
 }
 
 /**
- * Searches for a video by query, channel, or direct URL.
+ * Direct scraper for YouTube video watch page to retrieve full metadata, duration, description and chapters.
+ */
+export async function fetchVideoDetailsDirect(videoId) {
+  if (!videoId) return null;
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    const playerMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});(?:var|\s*<\/script>)/);
+    if (playerMatch) {
+      const data = JSON.parse(playerMatch[1]);
+      const details = data?.videoDetails;
+      if (details) {
+        const lengthSec = parseInt(details.lengthSeconds || '0', 10);
+        return {
+          id: videoId,
+          title: details.title || '',
+          channel: details.author || 'YouTube',
+          duration: formatTimestamp(lengthSec, false),
+          durationSec: lengthSec,
+          thumbnail: details.thumbnail?.thumbnails?.[details.thumbnail.thumbnails.length - 1]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          description: details.shortDescription || '',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn(`[YouTubeService] Direct video watch page fetch failed for ${videoId}:`, err.message);
+  }
+  return null;
+}
+
+/**
+ * Direct scraper for YouTube search results page (both videos and playlists).
+ */
+export async function searchYouTubeDirect(query, type = 'video') {
+  if (!query) return [];
+  try {
+    const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+
+    const dataMatch = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
+    if (!dataMatch) return [];
+
+    const data = JSON.parse(dataMatch[1]);
+    const sections = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    const results = [];
+
+    for (const sec of sections) {
+      const items = sec?.itemSectionRenderer?.contents || [];
+      for (const item of items) {
+        if (type === 'playlist') {
+          const p = item?.playlistRenderer;
+          if (p && p.playlistId) {
+            results.push({
+              title: p.title?.simpleText || p.title?.runs?.[0]?.text || 'Playlist',
+              playlistId: p.playlistId,
+              videoCount: p.videoCountText?.runs?.[0]?.text || p.videoCount || '',
+              url: `https://www.youtube.com/playlist?list=${p.playlistId}`,
+              thumbnail: p.thumbnails?.[0]?.thumbnails?.[0]?.url || '',
+            });
+          }
+          const lockup = item?.lockupViewModel;
+          if (lockup && lockup.contentId?.startsWith('PL')) {
+            results.push({
+              title: lockup.metadata?.lockupMetadataViewModel?.title?.content || 'Playlist',
+              playlistId: lockup.contentId,
+              videoCount: '',
+              url: `https://www.youtube.com/playlist?list=${lockup.contentId}`,
+              thumbnail: '',
+            });
+          }
+        } else {
+          const v = item?.videoRenderer;
+          if (v && v.videoId) {
+            results.push({
+              id: v.videoId,
+              title: v.title?.runs?.[0]?.text || '',
+              channel: v.ownerText?.runs?.[0]?.text || '',
+              duration: v.lengthText?.simpleText || '',
+              thumbnail: v.thumbnail?.thumbnails?.[v.thumbnail.thumbnails.length - 1]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+              url: `https://www.youtube.com/watch?v=${v.videoId}`,
+              description: v.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((r) => r.text).join('') || '',
+            });
+          }
+        }
+      }
+    }
+    return results;
+  } catch (err) {
+    console.warn(`[YouTubeService] Direct search scraping failed for "${query}":`, err.message);
+    return [];
+  }
+}
+
+/**
+ * Searches for a video by query, channel, or direct URL with multi-layer fallback.
  */
 export async function searchYouTubeVideo(query, channelName = '') {
   const directId = extractVideoId(query);
   if (directId) {
+    // 1. Direct watch page scrape (most accurate, contains full description chapters)
+    const directDetails = await fetchVideoDetailsDirect(directId);
+    if (directDetails && directDetails.title) {
+      return directDetails;
+    }
+
+    // 2. Fallback to youtube-sr
     try {
       const v = await YouTube.getVideo(`https://www.youtube.com/watch?v=${directId}`);
       if (v) {
@@ -277,21 +404,22 @@ export async function searchYouTubeVideo(query, channelName = '') {
           duration: v.durationFormatted || '',
           thumbnail: v.thumbnail?.url || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
           url: `https://www.youtube.com/watch?v=${v.id}`,
-          description: v.description?.slice(0, 300) || '',
+          description: v.description || '',
         };
       }
     } catch (e) {
-      console.warn('[YouTubeService] Direct video fetch failed, continuing with ID:', e.message);
-      return {
-        id: directId,
-        title: query,
-        channel: channelName || 'YouTube',
-        duration: '',
-        thumbnail: `https://i.ytimg.com/vi/${directId}/hqdefault.jpg`,
-        url: `https://www.youtube.com/watch?v=${directId}`,
-        description: '',
-      };
+      console.warn('[YouTubeService] Fallback video fetch failed, continuing with ID:', e.message);
     }
+
+    return {
+      id: directId,
+      title: query,
+      channel: channelName || 'YouTube',
+      duration: '',
+      thumbnail: `https://i.ytimg.com/vi/${directId}/hqdefault.jpg`,
+      url: `https://www.youtube.com/watch?v=${directId}`,
+      description: '',
+    };
   }
 
   let fullQuery = query || '';
@@ -300,22 +428,47 @@ export async function searchYouTubeVideo(query, channelName = '') {
   }
 
   console.log(`[YouTubeService] Searching YouTube for query: "${fullQuery}"`);
-  const results = await YouTube.search(fullQuery, { limit: 3, type: 'video' });
 
-  if (!results || results.length === 0) {
-    return null;
+  // 1. First attempt: Direct YouTube search scraping (immune to youtube-sr browseId crash)
+  try {
+    const directResults = await searchYouTubeDirect(fullQuery, 'video');
+    if (directResults && directResults.length > 0) {
+      const best = directResults[0];
+      // Fetch full video watch page details to ensure 100% description chapters are present
+      const fullDetails = await fetchVideoDetailsDirect(best.id);
+      if (fullDetails) {
+        return fullDetails;
+      }
+      return best;
+    }
+  } catch (directSearchErr) {
+    console.warn('[YouTubeService] Direct search scraping failed, trying youtube-sr:', directSearchErr.message);
   }
 
-  const best = results[0];
-  return {
-    id: best.id,
-    title: best.title,
-    channel: best.channel?.name || channelName || 'YouTube',
-    duration: best.durationFormatted || '',
-    thumbnail: best.thumbnail?.url || `https://i.ytimg.com/vi/${best.id}/hqdefault.jpg`,
-    url: `https://www.youtube.com/watch?v=${best.id}`,
-    description: best.description?.slice(0, 300) || '',
-  };
+  // 2. Second attempt: youtube-sr library with try/catch
+  try {
+    const results = await YouTube.search(fullQuery, { limit: 3, type: 'video' });
+    if (results && results.length > 0) {
+      const best = results[0];
+      const fullDetails = await fetchVideoDetailsDirect(best.id);
+      if (fullDetails) {
+        return fullDetails;
+      }
+      return {
+        id: best.id,
+        title: best.title,
+        channel: best.channel?.name || channelName || 'YouTube',
+        duration: best.durationFormatted || '',
+        thumbnail: best.thumbnail?.url || `https://i.ytimg.com/vi/${best.id}/hqdefault.jpg`,
+        url: `https://www.youtube.com/watch?v=${best.id}`,
+        description: best.description || '',
+      };
+    }
+  } catch (srErr) {
+    console.warn('[YouTubeService] youtube-sr search failed:', srErr.message);
+  }
+
+  return null;
 }
 
 /**
@@ -553,8 +706,8 @@ ${roadmapLines.join('\n')}
 /**
  * Unified request handler for all YouTube exploration and transcripts.
  */
-export async function handleYouTubeRequest({ action, query, channelName, videoUrlOrId, type = 'latest_videos' }) {
-  if (action === 'explore_channel' || type === 'playlists' || type === 'latest_videos') {
+export async function handleYouTubeRequest({ action, query, channelName, videoUrlOrId, type }) {
+  if (action === 'explore_channel' || action === 'channel' || type === 'playlists' || type === 'channel_videos') {
     const tab = type === 'playlists' ? 'playlists' : 'videos';
     const channelRes = await fetchChannelTabContent(channelName || query, tab);
 

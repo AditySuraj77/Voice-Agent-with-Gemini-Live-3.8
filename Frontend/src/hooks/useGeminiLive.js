@@ -139,8 +139,14 @@ IMPORTANT WHITEBOARD PRESERVATION RULE:
 - The whiteboard is an INFINITE SCROLL NOTEBOOK. Always APPEND new topics and notes below the previous ones so the student can review and export the complete session.
 - ONLY call \`clear_whiteboard\` if the student explicitly asks: "board saaf kar do" / "erase the board".
 
-ON EVERY TURN WHEN YOU EXPLAIN A CONCEPT OR ASK A QUESTION:
-YOU MUST CALL THE \`write_on_whiteboard\` TOOL AS YOU SPEAK!
+WHITEBOARD TEACHING BALANCE & VOICE STREAMING SMOOTHNESS:
+- Speak fluently, warmly, and continuously without pausing or stuttering!
+- DO NOT call \`write_on_whiteboard\` on every conversational turn or simple chit-chat—this disrupts natural conversational rhythm.
+- Call \`write_on_whiteboard\` PURPOSEFULLY when:
+  1. Introducing a new major study topic, structured roadmap, or key bullet points.
+  2. Writing mathematical formulas, equations, or chemical structures.
+  3. Writing code snippets, algorithms, or technical steps in Code Lab.
+  4. Posing a formal challenge question or recording verified student answers.
 
 CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
 - The student ${studentName} writes, solves math, and draws shapes or graphs directly on the whiteboard canvas with a pen/marker!
@@ -553,9 +559,10 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
         if (channelCall) {
           const ch = channelCall.args?.channelName || '';
           const t = channelCall.args?.type === 'playlists' ? 'playlists' : 'latest videos';
-          console.log(`[useGeminiLive] Tool call triggered: youtube_channel_search "${ch}" (${t})`);
+          const q = channelCall.args?.query ? ` (search: "${channelCall.args.query}")` : '';
+          console.log(`[useGeminiLive] Tool call triggered: youtube_channel_search "${ch}" (${t}${q})`);
           setIsSearching(true);
-          setSearchQuery(`YouTube Channel: ${ch}`);
+          setSearchQuery(`YouTube: ${ch}${q}`);
           setConversationState('thinking');
           setMessages((prev) => [
             ...prev,
@@ -564,7 +571,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               sender: 'tool',
               toolName: 'YouTube Channel',
               query: ch,
-              text: `Checking real-time ${t} on YouTube channel "${ch}"...`,
+              text: `Checking real-time ${t} on YouTube channel "${ch}"${q}...`,
               isSearching: true,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             },
