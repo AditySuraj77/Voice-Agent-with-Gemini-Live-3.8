@@ -169,18 +169,36 @@ export const GEMINI_TOOLS = [
         },
       },
       {
+        name: 'youtube_channel_search',
+        description: 'MANDATORY FOR YOUTUBE CHANNELS & PLAYLISTS: Call this tool whenever the student asks to check, explore, search, or view ANY YouTube channel, its latest uploaded videos, or playlists (e.g. "Stanford Online channel playlists", "OpenAI channel latest videos", "Code Eater channel videos", "kisi YouTube channel par jao"). NEVER call search_web for YouTube channel queries.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            channelName: {
+              type: 'STRING',
+              description: 'The name or handle of the YouTube channel (e.g. "Stanford Online", "OpenAI", "Code Eater", "3Blue1Brown", "Veritasium")',
+            },
+            type: {
+              type: 'STRING',
+              description: 'Type of content to retrieve: "videos" for latest uploaded videos, or "playlists" for channel playlists',
+            },
+          },
+          required: ['channelName'],
+        },
+      },
+      {
         name: 'youtube_fetch_transcript',
-        description: 'MANDATORY FOR YOUTUBE REQUESTS: Search YouTube for a channel, video, or playlist topic, or parse a YouTube URL. Extracts the full transcript/subtitles with timestamps to summarize, explain concepts, answer questions, or transcribe content for the student.',
+        description: 'MANDATORY FOR VIDEO TRANSCRIPTS & TIMESTAMPS: Search YouTube for a video, or parse a YouTube URL/ID to extract the complete chronological transcript and timestamps from 00:00 through the conclusion. Use this whenever the student asks to summarize, explain, or extract timestamps across a YouTube video.',
         parameters: {
           type: 'OBJECT',
           properties: {
             query: {
               type: 'STRING',
-              description: 'Topic, video title, or search keywords to find on YouTube (e.g. "speed of light", "backpropagation algorithm")',
+              description: 'Topic, video title, or search keywords to find on YouTube (e.g. "speed of light", "ChatGPT Voice")',
             },
             channelName: {
               type: 'STRING',
-              description: 'Optional YouTube channel name (e.g. "Veritasium", "3Blue1Brown", "Khan Academy", "Chai aur Code")',
+              description: 'Optional YouTube channel name (e.g. "Veritasium", "OpenAI", "3Blue1Brown", "Khan Academy")',
             },
             videoUrlOrId: {
               type: 'STRING',

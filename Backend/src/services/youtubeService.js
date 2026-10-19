@@ -8,12 +8,10 @@ export function extractVideoId(input = '') {
   if (!input || typeof input !== 'string') return null;
   const clean = input.trim();
 
-  // If already an 11-character ID (alphanumeric, dash, underscore)
   if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) {
     return clean;
   }
 
-  // Common YouTube URL patterns
   const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
   return match ? match[1] : null;
 }
@@ -21,7 +19,7 @@ export function extractVideoId(input = '') {
 /**
  * Formats seconds into mm:ss or hh:mm:ss string
  */
-function formatTimestamp(millisOrSeconds) {
+export function formatTimestamp(millisOrSeconds) {
   const totalSeconds = Math.floor(typeof millisOrSeconds === 'number' && millisOrSeconds > 1000 ? millisOrSeconds / 1000 : millisOrSeconds);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -34,6 +32,172 @@ function formatTimestamp(millisOrSeconds) {
 }
 
 /**
+ * Resolves a channel name to its canonical URL or handle.
+ */
+export async function resolveChannelUrl(channelName) {
+  if (!channelName) return null;
+  const clean = channelName.trim();
+
+  // If already a URL or handle
+  if (clean.startsWith('http')) return clean.replace(/\/$/, '');
+  if (clean.startsWith('@')) return `https://www.youtube.com/${clean}`;
+
+  try {
+    const results = await YouTube.search(clean, { limit: 1, type: 'channel' });
+    if (results && results[0]?.url) {
+      return results[0].url.replace(/\/$/, '');
+    }
+  } catch (err) {
+    console.warn('[YouTubeService] Error resolving channel:', err.message);
+  }
+
+  // Fallback to formatted handle
+  const slug = clean.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `https://www.youtube.com/@${slug}`;
+}
+
+/**
+ * Fetches real-time latest videos or playlists directly from a YouTube channel page.
+ */
+export async function fetchChannelTabContent(channelName, tab = 'videos') {
+  const channelUrl = await resolveChannelUrl(channelName);
+  if (!channelUrl) {
+    throw new Error(`Could not locate YouTube channel "${channelName}".`);
+  }
+
+  const targetUrl = `${channelUrl}/${tab}`;
+  console.log(`[YouTubeService] Fetching real-time channel ${tab} from: ${targetUrl}`);
+
+  try {
+    const res = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`YouTube responded with HTTP ${res.status}`);
+    }
+
+    const html = await res.text();
+    const match = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
+    if (!match) {
+      throw new Error('Could not parse YouTube channel initial data.');
+    }
+
+    const data = JSON.parse(match[1]);
+    const channelTitle = data?.metadata?.channelMetadataRenderer?.title || channelName;
+    const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs || [];
+    const selectedTab =
+      tabs.find((t) => t?.tabRenderer?.selected) ||
+      tabs.find((t) => t?.tabRenderer?.title?.toLowerCase() === tab.toLowerCase());
+
+    const results = [];
+
+    if (tab === 'videos') {
+      const contents = selectedTab?.tabRenderer?.content?.richGridRenderer?.contents || [];
+      for (const item of contents) {
+        const lockup = item?.richItemRenderer?.content?.lockupViewModel;
+        if (lockup) {
+          const title = lockup.metadata?.lockupMetadataViewModel?.title?.content;
+          const metaRows = lockup.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
+          const parts = metaRows[0]?.metadataParts || [];
+          const views = parts[0]?.text?.content || '';
+          const uploaded = parts[1]?.text?.content || '';
+          const videoId =
+            lockup.contentId ||
+            lockup.rendererContext?.commandContext?.onTap?.innertubeCommand?.watchEndpoint?.videoId;
+          const label = lockup.rendererContext?.accessibilityContext?.label || '';
+
+          if (title && videoId) {
+            results.push({
+              title,
+              videoId,
+              url: `https://www.youtube.com/watch?v=${videoId}`,
+              thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+              views,
+              uploaded,
+              label,
+            });
+          }
+        }
+      }
+    } else if (tab === 'playlists') {
+      const contents =
+        selectedTab?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.gridRenderer?.items ||
+        selectedTab?.tabRenderer?.content?.richGridRenderer?.contents ||
+        [];
+
+      for (const item of contents) {
+        const lockup = item?.lockupViewModel || item?.gridPlaylistRenderer || item?.richItemRenderer?.content?.lockupViewModel;
+        if (lockup) {
+          const title =
+            lockup.title?.runs?.[0]?.text ||
+            lockup.metadata?.lockupMetadataViewModel?.title?.content ||
+            lockup.metadata?.title?.content;
+          const playlistId = lockup.playlistId || lockup.contentId;
+          const videoCount = lockup.videoCountText?.runs?.[0]?.text || lockup.videoCountShortText?.simpleText || '';
+
+          if (title) {
+            results.push({
+              title,
+              playlistId,
+              videoCount,
+              url: playlistId ? `https://www.youtube.com/playlist?list=${playlistId}` : `${channelUrl}/playlists`,
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      success: true,
+      channel: channelTitle,
+      channelUrl,
+      tab,
+      count: results.length,
+      items: results.slice(0, 12),
+    };
+  } catch (err) {
+    console.warn(`[YouTubeService] Direct scraping failed for ${channelName} (${tab}), attempting fallback:`, err.message);
+
+    // Fallback using youtube-sr search
+    try {
+      const searchRes = await YouTube.search(`${channelName} ${tab === 'playlists' ? 'playlist' : ''}`, {
+        limit: 8,
+        type: tab === 'playlists' ? 'playlist' : 'video',
+      });
+
+      const fallbackItems = (searchRes || []).map((v) => ({
+        title: v.title,
+        videoId: v.id,
+        url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+        thumbnail: v.thumbnail?.url || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
+        uploaded: v.uploadedAt || '',
+        views: v.views ? `${v.views} views` : '',
+        duration: v.durationFormatted || '',
+      }));
+
+      return {
+        success: true,
+        channel: channelName,
+        tab,
+        count: fallbackItems.length,
+        items: fallbackItems,
+      };
+    } catch (fallbackErr) {
+      return {
+        success: false,
+        channel: channelName,
+        message: `Could not load ${tab} for "${channelName}": ${fallbackErr.message}`,
+        items: [],
+      };
+    }
+  }
+}
+
+/**
  * Fetches transcript for a YouTube video with language fallbacks.
  */
 export async function getTranscript(videoId) {
@@ -42,7 +206,6 @@ export async function getTranscript(videoId) {
   let rawTranscript = null;
   let detectedLang = 'en';
 
-  // Try English first, then Hindi, then whatever default captions are available
   const langPreferences = ['en', 'hi', undefined];
 
   for (const lang of langPreferences) {
@@ -67,7 +230,6 @@ export async function getTranscript(videoId) {
     };
   }
 
-  // Format into readable timed segments and continuous text
   const timedTranscript = [];
   const textParts = [];
 
@@ -129,7 +291,6 @@ export async function searchYouTubeVideo(query, channelName = '') {
     }
   }
 
-  // Combine channel name with search query if provided
   let fullQuery = query || '';
   if (channelName && !fullQuery.toLowerCase().includes(channelName.toLowerCase())) {
     fullQuery = `${channelName} ${fullQuery}`.trim();
@@ -152,6 +313,32 @@ export async function searchYouTubeVideo(query, channelName = '') {
     url: `https://www.youtube.com/watch?v=${best.id}`,
     description: best.description?.slice(0, 300) || '',
   };
+}
+
+/**
+ * Generates a full chronological timeline spanning from 00:00 to the video's end.
+ */
+function buildFullChronologicalTimeline(timedTranscript = []) {
+  if (!timedTranscript || timedTranscript.length === 0) return '';
+
+  // If transcript has 40 or fewer items, include every single timestamp
+  if (timedTranscript.length <= 40) {
+    return timedTranscript.map((t) => `[${t.time}] ${t.text}`).join('\n');
+  }
+
+  // Sample evenly across the entire duration so every section from 00:00 to end is represented
+  const step = Math.ceil(timedTranscript.length / 35);
+  const selected = [];
+  for (let i = 0; i < timedTranscript.length; i += step) {
+    selected.push(timedTranscript[i]);
+  }
+  // Guarantee the last timestamp is always included
+  const last = timedTranscript[timedTranscript.length - 1];
+  if (selected[selected.length - 1] !== last) {
+    selected.push(last);
+  }
+
+  return selected.map((t) => `[${t.time}] ${t.text}`).join('\n');
 }
 
 /**
@@ -185,13 +372,9 @@ export async function fetchYouTubeTranscriptAndDetails({ query, channelName = ''
     };
   }
 
-  // Format timed sample (first 10 key timestamps) and clean text
-  const sampleTimeline = transcriptData.timedTranscript
-    .slice(0, 15)
-    .map((item) => `[${item.time}] ${item.text}`)
-    .join('\n');
+  // Full chronological timeline covering 00:00 through the conclusion
+  const fullTimeline = buildFullChronologicalTimeline(transcriptData.timedTranscript);
 
-  // Cap full text to ~10,000 characters to keep WebSocket message snappy
   const cappedFullText = transcriptData.fullText.length > 10000
     ? transcriptData.fullText.slice(0, 10000) + '... (transcript continues)'
     : transcriptData.fullText;
@@ -204,8 +387,8 @@ Duration: ${video.duration || 'N/A'}
 URL: ${video.url}
 Thumbnail: ${video.thumbnail}
 
-TIMED HIGHLIGHTS:
-${sampleTimeline}
+CHRONOLOGICAL TIMELINE (BEGINNING TO END):
+${fullTimeline}
 
 FULL TRANSCRIPT CONTENT:
 ${cappedFullText}
@@ -220,4 +403,41 @@ ${cappedFullText}
     fullText: transcriptData.fullText,
     timedTranscript: transcriptData.timedTranscript,
   };
+}
+
+/**
+ * Unified request handler for all YouTube exploration and transcripts.
+ */
+export async function handleYouTubeRequest({ action, query, channelName, videoUrlOrId, type = 'latest_videos' }) {
+  if (action === 'explore_channel' || type === 'playlists' || type === 'latest_videos') {
+    const tab = type === 'playlists' ? 'playlists' : 'videos';
+    const channelRes = await fetchChannelTabContent(channelName || query, tab);
+
+    if (channelRes.success && channelRes.items.length > 0) {
+      let formattedSummary = `=== YOUTUBE CHANNEL: ${channelRes.channel} (${tab.toUpperCase()}) ===\n`;
+      if (tab === 'playlists') {
+        formattedSummary += `Found ${channelRes.items.length} Playlists:\n`;
+        channelRes.items.forEach((p, idx) => {
+          formattedSummary += `${idx + 1}. "${p.title}" ${p.videoCount ? `(${p.videoCount})` : ''} - ${p.url}\n`;
+        });
+      } else {
+        formattedSummary += `Latest Uploads:\n`;
+        channelRes.items.forEach((v, idx) => {
+          formattedSummary += `${idx + 1}. "${v.title}" (${v.uploaded || 'recent'}${v.views ? ` • ${v.views}` : ''}) - ${v.url}\n`;
+        });
+      }
+
+      return {
+        success: true,
+        action: 'explore_channel',
+        channel: channelRes.channel,
+        tab,
+        items: channelRes.items,
+        formattedSummary: formattedSummary.trim(),
+      };
+    }
+  }
+
+  // Default to video transcript fetch
+  return fetchYouTubeTranscriptAndDetails({ query, channelName, videoUrlOrId });
 }

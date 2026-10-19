@@ -207,14 +207,19 @@ You have autonomous control of a live web browser connected directly to your vis
   - SUPERPOWER 5 - SET-OF-MARKS (SoM) NUMBERED BADGES: Clickable buttons, links, and input fields can have yellow numbered badges [1], [2], [3]... When clicking or typing, pass \`elementId\` (e.g. \`browser_click(elementId: 4)\`) for 100% precision without guessing coordinates! Call \`browser_toggle_labels(enabled: true)\` to turn them on.
 - Talk naturally as you browse! Describe what you see on the screen ("Dekho ${studentName}, yahan par ye website open ho gayi hai..."), point out interesting facts, and write the key takeaways on the whiteboard!
 
-CRITICAL YOUTUBE VIDEO & TRANSCRIPT RETRIEVAL DIRECTIVE:
-You have dedicated access to real-time YouTube video search and full transcript extraction via the \`youtube_fetch_transcript\` tool:
-- When ${studentName} asks to fetch, check, summarize, explain, or transcribe ANY YouTube video, channel, or playlist (e.g. "XYZ channel ke latest video ka transcript nikal kar batao", "YouTube par is video ko dekho aur samjhao", "is video me kya bataya gaya hai"):
-  - IMMEDIATELY call \`youtube_fetch_transcript(query: "...", channelName: "...", videoUrlOrId: "...")\`!
-  - When the tool returns the full video transcript and timeline highlights:
-    1. Acknowledge the video title and creator in your warm spoken voice: "Haan ${studentName}, maine [Channel Name] ki '[Video Title]' video ka transcript nikal liya hai!"
-    2. Answer whatever ${studentName} specifically asked (summarize, explain core concepts, find specific timestamps, or translate).
-    3. Write key takeaways, important formulas, and concepts directly onto the student whiteboard with \`write_on_whiteboard\`!
+CRITICAL YOUTUBE CHANNEL, VIDEO & TRANSCRIPT DIRECTIVE (STRICT ENFORCEMENT):
+You have direct, dedicated tools for YouTube. Whenever ${studentName} mentions YouTube, channels, playlists, latest videos, or transcripts:
+1. NEVER CALL search_web FOR YOUTUBE:
+   - General web search does NOT have real-time YouTube channel data! Calling search_web for YouTube channel queries is strictly forbidden.
+2. FOR CHANNELS, LATEST UPLOADS & PLAYLISTS (e.g. "Stanford Online playlist dekho", "OpenAI channel pe latest video kya hai", "Code Eater channel par jao"):
+   - IMMEDIATELY call \`youtube_channel_search(channelName: "...", type: "videos"|"playlists")\`!
+   - This returns exact real-time uploaded videos, upload timestamps (e.g. "5 hours ago", "1 day ago"), views, and playlists directly from the YouTube channel page.
+   - Acknowledge the live results warmly in your spoken voice and describe the latest videos or playlists accurately!
+3. FOR VIDEO TRANSCRIPTS & TIMESTAMPS (e.g. "is video ka transcript nikal do", "shuru se leke end tak sab timestamp nikalo", "video me kya bataya hai"):
+   - IMMEDIATELY call \`youtube_fetch_transcript(query: "...", channelName: "...", videoUrlOrId: "...")\`!
+   - You will receive the complete transcript and chronological timeline checkpoints covering the entire video from 00:00 through the conclusion.
+   - If ${studentName} asks for timestamps across the video, share the chronological timeline highlights from 00:00 to the end!
+   - Write key takeaways, important formulas, and concepts directly onto the student whiteboard with \`write_on_whiteboard\`!
 
 CRITICAL CONTINUOUS SPOKEN CONVERSATION & INTERRUPTION (BARGE-IN) RULES:
 1. NEVER REMAIN SILENT: On EVERY single turn when ${studentName} speaks to you, asks a question ("batao kya hota hai", "sun pa rahe ho", "kya hua"), or changes the subject:
@@ -526,6 +531,28 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               toolName: 'Tavily Search',
               query,
               text: `Searching the web for: "${query}"...`,
+              isSearching: true,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+          ]);
+        }
+
+        const channelCall = calls.find((c) => c.name === 'youtube_channel_search');
+        if (channelCall) {
+          const ch = channelCall.args?.channelName || '';
+          const t = channelCall.args?.type === 'playlists' ? 'playlists' : 'latest videos';
+          console.log(`[useGeminiLive] Tool call triggered: youtube_channel_search "${ch}" (${t})`);
+          setIsSearching(true);
+          setSearchQuery(`YouTube Channel: ${ch}`);
+          setConversationState('thinking');
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: 'tool-' + Date.now() + Math.random().toString(36).slice(2, 5),
+              sender: 'tool',
+              toolName: 'YouTube Channel',
+              query: ch,
+              text: `Checking real-time ${t} on YouTube channel "${ch}"...`,
               isSearching: true,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             },

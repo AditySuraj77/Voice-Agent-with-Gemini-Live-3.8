@@ -336,18 +336,36 @@ export class GeminiLiveClient {
                 },
               },
               {
+                name: 'youtube_channel_search',
+                description: 'MANDATORY FOR YOUTUBE CHANNELS & PLAYLISTS: Call this tool whenever the student asks to check, explore, search, or view ANY YouTube channel, its latest uploaded videos, or playlists (e.g. "Stanford Online channel playlists", "OpenAI channel latest videos", "Code Eater channel videos", "kisi YouTube channel par jao"). NEVER call search_web for YouTube channel queries.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    channelName: {
+                      type: 'STRING',
+                      description: 'The name or handle of the YouTube channel (e.g. "Stanford Online", "OpenAI", "Code Eater", "3Blue1Brown", "Veritasium")',
+                    },
+                    type: {
+                      type: 'STRING',
+                      description: 'Type of content to retrieve: "videos" for latest uploaded videos, or "playlists" for channel playlists',
+                    },
+                  },
+                  required: ['channelName'],
+                },
+              },
+              {
                 name: 'youtube_fetch_transcript',
-                description: 'MANDATORY FOR YOUTUBE REQUESTS: Search YouTube for a channel, video, or playlist topic, or parse a YouTube URL. Extracts the full transcript/subtitles with timestamps to summarize, explain concepts, answer questions, or transcribe content for the student.',
+                description: 'MANDATORY FOR VIDEO TRANSCRIPTS & TIMESTAMPS: Search YouTube for a video, or parse a YouTube URL/ID to extract the complete chronological transcript and timestamps from 00:00 through the conclusion. Use this whenever the student asks to summarize, explain, or extract timestamps across a YouTube video.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
                     query: {
                       type: 'STRING',
-                      description: 'Topic, video title, or search keywords to find on YouTube (e.g. "speed of light", "backpropagation algorithm")',
+                      description: 'Topic, video title, or search keywords to find on YouTube (e.g. "speed of light", "ChatGPT Voice")',
                     },
                     channelName: {
                       type: 'STRING',
-                      description: 'Optional YouTube channel name (e.g. "Veritasium", "3Blue1Brown", "Khan Academy", "Chai aur Code")',
+                      description: 'Optional YouTube channel name (e.g. "Veritasium", "OpenAI", "3Blue1Brown", "Khan Academy")',
                     },
                     videoUrlOrId: {
                       type: 'STRING',
@@ -800,27 +818,11 @@ export class GeminiLiveClient {
       }
     }
 
-    // 5. Turn Complete & Anti-Silence Watchdog
+    // 5. Turn Complete
     if (serverContent.turnComplete) {
       console.log('[GeminiLiveClient] [Event] Model turn complete.');
-
-      // Anti-Silence Watchdog: Detect empty turn with NO audio, NO text, and NO tools
-      if (!this.turnHasActivity) {
-        this.emptyTurnCount = (this.emptyTurnCount || 0) + 1;
-        console.warn(`[GeminiLiveClient #${this.clientId}] Empty model turn detected (#${this.emptyTurnCount}) without speech or tools! Triggering anti-silence recovery.`);
-
-        // Auto-nudge recovery: force Gemini Live to speak and respond to student's last query
-        if (this.lastUserUtterance && this.emptyTurnCount <= 2) {
-          const studentTopic = this.lastUserUtterance;
-          this.sendContextNotification(
-            `[SYSTEM RECOVERY NUDGE]: Student asked "${studentTopic}". You MUST speak out loud now in audio to explain and guide the student!`
-          );
-        }
-      } else {
-        this.emptyTurnCount = 0;
-      }
-
       this.turnHasActivity = false;
+      this.emptyTurnCount = 0;
 
       if (this.onTurnComplete) {
         this.onTurnComplete();
@@ -1008,6 +1010,73 @@ export class GeminiLiveClient {
           name: call.name,
           response: {
             result: searchResult,
+          },
+        });
+      } else if (call.name === 'youtube_channel_search') {
+        const { channelName = '', type = 'videos' } = call.args || {};
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing YouTube channel search for: "${channelName}" (type: ${type})`);
+
+        let resultPayload = '';
+        try {
+          const res = await fetch(`${this.backendUrl}/api/tools/youtube-channel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelName, type }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.items && data.items.length > 0) {
+              const isPlaylists = data.tab === 'playlists';
+              let summary = `=== REAL-TIME YOUTUBE CHANNEL: ${data.channel} (${data.tab.toUpperCase()}) ===\n`;
+              if (isPlaylists) {
+                summary += `Found ${data.items.length} Playlists on channel:\n`;
+                data.items.forEach((p, idx) => {
+                  summary += `${idx + 1}. "${p.title}" ${p.videoCount ? `(${p.videoCount})` : ''} - ${p.url}\n`;
+                });
+              } else {
+                summary += `Latest Uploaded Videos (Live from YouTube):\n`;
+                data.items.forEach((v, idx) => {
+                  summary += `${idx + 1}. "${v.title}" (${v.uploaded || 'recent'}${v.views ? ` • ${v.views}` : ''}) - ${v.url}\n`;
+                });
+              }
+              resultPayload = summary.trim();
+
+              // Pin channel summary onto Whiteboard for student
+              if (this.onWhiteboardCall) {
+                const noteBullets = data.items.slice(0, 4).map((item) =>
+                  isPlaylists
+                    ? `• "${item.title}" ${item.videoCount ? `(${item.videoCount})` : ''}`
+                    : `• "${item.title}" (${item.uploaded || 'recent'})`
+                );
+
+                this.onWhiteboardCall({
+                  topic: `📺 ${data.channel} (${isPlaylists ? 'Playlists' : 'Latest Uploads'})`,
+                  notes: noteBullets,
+                  cardType: 'concept',
+                  visualType: 'photo',
+                  imageUrl: data.items[0]?.thumbnail || 'https://www.youtube.com/favicon.ico',
+                  imageTitle: data.channel,
+                  attribution: `${data.channel} (YouTube Channel)`,
+                  caption: `Live from YouTube: "${data.channel}"`,
+                });
+              }
+            } else {
+              resultPayload = data.message || `No ${type} found for YouTube channel "${channelName}".`;
+            }
+          } else {
+            resultPayload = `YouTube channel tool returned HTTP status ${res.status}.`;
+          }
+        } catch (chErr) {
+          console.error('[GeminiLiveClient] YouTube channel search error:', chErr);
+          resultPayload = `Failed to fetch YouTube channel: ${chErr.message}`;
+        }
+
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: resultPayload,
           },
         });
       } else if (call.name === 'youtube_fetch_transcript') {
