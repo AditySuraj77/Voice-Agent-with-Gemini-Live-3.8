@@ -786,6 +786,7 @@ export class GeminiLiveClient {
 
       for (let partIndex = 0; partIndex < modelTurn.parts.length; partIndex++) {
         const part = modelTurn.parts[partIndex];
+        if (!part) continue;
         // Output audio stream
         if (part.inlineData && part.inlineData.mimeType && part.inlineData.mimeType.startsWith('audio/pcm')) {
           this.turnHasActivity = true;

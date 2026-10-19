@@ -15,6 +15,7 @@ export class AudioPlayer {
     this.isPlaying = false;
     this.activeSourceNodes = new Set();
     this.chunkCounter = 0;
+    this.playbackStopTimer = null;
   }
 
   /**
@@ -54,23 +55,23 @@ export class AudioPlayer {
     sourceNode.buffer = audioBuffer;
     sourceNode.connect(this.audioContext.destination);
 
-    // Schedule seamlessly right after previous chunk finishes.
-    // If nextScheduledTime has fallen behind currentTime (or queue was idle), start at currentTime + 20ms lead.
+    // Continuous seamless audio scheduling:
+    // If nextScheduledTime is in the future, chain directly to eliminate dead-air gaps.
+    // If queue ran empty (or first chunk), start with a minimal 5ms lookahead to prevent click/pop.
     const currentTime = this.audioContext.currentTime;
-    const leadTime = 0.02; // 20ms lead time for jitter-free scheduling
-    const startTime = Math.max(currentTime + leadTime, this.nextScheduledTime);
+    const startTime = this.nextScheduledTime > currentTime ? this.nextScheduledTime : currentTime + 0.005;
 
     sourceNode.start(startTime);
     this.nextScheduledTime = startTime + audioBuffer.duration;
 
     const playId = ++this.chunkCounter;
-    console.log(
-      `[AudioPlayer #${this.playerId}] playChunk #${playId}: duration=${audioBuffer.duration.toFixed(3)}s, ` +
-      `startTime=${startTime.toFixed(3)}s, currentTime=${currentTime.toFixed(3)}s, ` +
-      `queueEnd=${this.nextScheduledTime.toFixed(3)}s, activeNodes=${this.activeSourceNodes.size + 1}`
-    );
-
     this.activeSourceNodes.add(sourceNode);
+
+    // Cancel any pending stop debounce since new audio has arrived
+    if (this.playbackStopTimer) {
+      clearTimeout(this.playbackStopTimer);
+      this.playbackStopTimer = null;
+    }
 
     if (!this.isPlaying) {
       this.isPlaying = true;
@@ -82,10 +83,20 @@ export class AudioPlayer {
     sourceNode.onended = () => {
       this.activeSourceNodes.delete(sourceNode);
       if (this.activeSourceNodes.size === 0) {
-        this.isPlaying = false;
-        if (this.onPlaybackStateChange) {
-          this.onPlaybackStateChange(false);
+        // Hysteresis buffer: Wait 250ms before declaring playback ended.
+        // This prevents rapid UI flickering and main-thread React re-render thrashing between incoming chunks.
+        if (this.playbackStopTimer) {
+          clearTimeout(this.playbackStopTimer);
         }
+        this.playbackStopTimer = setTimeout(() => {
+          if (this.activeSourceNodes.size === 0) {
+            this.isPlaying = false;
+            this.playbackStopTimer = null;
+            if (this.onPlaybackStateChange) {
+              this.onPlaybackStateChange(false);
+            }
+          }
+        }, 250);
       }
     };
   }
@@ -96,6 +107,11 @@ export class AudioPlayer {
    * flushes the queue, and resets timing to prevent stale audio playback.
    */
   stopAndClear() {
+    if (this.playbackStopTimer) {
+      clearTimeout(this.playbackStopTimer);
+      this.playbackStopTimer = null;
+    }
+
     console.log(`[AudioPlayer #${this.playerId}] stopAndClear: stopping ${this.activeSourceNodes.size} queued audio nodes.`);
     for (const source of this.activeSourceNodes) {
       try {
