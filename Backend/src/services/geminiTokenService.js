@@ -188,7 +188,7 @@ export const GEMINI_TOOLS = [
       },
       {
         name: 'youtube_fetch_transcript',
-        description: 'MANDATORY FOR VIDEO TRANSCRIPTS & TIMESTAMPS: Search YouTube for a video, or parse a YouTube URL/ID to extract the complete chronological transcript and timestamps from 00:00 through the conclusion. Use this whenever the student asks to summarize, explain, or extract timestamps across a YouTube video.',
+        description: 'MANDATORY FOR VIDEO TRANSCRIPTS, FULL TIMESTAMPS & GROUNDED TEACHING: Search YouTube for any video, or parse a YouTube URL/ID to extract 100% continuous chronological timestamps (from 00:00 to the video end) and full transcript dialogue. Automatically posts an interactive study roadmap to the student whiteboard. Use this whenever the student asks to explore, summarize, get timestamps, or learn from a video without external hallucinations.',
         parameters: {
           type: 'OBJECT',
           properties: {

@@ -9,6 +9,7 @@ import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
 import { MathFormula } from './MathFormula.jsx';
 import { InlineFormattedNote } from './InlineFormattedNote.jsx';
 import { UniversalVisualCard } from './UniversalVisualCard.jsx';
+import { VideoTimelineCard } from './VideoTimelineCard.jsx';
 import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
 import { captureElementWithOverlay } from '../../utils/whiteboardSnapshot.js';
 import { saveActiveSession } from '../../services/sessionHistory.js';
@@ -37,6 +38,7 @@ export function DirectWhiteboard({
   aiLaserPoint = null,
   onInspectAnnotations = null,
   restoredCanvasSnapshot = null,
+  onAskChapter = null,
 }) {
   const containerRef = useRef(null);
   const contentWrapperRef = useRef(null);
@@ -900,6 +902,10 @@ export function DirectWhiteboard({
                 item.question
               );
 
+              const isVideoTimeline = Boolean(
+                item.cardType === 'video_timeline' || (Array.isArray(item.timeline) && item.timeline.length > 0)
+              );
+
               return (
                 <div
                   key={item.id || index}
@@ -910,21 +916,25 @@ export function DirectWhiteboard({
                   }`}
                   data-testid={`whiteboard-item-${index}`}
                 >
-                  {/* Two-Way AI Highlight Badge */}
-                  {isAiHighlighted && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400 text-stone-950 text-xs font-sans font-bold w-fit shadow-xs animate-bounce">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Sir Pointing Here: {aiHighlightedTopic.reason || 'Pay attention to this'}</span>
-                    </div>
-                  )}
+                  {isVideoTimeline ? (
+                    <VideoTimelineCard item={item} onAskChapter={onAskChapter} />
+                  ) : (
+                    <>
+                      {/* Two-Way AI Highlight Badge */}
+                      {isAiHighlighted && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400 text-stone-950 text-xs font-sans font-bold w-fit shadow-xs animate-bounce">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Sir Pointing Here: {aiHighlightedTopic.reason || 'Pay attention to this'}</span>
+                        </div>
+                      )}
 
-                  {/* 1. Verified Student Answer with Checkmark */}
-                  {item.studentAnswer && (
-                    <div className="text-sm md:text-base font-sans font-medium text-emerald-800 flex items-center gap-2">
-                      <span>{item.studentAnswer.replace(/[✓✔\s]+$/, '')}</span>
-                      <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
-                    </div>
-                  )}
+                      {/* 1. Verified Student Answer with Checkmark */}
+                      {item.studentAnswer && (
+                        <div className="text-sm md:text-base font-sans font-medium text-emerald-800 flex items-center gap-2">
+                          <span>{item.studentAnswer.replace(/[✓✔\s]+$/, '')}</span>
+                          <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
+                        </div>
+                      )}
 
                   {/* 2. Topic Heading */}
                   {item.topic && (
@@ -1168,7 +1178,9 @@ export function DirectWhiteboard({
                       )}
                     </>
                   )}
-                </div>
+                </>
+              )}
+            </div>
               );
             })}
             <div ref={bottomAnchorRef} />

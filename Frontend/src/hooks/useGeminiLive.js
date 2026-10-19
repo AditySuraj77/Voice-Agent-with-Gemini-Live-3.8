@@ -64,6 +64,11 @@ function formatWhiteboardSummary(items = []) {
       if (item.studentAnswer) parts.push(`Answer: ${item.studentAnswer}`);
       if (item.svgCode || item.visualType === 'svg') parts.push(`Visual: Vector Diagram ("${item.topic || 'Diagram'}")`);
       if (item.imageUrl || item.visualType === 'photo') parts.push(`Visual: Archive Photo ("${item.imageTitle || item.topic || 'Photo'}")`);
+      if (item.cardType === 'video_timeline' || item.timeline) {
+        const chCount = item.timeline?.length || 0;
+        const sample = item.timeline?.slice(0, 3).map((c) => `[${c.timeRange}] ${c.topic}`).join('; ');
+        parts.push(`YouTube Roadmap: "${item.video?.title || item.topic}" (${chCount} chapters, e.g. ${sample})`);
+      }
       return `[Board Item ${idx + 1}] ${parts.join(' | ')}`;
     })
     .join('\n');
@@ -109,7 +114,6 @@ CRITICAL CONVERSATIONAL PACING & HUMAN-LIKE DEPTH:
 - Talk like a real, passionate human mentor and friendly elder sibling—NEVER sound robotic, rushed, or artificially brief!
 - ADAPT YOUR EXPLANATION DEPTH TO WHAT ${studentName} ASKS:
   1. WHEN EXPLAINING CONCEPTS, SCIENCE, HISTORY, LITERATURE, OR WHEN ASKED "DETAIL ME BATAO":
-     - Do NOT cut yourself short after 1-2 sentences!
      - Give a rich, engaging, story-driven explanation (3 to 6 sentences with natural narrative flow).
      - Break it down naturally with vivid real-world analogies, historical eras, or scientific mechanics that make it exciting and easy to visualize.
   2. WHEN DOING MATH PROBLEMS, CODE EXERCISES, OR STEP-BY-STEP QUIZZES:
@@ -215,11 +219,19 @@ You have direct, dedicated tools for YouTube. Whenever ${studentName} mentions Y
    - IMMEDIATELY call \`youtube_channel_search(channelName: "...", type: "videos"|"playlists")\`!
    - This returns exact real-time uploaded videos, upload timestamps (e.g. "5 hours ago", "1 day ago"), views, and playlists directly from the YouTube channel page.
    - Acknowledge the live results warmly in your spoken voice and describe the latest videos or playlists accurately!
-3. FOR VIDEO TRANSCRIPTS & TIMESTAMPS (e.g. "is video ka transcript nikal do", "shuru se leke end tak sab timestamp nikalo", "video me kya bataya hai"):
-   - IMMEDIATELY call \`youtube_fetch_transcript(query: "...", channelName: "...", videoUrlOrId: "...")\`!
-   - You will receive the complete transcript and chronological timeline checkpoints covering the entire video from 00:00 through the conclusion.
-   - If ${studentName} asks for timestamps across the video, share the chronological timeline highlights from 00:00 to the end!
-   - Write key takeaways, important formulas, and concepts directly onto the student whiteboard with \`write_on_whiteboard\`!
+3. FOR VIDEO TRANSCRIPTS, COMPLETE CHRONOLOGICAL TIMESTAMPS & ZERO-HALLUCINATION TEACHING:
+   - When ${studentName} asks to fetch a video, get timestamps, transcribe, or learn from a YouTube video (e.g. "is video ka transcript nikal do", "shuru se leke end tak pura timestamp board pe daalo", "video se padhao bina kisi hallucination ke", "youtube se video le aao"):
+     - IMMEDIATELY call \`youtube_fetch_transcript(query: "...", channelName: "...", videoUrlOrId: "...")\`!
+     - 100% OF CHRONOLOGICAL TIMESTAMPS (from 00:00 to the video's end) are AUTOMATICALLY POSTED onto the student's Whiteboard as an interactive study roadmap.
+     - Tell ${studentName} enthusiastically in your spoken voice: "Maine video ka shuru se lekar aakhri second tak ka pura chronological timestamp roadmap aapke whiteboard par daal diya hai!"
+     - Give a crisp spoken overview of the video's timeline structure (how many chapters, total duration, and what the major phases cover).
+     - STRICT ZERO-HALLUCINATION GROUNDING DIRECTIVE (NO OUTSIDE FABRICATION):
+       * Tumhara har ek explanation SIRF AUR SIRF us original video ki transcript ke dialogue aur words par based hona chahiye!
+       * Bahar se koi bhi man-ghadant (hallucinated) theory ya external facts mix MAT karo jo video me nahi boli gayi!
+       * Agar video me speaker ne koi specific experiment, analogy, calculation, ya step bola hai, toh vahi exact context student ko samjhao.
+       * Jab tum timestamp explain karo, pehle timestamp range bolo (jaise: "Dekho timestamp [00:00 - 01:30] me speaker batata hai ki..."), phir transcript ke dialogue ke according explain karo.
+       * Step-by-step chapters explain karo ya student se pucho: "Pehle chapter se shuru karein ya whiteboard par se koi specific timestamp samajhna chahte ho?"
+     - Write important formulas, derivations, or student key takeaways directly onto the student whiteboard with \`write_on_whiteboard\`!
 
 CRITICAL CONTINUOUS SPOKEN CONVERSATION & INTERRUPTION (BARGE-IN) RULES:
 1. NEVER REMAIN SILENT: On EVERY single turn when ${studentName} speaks to you, asks a question ("batao kya hota hai", "sun pa rahe ho", "kya hua"), or changes the subject:
@@ -710,6 +722,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           imageTitle: args.imageTitle || null,
           attribution: args.attribution || null,
           subject: args.subject || null,
+          video: args.video || null,
+          timeline: Array.isArray(args.timeline) ? args.timeline : null,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
 
@@ -722,6 +736,13 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
             topic &&
             isSameOrRelatedTopic(lastItem.topic, topic)
           ) {
+            // Dedicated cards (video timeline, visual diagrams) should NEVER be merged into plain text notes!
+            const isNewItemTimeline = newItem.cardType === 'video_timeline' || Boolean(newItem.timeline);
+            const isLastItemTimeline = lastItem.cardType === 'video_timeline' || Boolean(lastItem.timeline);
+            if (isNewItemTimeline || isLastItemTimeline) {
+              return [...prev, newItem];
+            }
+
             const isNewItemVisual = Boolean(newItem.svgCode || newItem.imageUrl || newItem.cardType === 'visual' || newItem.visualType);
             const isLastItemVisual = Boolean(lastItem.svgCode || lastItem.imageUrl || lastItem.cardType === 'visual' || lastItem.visualType);
 

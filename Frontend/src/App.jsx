@@ -181,6 +181,13 @@ export default function App() {
               aiLaserPoint={aiLaserPoint}
               onInspectAnnotations={inspectWhiteboardSnapshot}
               restoredCanvasSnapshot={restoredCanvasSnapshot}
+              onAskChapter={(ch) => {
+                if (sendContextUpdate) {
+                  sendContextUpdate(
+                    `[STUDENT CLICKED TIMELINE CHAPTER]: The student wants to understand chapter [${ch.timeRange}] "${ch.topic}".\nTranscript excerpt for this chapter: "${ch.text}"\nPlease explain this specific section now in your warm spoken voice, grounded strictly and exclusively in the video's transcript without external hallucination!`
+                  );
+                }
+              }}
             />
           </div>
         )}

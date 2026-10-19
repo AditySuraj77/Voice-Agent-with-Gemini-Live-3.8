@@ -17,10 +17,13 @@ export function extractVideoId(input = '') {
 }
 
 /**
- * Formats seconds into mm:ss or hh:mm:ss string
+ * Formats seconds into mm:ss or hh:mm:ss string.
+ * @param {number} val - Time in seconds (or ms if isMs is true)
+ * @param {boolean} isMs - Whether val is in milliseconds
  */
-export function formatTimestamp(millisOrSeconds) {
-  const totalSeconds = Math.floor(typeof millisOrSeconds === 'number' && millisOrSeconds > 1000 ? millisOrSeconds / 1000 : millisOrSeconds);
+export function formatTimestamp(val = 0, isMs = false) {
+  if (typeof val !== 'number' || isNaN(val)) return '00:00';
+  const totalSeconds = Math.max(0, Math.floor(isMs ? val / 1000 : val));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -234,7 +237,7 @@ export async function getTranscript(videoId) {
   const textParts = [];
 
   for (const item of rawTranscript) {
-    const timeStr = formatTimestamp(item.offset);
+    const timeStr = formatTimestamp(item.offset, true);
     const cleanText = (item.text || '').replace(/\n+/g, ' ').trim();
     if (cleanText) {
       timedTranscript.push({
@@ -316,29 +319,159 @@ export async function searchYouTubeVideo(query, channelName = '') {
 }
 
 /**
- * Generates a full chronological timeline spanning from 00:00 to the video's end.
+ * Parses timestamp string "hh:mm:ss" or "mm:ss" into total seconds.
  */
-function buildFullChronologicalTimeline(timedTranscript = []) {
-  if (!timedTranscript || timedTranscript.length === 0) return '';
+export function parseTimestampToSeconds(tsStr = '') {
+  if (!tsStr || typeof tsStr !== 'string') return 0;
+  const parts = tsStr.trim().split(':').map((p) => parseInt(p, 10));
+  if (parts.some(isNaN)) return 0;
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return parts[0] || 0;
+}
 
-  // If transcript has 40 or fewer items, include every single timestamp
-  if (timedTranscript.length <= 40) {
-    return timedTranscript.map((t) => `[${t.time}] ${t.text}`).join('\n');
+/**
+ * Parses creator chapter timestamps from video description if present.
+ */
+export function parseDescriptionChapters(description = '', durationSec = 0) {
+  if (!description || typeof description !== 'string') return [];
+  const regex = /(?:^|\n)\s*(?:\[|\()?(\d{1,2}:\d{2}(?::\d{2})?)(?:\]|\))?\s*[-–—:]?\s*([^\n\r]+)/g;
+  const chapters = [];
+  let match;
+  while ((match = regex.exec(description)) !== null) {
+    const timeStr = match[1];
+    const rawTitle = match[2].trim().replace(/^[-–—:]\s*/, '');
+    const sec = parseTimestampToSeconds(timeStr);
+    if (rawTitle && rawTitle.length >= 2 && !chapters.some((c) => c.sec === sec)) {
+      chapters.push({ sec, timeStr, title: rawTitle });
+    }
   }
 
-  // Sample evenly across the entire duration so every section from 00:00 to end is represented
-  const step = Math.ceil(timedTranscript.length / 35);
-  const selected = [];
-  for (let i = 0; i < timedTranscript.length; i += step) {
-    selected.push(timedTranscript[i]);
-  }
-  // Guarantee the last timestamp is always included
-  const last = timedTranscript[timedTranscript.length - 1];
-  if (selected[selected.length - 1] !== last) {
-    selected.push(last);
+  chapters.sort((a, b) => a.sec - b.sec);
+  if (chapters.length < 3) return [];
+
+  // Align first chapter to 0 if close to beginning
+  if (chapters[0].sec > 0 && chapters[0].sec <= 15) {
+    chapters[0].sec = 0;
+    chapters[0].timeStr = '00:00';
   }
 
-  return selected.map((t) => `[${t.time}] ${t.text}`).join('\n');
+  for (let i = 0; i < chapters.length; i++) {
+    const next = chapters[i + 1];
+    chapters[i].endSec = next ? next.sec : (durationSec || chapters[i].sec + 180);
+  }
+
+  return chapters;
+}
+
+/**
+ * Builds continuous chronological chapters / timeblocks covering 100% of the video duration.
+ * Works seamlessly for short clips (3-5 min) up to multi-hour lectures (10+ hours).
+ */
+export function buildTranscriptTimeblocks(timedTranscript = [], durationSec = 0, description = '') {
+  if (!timedTranscript || timedTranscript.length === 0) return [];
+
+  const lastChunk = timedTranscript[timedTranscript.length - 1];
+  const lastChunkEndSec = lastChunk ? Math.ceil((lastChunk.offsetMs + 3000) / 1000) : 0;
+  const totalDuration = Math.max(durationSec, lastChunkEndSec, 30);
+
+  // Check if creator provided explicit chapters in video description
+  const descChapters = parseDescriptionChapters(description, totalDuration);
+
+  if (descChapters.length >= 3) {
+    const result = [];
+    descChapters.forEach((ch, idx) => {
+      const startMs = ch.sec * 1000;
+      const endMs = ch.endSec * 1000;
+      const items = timedTranscript.filter(
+        (t) => t.offsetMs >= startMs && (idx === descChapters.length - 1 ? true : t.offsetMs < endMs)
+      );
+      const text = items.map((i) => i.text).join(' ').trim();
+      const timeRange = `${ch.timeStr} - ${formatTimestamp(ch.endSec)}`;
+
+      result.push({
+        index: idx + 1,
+        start: ch.timeStr,
+        end: formatTimestamp(ch.endSec),
+        startSec: ch.sec,
+        endSec: ch.endSec,
+        timeRange,
+        topic: ch.title,
+        text: text || '(No spoken dialogue in this chapter)',
+        preview: text.slice(0, 150) + (text.length > 150 ? '...' : ''),
+        isOfficialChapter: true,
+      });
+    });
+    return result;
+  }
+
+  // Dynamic interval segmentation covering 100% of video duration from 00:00 to end
+  let intervalSec = 60;
+  if (totalDuration <= 300) {
+    intervalSec = 30; // 5 min or less: 30s blocks
+  } else if (totalDuration <= 900) {
+    intervalSec = 60; // 5-15 min: 1 min blocks
+  } else if (totalDuration <= 1800) {
+    intervalSec = 90; // 15-30 min: 1.5 min blocks
+  } else if (totalDuration <= 3600) {
+    intervalSec = 150; // 30-60 min: 2.5 min blocks
+  } else if (totalDuration <= 7200) {
+    intervalSec = 240; // 1-2 hours: 4 min blocks
+  } else if (totalDuration <= 18000) {
+    intervalSec = 420; // 2-5 hours: 7 min blocks
+  } else {
+    intervalSec = 600; // 5-10+ hours: 10 min blocks
+  }
+
+  const result = [];
+  let currentStartSec = 0;
+  let chapterIndex = 1;
+
+  while (currentStartSec < totalDuration) {
+    const currentEndSec = Math.min(currentStartSec + intervalSec, totalDuration);
+    const startMs = currentStartSec * 1000;
+    const endMs = currentEndSec * 1000;
+
+    const items = timedTranscript.filter(
+      (t) => t.offsetMs >= startMs && (currentEndSec >= totalDuration ? true : t.offsetMs < endMs)
+    );
+
+    const aggregatedText = items.map((i) => i.text).join(' ').trim();
+    const startStr = formatTimestamp(currentStartSec);
+    const endStr = formatTimestamp(currentEndSec);
+
+    let topic = `Section ${chapterIndex}: ${startStr}`;
+    if (aggregatedText) {
+      const sentences = aggregatedText.split(/(?<=[.?!])\s+/);
+      const firstSentence = (sentences[0] || '').replace(/^(okay|so|well|um|uh|right|now|and|today|hey guys)[,\s]+/i, '').trim();
+      if (firstSentence.length >= 8) {
+        const words = firstSentence.split(/\s+/).slice(0, 9).join(' ');
+        topic = words.charAt(0).toUpperCase() + words.slice(1);
+      }
+    }
+
+    result.push({
+      index: chapterIndex,
+      start: startStr,
+      end: endStr,
+      startSec: currentStartSec,
+      endSec: currentEndSec,
+      timeRange: `${startStr} - ${endStr}`,
+      topic,
+      text: aggregatedText || '(Instrumental or visual demonstration)',
+      preview: aggregatedText.slice(0, 150) + (aggregatedText.length > 150 ? '...' : ''),
+      isOfficialChapter: false,
+    });
+
+    chapterIndex++;
+    currentStartSec = currentEndSec;
+  }
+
+  return result;
 }
 
 /**
@@ -372,12 +505,20 @@ export async function fetchYouTubeTranscriptAndDetails({ query, channelName = ''
     };
   }
 
-  // Full chronological timeline covering 00:00 through the conclusion
-  const fullTimeline = buildFullChronologicalTimeline(transcriptData.timedTranscript);
+  // Parse duration seconds from formatted duration (e.g. "19:05")
+  const durationSec = parseTimestampToSeconds(video.duration);
 
-  const cappedFullText = transcriptData.fullText.length > 10000
-    ? transcriptData.fullText.slice(0, 10000) + '... (transcript continues)'
-    : transcriptData.fullText;
+  // Full chronological timeline covering 00:00 through the conclusion
+  const timeline = buildTranscriptTimeblocks(
+    transcriptData.timedTranscript,
+    durationSec,
+    video.description || ''
+  );
+
+  // Formatted chronological roadmap for Gemini Live
+  const roadmapLines = timeline.map(
+    (ch) => `${ch.index}. [${ch.timeRange}] "${ch.topic}"\n   Transcript Dialogue: "${ch.preview}"`
+  );
 
   const formattedSummary = `
 === YOUTUBE VIDEO RETRIEVED ===
@@ -387,11 +528,14 @@ Duration: ${video.duration || 'N/A'}
 URL: ${video.url}
 Thumbnail: ${video.thumbnail}
 
-CHRONOLOGICAL TIMELINE (BEGINNING TO END):
-${fullTimeline}
+=== COMPLETE CHRONOLOGICAL ROADMAP (100% COVERAGE FROM 00:00 TO END) ===
+${roadmapLines.join('\n')}
 
-FULL TRANSCRIPT CONTENT:
-${cappedFullText}
+=== STRICT ZERO-HALLUCINATION TEACHING DIRECTIVE ===
+1. All chapters above are currently posted onto the student's Whiteboard roadmap.
+2. When explaining any timestamp or chapter, speak strictly and exclusively using the creator's dialogue and concepts from the transcript. Do NOT hallucinate external facts or speculate outside this video!
+3. Mention the specific timestamp range you are explaining (e.g. "Ab dekho [${timeline[0]?.timeRange || '00:00'}] me speaker kehta hai...").
+4. Guide the student through these timestamps step by step.
 `.trim();
 
   return {
@@ -399,6 +543,7 @@ ${cappedFullText}
     video,
     hasTranscript: true,
     language: transcriptData.language,
+    timeline,
     formattedSummary,
     fullText: transcriptData.fullText,
     timedTranscript: transcriptData.timedTranscript,

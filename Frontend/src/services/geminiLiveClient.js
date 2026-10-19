@@ -355,7 +355,7 @@ export class GeminiLiveClient {
               },
               {
                 name: 'youtube_fetch_transcript',
-                description: 'MANDATORY FOR VIDEO TRANSCRIPTS & TIMESTAMPS: Search YouTube for a video, or parse a YouTube URL/ID to extract the complete chronological transcript and timestamps from 00:00 through the conclusion. Use this whenever the student asks to summarize, explain, or extract timestamps across a YouTube video.',
+                description: 'MANDATORY FOR VIDEO TRANSCRIPTS, FULL TIMESTAMPS & GROUNDED TEACHING: Search YouTube for any video, or parse a YouTube URL/ID to extract 100% continuous chronological timestamps (from 00:00 to the video end) and full transcript dialogue. Automatically posts an interactive study roadmap to the student whiteboard. Use this whenever the student asks to explore, summarize, get timestamps, or learn from a video without external hallucinations.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
@@ -1096,22 +1096,25 @@ export class GeminiLiveClient {
             if (data.success && data.video) {
               resultPayload = data.formattedSummary || `Retrieved video: "${data.video.title}" by ${data.video.channel}. Transcript: ${data.fullText || 'No transcript'}`;
 
-              // Pin YouTube video visual card onto Whiteboard for student
+              // Pin dedicated YouTube video roadmap onto Whiteboard for student
               if (this.onWhiteboardCall) {
                 const noteBullets = [
                   `Channel: ${data.video.channel} • Duration: ${data.video.duration || 'N/A'}`,
                   `Video Link: ${data.video.url}`,
                 ];
                 if (data.hasTranscript) {
-                  noteBullets.push(`Full transcript retrieved and loaded into active session.`);
+                  noteBullets.push(`Full chronological roadmap (${data.timeline?.length || 0} chapters) loaded onto whiteboard.`);
+                  noteBullets.push(`Strict Grounding: Zero external hallucination.`);
                 } else {
                   noteBullets.push(`Note: Creator has disabled subtitles on this video.`);
                 }
 
                 this.onWhiteboardCall({
-                  topic: `📺 ${data.video.title}`,
+                  topic: `🎬 ${data.video.title}`,
                   notes: noteBullets,
-                  cardType: 'concept',
+                  cardType: data.hasTranscript && data.timeline?.length > 0 ? 'video_timeline' : 'concept',
+                  video: data.video,
+                  timeline: data.timeline || [],
                   visualType: 'photo',
                   imageUrl: data.video.thumbnail,
                   imageTitle: data.video.title,
