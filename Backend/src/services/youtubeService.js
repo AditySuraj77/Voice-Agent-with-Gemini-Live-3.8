@@ -684,11 +684,11 @@ Thumbnail: ${video.thumbnail}
 === COMPLETE CHRONOLOGICAL ROADMAP (100% COVERAGE FROM 00:00 TO END) ===
 ${roadmapLines.join('\n')}
 
-=== STRICT ZERO-HALLUCINATION TEACHING DIRECTIVE ===
+=== SMART GROUNDING & MENTOR TEACHING DIRECTIVE ===
 1. All chapters above are currently posted onto the student's Whiteboard roadmap.
-2. When explaining any timestamp or chapter, speak strictly and exclusively using the creator's dialogue and concepts from the transcript. Do NOT hallucinate external facts or speculate outside this video!
-3. Mention the specific timestamp range you are explaining (e.g. "Ab dekho [${timeline[0]?.timeRange || '00:00'}] me speaker kehta hai...").
-4. Guide the student through these timestamps step by step.
+2. FACTUAL GROUNDING: When explaining what is in the video or specific chapters, faithfully explain the creator's actual dialogue, concepts, and context from the transcript without fabricating fake facts or false claims. Mention the timestamp range you are explaining (e.g. "Dekho [${timeline[0]?.timeRange || '00:00'}] me speaker kehta hai...").
+3. MENTOR OPINION & REAL-WORLD LIFE APPLICATION: When the student asks for your opinion ("Tum kya sochte ho?"), key takeaways ("Main isse kya seekhun?"), practical application ("Isko life ya career me kaise use karein?"), or real-world examples: freely use your full LLM intelligence, reasoning, and broad real-world knowledge to provide deep, actionable insights, practical frameworks, and relatable analogies like a true mentor!
+4. Guide the student through these timestamps and takeaways step by step.
 `.trim();
 
   return {
