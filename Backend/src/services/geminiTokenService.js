@@ -169,6 +169,28 @@ export const GEMINI_TOOLS = [
         },
       },
       {
+        name: 'youtube_fetch_transcript',
+        description: 'MANDATORY FOR YOUTUBE REQUESTS: Search YouTube for a channel, video, or playlist topic, or parse a YouTube URL. Extracts the full transcript/subtitles with timestamps to summarize, explain concepts, answer questions, or transcribe content for the student.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            query: {
+              type: 'STRING',
+              description: 'Topic, video title, or search keywords to find on YouTube (e.g. "speed of light", "backpropagation algorithm")',
+            },
+            channelName: {
+              type: 'STRING',
+              description: 'Optional YouTube channel name (e.g. "Veritasium", "3Blue1Brown", "Khan Academy", "Chai aur Code")',
+            },
+            videoUrlOrId: {
+              type: 'STRING',
+              description: 'Optional direct YouTube video URL (e.g. "https://www.youtube.com/watch?v=...") or 11-character video ID',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
         name: 'browser_navigate',
         description: 'Navigate the live browser to a specific URL (e.g. "https://en.wikipedia.org" or "python.org") or search term. The page is displayed live on the student screen, and you receive real-time screenshots to visually inspect the website.',
         parameters: {

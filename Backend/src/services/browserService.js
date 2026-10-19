@@ -397,6 +397,28 @@ class BrowserService {
       }
     }
 
+    // SSRF Guard: Block internal network, localhost, and cloud metadata access
+    try {
+      const parsed = new URL(cleanUrl);
+      const host = parsed.hostname.toLowerCase();
+      const isInternal =
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '0.0.0.0' ||
+        host === '::1' ||
+        host === '169.254.169.254' ||
+        host.startsWith('10.') ||
+        host.startsWith('192.168.') ||
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+        parsed.protocol === 'file:';
+
+      if (isInternal) {
+        throw new Error(`Navigation to restricted internal address "${host}" is blocked for security.`);
+      }
+    } catch (urlErr) {
+      if (urlErr.message.includes('blocked for security')) throw urlErr;
+    }
+
     console.log(`[BrowserService] Navigating to: ${cleanUrl}`);
     this.lastAction = { type: 'navigate', url: cleanUrl, timestamp: Date.now() };
 

@@ -207,6 +207,15 @@ You have autonomous control of a live web browser connected directly to your vis
   - SUPERPOWER 5 - SET-OF-MARKS (SoM) NUMBERED BADGES: Clickable buttons, links, and input fields can have yellow numbered badges [1], [2], [3]... When clicking or typing, pass \`elementId\` (e.g. \`browser_click(elementId: 4)\`) for 100% precision without guessing coordinates! Call \`browser_toggle_labels(enabled: true)\` to turn them on.
 - Talk naturally as you browse! Describe what you see on the screen ("Dekho ${studentName}, yahan par ye website open ho gayi hai..."), point out interesting facts, and write the key takeaways on the whiteboard!
 
+CRITICAL YOUTUBE VIDEO & TRANSCRIPT RETRIEVAL DIRECTIVE:
+You have dedicated access to real-time YouTube video search and full transcript extraction via the \`youtube_fetch_transcript\` tool:
+- When ${studentName} asks to fetch, check, summarize, explain, or transcribe ANY YouTube video, channel, or playlist (e.g. "XYZ channel ke latest video ka transcript nikal kar batao", "YouTube par is video ko dekho aur samjhao", "is video me kya bataya gaya hai"):
+  - IMMEDIATELY call \`youtube_fetch_transcript(query: "...", channelName: "...", videoUrlOrId: "...")\`!
+  - When the tool returns the full video transcript and timeline highlights:
+    1. Acknowledge the video title and creator in your warm spoken voice: "Haan ${studentName}, maine [Channel Name] ki '[Video Title]' video ka transcript nikal liya hai!"
+    2. Answer whatever ${studentName} specifically asked (summarize, explain core concepts, find specific timestamps, or translate).
+    3. Write key takeaways, important formulas, and concepts directly onto the student whiteboard with \`write_on_whiteboard\`!
+
 CRITICAL CONTINUOUS SPOKEN CONVERSATION & INTERRUPTION (BARGE-IN) RULES:
 1. NEVER REMAIN SILENT: On EVERY single turn when ${studentName} speaks to you, asks a question ("batao kya hota hai", "sun pa rahe ho", "kya hua"), or changes the subject:
    - YOU MUST ALWAYS SPEAK OUT LOUD IN AUDIO!
@@ -484,6 +493,9 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
         console.log('[useGeminiLive] Model turn complete. Ready for student voice input.');
         setIsSearching(false);
         setConversationState('listening');
+        setMessages((prev) =>
+          prev.map((m) => (m.isPartial ? { ...m, isPartial: false } : m))
+        );
       },
       onInterrupted: () => {
         console.log('[useGeminiLive] User barged in: clearing active audio playback.');
@@ -520,6 +532,28 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           ]);
         }
 
+        const youtubeCall = calls.find((c) => c.name === 'youtube_fetch_transcript');
+        if (youtubeCall) {
+          const q = youtubeCall.args?.query || youtubeCall.args?.videoUrlOrId || '';
+          const ch = youtubeCall.args?.channelName ? ` on ${youtubeCall.args.channelName}` : '';
+          console.log(`[useGeminiLive] Tool call triggered: youtube_fetch_transcript "${q}"${ch}`);
+          setIsSearching(true);
+          setSearchQuery(`YouTube: ${q}${ch}`);
+          setConversationState('thinking');
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: 'tool-' + Date.now() + Math.random().toString(36).slice(2, 5),
+              sender: 'tool',
+              toolName: 'YouTube Transcript',
+              query: q,
+              text: `Retrieving YouTube video & transcript for: "${q}"${ch}...`,
+              isSearching: true,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+          ]);
+        }
+
         const browserCall = calls.find((c) => c.name.startsWith('browser_'));
         if (browserCall) {
           console.log(`[useGeminiLive] Browser tool call detected: ${browserCall.name}`);
@@ -541,7 +575,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               ? {
                   ...m,
                   isSearching: false,
-                  text: `Web search completed for: "${m.query}"`,
+                  text: `Completed request for: "${m.query}"`,
                 }
               : m
           )
@@ -750,12 +784,6 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
             ];
           }
         });
-      },
-      onTurnComplete: () => {
-        setIsSearching(false);
-        setMessages((prev) =>
-          prev.map((m) => (m.isPartial ? { ...m, isPartial: false } : m))
-        );
       },
     });
 

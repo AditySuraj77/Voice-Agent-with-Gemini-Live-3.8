@@ -336,6 +336,28 @@ export class GeminiLiveClient {
                 },
               },
               {
+                name: 'youtube_fetch_transcript',
+                description: 'MANDATORY FOR YOUTUBE REQUESTS: Search YouTube for a channel, video, or playlist topic, or parse a YouTube URL. Extracts the full transcript/subtitles with timestamps to summarize, explain concepts, answer questions, or transcribe content for the student.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    query: {
+                      type: 'STRING',
+                      description: 'Topic, video title, or search keywords to find on YouTube (e.g. "speed of light", "backpropagation algorithm")',
+                    },
+                    channelName: {
+                      type: 'STRING',
+                      description: 'Optional YouTube channel name (e.g. "Veritasium", "3Blue1Brown", "Khan Academy", "Chai aur Code")',
+                    },
+                    videoUrlOrId: {
+                      type: 'STRING',
+                      description: 'Optional direct YouTube video URL (e.g. "https://www.youtube.com/watch?v=...") or 11-character video ID',
+                    },
+                  },
+                  required: ['query'],
+                },
+              },
+              {
                 name: 'browser_navigate',
                 description: 'Navigate the live browser to a specific URL (e.g. "https://en.wikipedia.org" or "python.org") or search term. The page is displayed live on the student screen, and you receive real-time screenshots to visually inspect the website.',
                 parameters: {
@@ -986,6 +1008,64 @@ export class GeminiLiveClient {
           name: call.name,
           response: {
             result: searchResult,
+          },
+        });
+      } else if (call.name === 'youtube_fetch_transcript') {
+        const { query = '', channelName = '', videoUrlOrId = '' } = call.args || {};
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing YouTube transcript fetch:`, { query, channelName, videoUrlOrId });
+
+        let resultPayload = '';
+        try {
+          const res = await fetch(`${this.backendUrl}/api/tools/youtube-transcript`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, channelName, videoUrlOrId }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.video) {
+              resultPayload = data.formattedSummary || `Retrieved video: "${data.video.title}" by ${data.video.channel}. Transcript: ${data.fullText || 'No transcript'}`;
+
+              // Pin YouTube video visual card onto Whiteboard for student
+              if (this.onWhiteboardCall) {
+                const noteBullets = [
+                  `Channel: ${data.video.channel} • Duration: ${data.video.duration || 'N/A'}`,
+                  `Video Link: ${data.video.url}`,
+                ];
+                if (data.hasTranscript) {
+                  noteBullets.push(`Full transcript retrieved and loaded into active session.`);
+                } else {
+                  noteBullets.push(`Note: Creator has disabled subtitles on this video.`);
+                }
+
+                this.onWhiteboardCall({
+                  topic: `📺 ${data.video.title}`,
+                  notes: noteBullets,
+                  cardType: 'concept',
+                  visualType: 'photo',
+                  imageUrl: data.video.thumbnail,
+                  imageTitle: data.video.title,
+                  attribution: `${data.video.channel} (YouTube)`,
+                  caption: `YouTube Video: "${data.video.title}" by ${data.video.channel}`,
+                });
+              }
+            } else {
+              resultPayload = data.message || `Could not find YouTube video for "${query}".`;
+            }
+          } else {
+            resultPayload = `YouTube tool request returned HTTP status ${res.status}.`;
+          }
+        } catch (ytErr) {
+          console.error('[GeminiLiveClient] YouTube tool request failed:', ytErr);
+          resultPayload = `Failed to fetch YouTube transcript: ${ytErr.message}`;
+        }
+
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: resultPayload,
           },
         });
       } else if (

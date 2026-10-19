@@ -15,6 +15,7 @@ import rateLimit from 'express-rate-limit';
 import tokenRouter from './routes/tokenRoute.js';
 import searchRouter from './routes/searchRoute.js';
 import browserRouter from './routes/browserRoute.js';
+import youtubeRouter from './routes/youtubeRoute.js';
 import { browserService } from './services/browserService.js';
 
 const app = express();
@@ -48,6 +49,24 @@ const searchLimiter = rateLimit({
   message: { error: 'Too many search requests, please slow down.' }
 });
 
+// Rate limiting for YouTube transcript tool endpoint
+const youtubeLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 25, // Limit each IP to 25 YouTube requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many YouTube requests, please slow down.' }
+});
+
+// Rate limiting for browser automation endpoint to prevent CPU/RAM exhaustion
+const browserLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // Limit each IP to 30 browser actions per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many browser automation requests, please slow down.' }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -65,8 +84,11 @@ app.use('/api', tokenLimiter, tokenRouter);
 // Web search tool endpoint protected by searchLimiter
 app.use('/api', searchLimiter, searchRouter);
 
-// Browser automation tool endpoint
-app.use('/api', browserRouter);
+// YouTube search & transcript tool endpoint
+app.use('/api', youtubeLimiter, youtubeRouter);
+
+// Browser automation tool endpoint protected by browserLimiter
+app.use('/api', browserLimiter, browserRouter);
 
 // Start server
 const server = app.listen(PORT, () => {
