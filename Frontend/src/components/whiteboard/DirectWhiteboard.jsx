@@ -135,29 +135,49 @@ export function DirectWhiteboard({
   const handleScroll = () => {
     if (!containerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 120;
+    // pb-36 adds 144px of bottom padding for floating controls bar; threshold of 220px prevents false scroll-up detection
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 220;
     isUserScrolledUpRef.current = !isAtBottom;
     setShowScrollBottomPill(!isAtBottom);
   };
 
-  const scrollToBottom = (behavior = 'smooth') => {
-    if (bottomAnchorRef.current) {
-      bottomAnchorRef.current.scrollIntoView({ behavior });
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
+    if (containerRef.current) {
+      containerRef.current.scrollTo({
+        top: containerRef.current.scrollHeight,
+        behavior,
+      });
       isUserScrolledUpRef.current = false;
       setShowScrollBottomPill(false);
     }
-  };
+    if (bottomAnchorRef.current) {
+      bottomAnchorRef.current.scrollIntoView({ behavior, block: 'end' });
+      isUserScrolledUpRef.current = false;
+      setShowScrollBottomPill(false);
+    }
+  }, []);
 
   useEffect(() => {
     const isNewItemAdded = items.length > prevItemsLengthRef.current;
     prevItemsLengthRef.current = items.length;
 
     if (items.length > 0 && isNewItemAdded) {
-      if (!isUserScrolledUpRef.current) {
-        scrollToBottom('smooth');
-      }
+      // User requirement: Always auto-scroll smoothly to latest note on live update without requiring manual scroll
+      isUserScrolledUpRef.current = false;
+      setShowScrollBottomPill(false);
+      scrollToBottom('smooth');
+
+      // Additional ticks to handle async rendering of Monaco editor, KaTeX formulas, and images
+      const t1 = setTimeout(() => scrollToBottom('smooth'), 80);
+      const t2 = setTimeout(() => scrollToBottom('smooth'), 250);
+      const t3 = setTimeout(() => scrollToBottom('smooth'), 500);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
     }
-  }, [items.length]);
+  }, [items.length, scrollToBottom]);
 
   // Helper to get precise canvas coordinates taking scaling into account
   const getCanvasCoords = (e) => {
