@@ -234,6 +234,32 @@ export class GeminiLiveClient {
                 },
               },
               {
+                name: 'generate_ai_image',
+                description: 'DEDICATED FLUX.1 AI IMAGE GENERATION TOOL: Call this whenever the student asks to generate an AI image, asks about AI image tools, or requests a realistic conceptual 3D render, futuristic scene, quantum processor chip, or illustration with clear text labels. Uses the FLUX.1 model for high-fidelity graphics and accurate typography.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    prompt: {
+                      type: 'STRING',
+                      description: 'Detailed visual prompt for FLUX.1. Always enclose the primary title or label in single quotes for crisp typography (e.g. "Photorealistic 3D cross-section of Mitochondria with glowing title \'MITOCHONDRIA\', studio lighting, 8k, scientific illustration").',
+                    },
+                    topic: {
+                      type: 'STRING',
+                      description: 'Topic title for the visual card (e.g. "Quantum Computer Processor", "Mars Human Colony", "Mitochondria 3D")',
+                    },
+                    caption: {
+                      type: 'STRING',
+                      description: 'Short 1-2 sentence educational explanation of what this AI visual illustrates',
+                    },
+                    subject: {
+                      type: 'STRING',
+                      description: 'Academic subject (e.g. "Computer Science", "Physics", "Biology", "Astronomy")',
+                    },
+                  },
+                  required: ['prompt', 'topic'],
+                },
+              },
+              {
                 name: 'render_visual',
                 description: 'MANDATORY FOR ANY SUBJECT: Display an educational visual on the student whiteboard whenever explaining concepts, objects, processes, or historical/scientific topics. Mode "svg_sketch" generates a custom-drawn vector diagram (physics rays, biology cells, atoms, math shapes, geography). Mode "photo_search" retrieves authentic educational photographs (space telescopes, monuments, historical maps, medical scans). Mode "ai_image" generates photorealistic 3D scientific scenes, anatomical models, or conceptual artwork with clear legible text titles using FLUX AI.',
                 parameters: {
@@ -922,6 +948,62 @@ export class GeminiLiveClient {
             })
             .catch((e) => console.warn('[GeminiLiveClient] Background visual query search skipped:', e.message));
         }
+      } else if (call.name === 'generate_ai_image') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing generate_ai_image call:`, call.args);
+        const { prompt, topic, caption, subject } = call.args || {};
+        const cleanTopic = topic || 'AI Conceptual Visual';
+        const cleanPrompt = prompt || cleanTopic;
+
+        // Immediate 0ms acknowledgment so Gemini Live voice streaming never stutters
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: {
+              status: 'success',
+              message: `FLUX AI image "${cleanTopic}" generated and displayed on student whiteboard canvas.`,
+            },
+          },
+        });
+
+        const seed = Math.floor(Math.random() * 1000000);
+        const directUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+
+        const visualPayload = {
+          topic: cleanTopic,
+          caption: caption || '',
+          subject: subject || 'General',
+          cardType: 'visual',
+          visualType: 'ai_image',
+          imagePrompt: cleanPrompt,
+          imageUrl: directUrl,
+          aiImageUrl: directUrl,
+          source: 'FLUX.1 AI Generator',
+          attribution: 'Generated via FLUX.1 by Black Forest Labs',
+          notes: caption ? [caption] : [],
+        };
+
+        if (this.onWhiteboardCall) {
+          this.onWhiteboardCall(visualPayload);
+        }
+
+        // Try backend endpoint in background to optimize or enhance
+        fetch(`${this.backendUrl}/api/tools/generate-image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: cleanPrompt, topic: cleanTopic, subject }),
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.success && data.imageUrl && this.onWhiteboardCall) {
+              this.onWhiteboardCall({
+                ...visualPayload,
+                imageUrl: data.imageUrl,
+                aiImageUrl: data.imageUrl,
+              });
+            }
+          })
+          .catch((err) => console.warn('[GeminiLiveClient] Backend generate-image background sync note:', err.message));
       } else if (call.name === 'render_visual') {
         console.log(`[GeminiLiveClient #${this.clientId}] Executing render_visual call:`, call.args);
         const { topic, mode, svgCode, searchQuery, imagePrompt, caption, subject } = call.args || {};
