@@ -911,7 +911,7 @@ export class GeminiLiveClient {
           })
             .then((res) => (res.ok ? res.json() : null))
             .then((aiData) => {
-              const imgUrl = aiData?.imageUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(whiteboardArgs.imagePrompt)}?model=flux&width=1024&height=640&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
+              const imgUrl = aiData?.imageUrl || `https://image.pollinations.ai/prompt/${encodeURIComponent(whiteboardArgs.imagePrompt)}?model=flux&width=1024&height=640&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
               if (this.onWhiteboardCall) {
                 this.onWhiteboardCall({
                   ...whiteboardArgs,
@@ -967,7 +967,7 @@ export class GeminiLiveClient {
         });
 
         const seed = Math.floor(Math.random() * 1000000);
-        const directUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+        const directUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
 
         const visualPayload = {
           topic: cleanTopic,
@@ -1066,7 +1066,7 @@ export class GeminiLiveClient {
                 visualPayload.attribution = data.attribution || 'Generated via FLUX.1 by Black Forest Labs';
               } else {
                 const seed = Math.floor(Math.random() * 1000000);
-                const directUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+                const directUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
                 visualPayload.imageUrl = directUrl;
                 visualPayload.aiImageUrl = directUrl;
                 visualPayload.source = 'FLUX.1 AI Generator';
@@ -1074,7 +1074,7 @@ export class GeminiLiveClient {
               }
             } else {
               const seed = Math.floor(Math.random() * 1000000);
-              const directUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+              const directUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
               visualPayload.imageUrl = directUrl;
               visualPayload.aiImageUrl = directUrl;
               visualPayload.source = 'FLUX.1 AI Generator';
@@ -1083,7 +1083,7 @@ export class GeminiLiveClient {
           } catch (genErr) {
             console.error('[GeminiLiveClient] Visual AI image generation error, falling back to direct URL:', genErr);
             const seed = Math.floor(Math.random() * 1000000);
-            const directUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+            const directUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
             visualPayload.imageUrl = directUrl;
             visualPayload.aiImageUrl = directUrl;
             visualPayload.source = 'FLUX.1 AI Generator';

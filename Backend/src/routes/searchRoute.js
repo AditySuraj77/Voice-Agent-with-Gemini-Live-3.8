@@ -81,7 +81,9 @@ router.post('/tools/generate-image', async (req, res) => {
     // Enhance prompt for clean educational illustration and legible typography
     const seed = Math.floor(Math.random() * 1000000);
     const encodedPrompt = encodeURIComponent(cleanPrompt);
-    const imageUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+    const imageUrl = `process.env.POLLINATIONS_API_KEY
+      ? `https://gen.pollinations.ai/image/${encodedPrompt}?model=flux&width=1024&height=640&nologo=true&seed=${seed}&key=${process.env.POLLINATIONS_API_KEY}`
+      : `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=1024&height=640&nologo=true&seed=${seed}``;
 
     return res.json({
       success: true,
