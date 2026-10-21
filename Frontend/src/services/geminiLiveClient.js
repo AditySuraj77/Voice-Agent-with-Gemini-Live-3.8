@@ -221,6 +221,10 @@ export class GeminiLiveClient {
                       type: 'STRING',
                       description: 'Optional search query to fetch an authentic educational photo/map from Wikimedia Commons archive',
                     },
+                    imagePrompt: {
+                      type: 'STRING',
+                      description: 'Optional descriptive prompt for FLUX AI image generator (mode "ai_image") with concept title in single quotes (e.g. "Photorealistic 3D Mitochondria with title \'MITOCHONDRIA\' ")',
+                    },
                     caption: {
                       type: 'STRING',
                       description: 'Educational caption for the attached visual illustration',
@@ -231,7 +235,7 @@ export class GeminiLiveClient {
               },
               {
                 name: 'render_visual',
-                description: 'MANDATORY FOR ANY SUBJECT: Display an educational visual on the student whiteboard whenever explaining concepts, objects, processes, or historical/scientific topics. Mode "svg_sketch" generates a custom-drawn vector diagram (physics rays, biology cells, atoms, math shapes, geography). Mode "photo_search" retrieves authentic educational photographs (space telescopes, monuments, historical maps, medical scans).',
+                description: 'MANDATORY FOR ANY SUBJECT: Display an educational visual on the student whiteboard whenever explaining concepts, objects, processes, or historical/scientific topics. Mode "svg_sketch" generates a custom-drawn vector diagram (physics rays, biology cells, atoms, math shapes, geography). Mode "photo_search" retrieves authentic educational photographs (space telescopes, monuments, historical maps, medical scans). Mode "ai_image" generates photorealistic 3D scientific scenes, anatomical models, or conceptual artwork with clear legible text titles using FLUX AI.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
@@ -241,7 +245,7 @@ export class GeminiLiveClient {
                     },
                     mode: {
                       type: 'STRING',
-                      description: 'Visual creation mode: "svg_sketch" for custom vector diagrams drawn from scratch, or "photo_search" for authentic real-world photos/maps from educational archives',
+                      description: 'Visual creation mode: "svg_sketch" for custom vector diagrams drawn from scratch, "photo_search" for authentic real-world photos/maps from educational archives, or "ai_image" for realistic AI-generated conceptual artwork / 3D scientific renders with clear text labels',
                     },
                     svgCode: {
                       type: 'STRING',
@@ -250,6 +254,10 @@ export class GeminiLiveClient {
                     searchQuery: {
                       type: 'STRING',
                       description: 'When mode="photo_search": Precise search query for educational archive (e.g. "James Webb Space Telescope", "Taj Mahal", "Human Heart Anatomy")',
+                    },
+                    imagePrompt: {
+                      type: 'STRING',
+                      description: 'When mode="ai_image": Detailed visual description for the FLUX AI image generator. Always include the concept title/label in single quotes for accurate typography (e.g. "Realistic 3D cross-section of Mitochondria with glowing title \'MITOCHONDRIA\', studio lighting, 8k, scientific illustration").',
                     },
                     caption: {
                       type: 'STRING',
@@ -868,6 +876,31 @@ export class GeminiLiveClient {
           this.onWhiteboardCall(whiteboardArgs);
         }
 
+        // Asynchronously resolve visual AI image in background if requested without blocking voice
+        if (whiteboardArgs.imagePrompt && !whiteboardArgs.imageUrl) {
+          fetch(`${this.backendUrl}/api/tools/generate-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: whiteboardArgs.imagePrompt, topic: whiteboardArgs.topic }),
+          })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((aiData) => {
+              const imgUrl = aiData?.imageUrl || `https://gen.pollinations.ai/image/${encodeURIComponent(whiteboardArgs.imagePrompt)}?model=flux&width=1024&height=640&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
+              if (this.onWhiteboardCall) {
+                this.onWhiteboardCall({
+                  ...whiteboardArgs,
+                  visualType: 'ai_image',
+                  imageUrl: imgUrl,
+                  aiImageUrl: imgUrl,
+                  imagePrompt: whiteboardArgs.imagePrompt,
+                  source: 'FLUX.1 AI Generator',
+                  attribution: 'Generated via FLUX.1 by Black Forest Labs',
+                });
+              }
+            })
+            .catch((e) => console.warn('[GeminiLiveClient] Background AI image generation skipped:', e.message));
+        }
+
         // Asynchronously resolve visual photo in background if requested without blocking voice
         if (whiteboardArgs.visualQuery && !whiteboardArgs.imageUrl) {
           fetch(`${this.backendUrl}/api/tools/visual-search`, {
@@ -891,7 +924,7 @@ export class GeminiLiveClient {
         }
       } else if (call.name === 'render_visual') {
         console.log(`[GeminiLiveClient #${this.clientId}] Executing render_visual call:`, call.args);
-        const { topic, mode, svgCode, searchQuery, caption, subject } = call.args || {};
+        const { topic, mode, svgCode, searchQuery, imagePrompt, caption, subject } = call.args || {};
 
         const visualPayload = {
           topic: topic || 'Educational Visual',
@@ -930,6 +963,49 @@ export class GeminiLiveClient {
             console.error('[GeminiLiveClient] Visual photo search failed:', fetchErr);
             visualPayload.visualType = 'photo_fallback';
             visualPayload.message = `Photo search could not connect to server: ${fetchErr.message}`;
+          }
+        } else if (mode === 'ai_image') {
+          const prompt = imagePrompt || topic || 'Scientific concept';
+          console.log(`[GeminiLiveClient] Generating AI illustration via FLUX.1 for prompt: "${prompt}"`);
+          visualPayload.visualType = 'ai_image';
+          visualPayload.imagePrompt = prompt;
+          try {
+            const res = await fetch(`${this.backendUrl}/api/tools/generate-image`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt, topic, subject }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.success && data.imageUrl) {
+                visualPayload.imageUrl = data.imageUrl;
+                visualPayload.aiImageUrl = data.imageUrl;
+                visualPayload.source = data.source || 'FLUX.1 AI Generator';
+                visualPayload.attribution = data.attribution || 'Generated via FLUX.1 by Black Forest Labs';
+              } else {
+                const seed = Math.floor(Math.random() * 1000000);
+                const directUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+                visualPayload.imageUrl = directUrl;
+                visualPayload.aiImageUrl = directUrl;
+                visualPayload.source = 'FLUX.1 AI Generator';
+                visualPayload.attribution = 'Generated via FLUX.1 by Black Forest Labs';
+              }
+            } else {
+              const seed = Math.floor(Math.random() * 1000000);
+              const directUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+              visualPayload.imageUrl = directUrl;
+              visualPayload.aiImageUrl = directUrl;
+              visualPayload.source = 'FLUX.1 AI Generator';
+              visualPayload.attribution = 'Generated via FLUX.1 by Black Forest Labs';
+            }
+          } catch (genErr) {
+            console.error('[GeminiLiveClient] Visual AI image generation error, falling back to direct URL:', genErr);
+            const seed = Math.floor(Math.random() * 1000000);
+            const directUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+            visualPayload.imageUrl = directUrl;
+            visualPayload.aiImageUrl = directUrl;
+            visualPayload.source = 'FLUX.1 AI Generator';
+            visualPayload.attribution = 'Generated via FLUX.1 by Black Forest Labs';
           }
         } else {
           // Default: svg_sketch (Autonomous vector diagram)

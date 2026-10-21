@@ -201,7 +201,12 @@ You have an autonomous Universal Visual Studio engine to create visuals on ANY s
    - Call \`render_visual(topic: "...", mode: "photo_search", searchQuery: "...", caption: "...")\` OR pass \`visualQuery: "..."\` in \`write_on_whiteboard\`!
    - This fetches authentic, high-resolution photographs, historical maps, and medical scans directly from Wikimedia Commons archive.
    - Examples: "James Webb Space Telescope", "Taj Mahal", "Chandrayaan-3", "Harappan Civilization Seal", "Apollo 11 Saturn V", "Human Brain MRI".
-3. REFER TO THE VISUAL IN YOUR VOICE:
+3. WHEN HIGH-REALISM 3D VISUALIZATION, REALISTIC CELL ORGANELLES, PLANETARY ATMOSPHERES, OR CONCEPTUAL ART WITH CLEAR TEXT TITLES IS NEEDED (MODE: "ai_image"):
+   - Call \`render_visual(topic: "...", mode: "ai_image", imagePrompt: "...", caption: "...", subject: "...")\` OR pass \`imagePrompt: "..."\` in \`write_on_whiteboard\`!
+   - This generates a photorealistic illustration instantly via the FLUX.1 engine with legible text typography.
+   - Prompt Guideline: Always enclose the main concept title/label in single quotes so FLUX renders perfect typography (e.g. \`imagePrompt: "Photorealistic 3D cross-section of Mitochondria with bold glowing title 'MITOCHONDRIA', scientific illustration, crisp studio lighting, 8k"\`).
+   - Examples: "Cross-section of human eye with title 'HUMAN EYE'", "Mars Terraforming base with title 'MARS COLONY'", "Supernova explosion in deep space with title 'SUPERNOVA'", "Ancient Egyptian Pyramid construction with title 'GIZA'".
+4. REFER TO THE VISUAL IN YOUR VOICE:
    - Always connect your spoken words to the visual: "Dekho ${studentName}, maine board par diagram bana diya hai...", "Notice karo is ray ko...", "Is visual me jo green part hai wo..."!
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:

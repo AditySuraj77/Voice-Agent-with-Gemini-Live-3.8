@@ -60,4 +60,45 @@ router.post('/tools/visual-search', async (req, res) => {
   }
 });
 
+/**
+ * Endpoint for generating educational AI illustrations via FLUX.1 (Pollinations.ai)
+ * POST /api/tools/generate-image
+ * Body: { prompt: string, topic?: string, subject?: string }
+ */
+router.post('/tools/generate-image', async (req, res) => {
+  try {
+    const { prompt, topic, subject } = req.body;
+    const basePrompt = prompt || topic;
+    if (!basePrompt || typeof basePrompt !== 'string' || !basePrompt.trim()) {
+      return res.status(400).json({ error: 'A valid string "prompt" or "topic" is required in request body.' });
+    }
+
+    const cleanPrompt = basePrompt.trim();
+    if (cleanPrompt.length > 500) {
+      return res.status(400).json({ error: 'Image prompt exceeds maximum allowed length of 500 characters.' });
+    }
+
+    // Enhance prompt for clean educational illustration and legible typography
+    const seed = Math.floor(Math.random() * 1000000);
+    const encodedPrompt = encodeURIComponent(cleanPrompt);
+    const imageUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+
+    return res.json({
+      success: true,
+      imageUrl,
+      prompt: cleanPrompt,
+      topic: topic || cleanPrompt,
+      subject: subject || 'general',
+      source: 'FLUX.1 AI Generator',
+      attribution: 'Generated via FLUX.1 by Black Forest Labs'
+    });
+  } catch (err) {
+    console.error('[searchRoute] Error during AI image generation:', err);
+    return res.status(500).json({
+      error: 'AI image generation failed',
+      details: err.message,
+    });
+  }
+});
+
 export default router;

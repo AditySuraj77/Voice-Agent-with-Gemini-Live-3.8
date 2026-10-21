@@ -298,4 +298,76 @@ test.describe('Universal Visual Studio E2E - Generative SVG & Educational Archiv
       await page.waitForTimeout(150);
     }
   });
+
+  test('7. FLUX AI Conceptual Illustration: Restores and renders FLUX.1 AI image with badges, prompt chip, and lightbox zoom', async ({ page }) => {
+    // Generate inline SVG data URI as test image to ensure instant loading without external network latency
+    const sampleImageUri = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%232e1065"/><text x="50%" y="50%" font-size="28" fill="%23e9d5ff" font-family="sans-serif" font-weight="bold" text-anchor="middle">MITOCHONDRIA 3D</text></svg>';
+
+    await page.evaluate((imgUri) => {
+      const session = {
+        id: 'session_test_flux_ai',
+        title: 'Mitochondria 3D • FLUX AI Visual',
+        dateStr: 'Today',
+        timeStr: '12:15 PM',
+        studentName: 'Adi',
+        itemsCount: 1,
+        items: [
+          {
+            id: 'wb-test-flux-1',
+            topic: 'Cellular Respiration in Mitochondria',
+            notes: ['Inner mitochondrial cristae folding', 'ATP synthase generating energy'],
+            visualType: 'ai_image',
+            imageUrl: imgUri,
+            aiImageUrl: imgUri,
+            imagePrompt: "Photorealistic 3D cross-section of Mitochondria with glowing title 'MITOCHONDRIA', scientific render, 8k",
+            caption: '3D conceptual visualization of mitochondrial inner cristae and ATP synthesis',
+            subject: 'Biology',
+          },
+        ],
+      };
+      localStorage.setItem('aristotle_session_history_v1', JSON.stringify([session]));
+    }, sampleImageUri);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    // Open History Drawer
+    const historyBtn = page.getByTitle('Past Study Sessions');
+    await expect(historyBtn).toBeVisible();
+    await historyBtn.click();
+
+    // Click history item to restore
+    const historyItem = page.getByTestId('session-history-item').first();
+    await expect(historyItem).toBeVisible();
+    await historyItem.click();
+
+    // Verify UniversalVisualCard and AI image container
+    const visualCard = page.locator('[data-testid="universal-visual-card"]');
+    await expect(visualCard).toBeVisible();
+
+    // Verify FLUX badge and AI indicator
+    await expect(visualCard).toContainText('FLUX AI Visual');
+    await expect(visualCard).toContainText('FLUX.1');
+
+    // Verify prompt chip and caption
+    await expect(visualCard).toContainText("MITOCHONDRIA");
+    await expect(visualCard).toContainText('3D conceptual visualization of mitochondrial inner cristae');
+
+    const aiContainer = page.locator('[data-testid="ai-image-container"]');
+    await expect(aiContainer).toBeVisible();
+    const img = visualCard.locator('img');
+    await expect(img).toBeVisible();
+
+    // Test Lightbox Zoom for AI Image
+    const expandBtn = visualCard.getByTestId('expand-visual-btn');
+    await expect(expandBtn).toBeVisible();
+    await expandBtn.click();
+
+    const lightboxModal = page.getByTestId('visual-lightbox-modal');
+    await expect(lightboxModal).toBeVisible();
+    await expect(lightboxModal).toContainText('FLUX AI Illustration');
+
+    // Dismiss lightbox via Escape key
+    await page.keyboard.press('Escape');
+    await expect(lightboxModal).toBeHidden();
+  });
 });
