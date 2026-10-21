@@ -177,7 +177,7 @@ test.describe('Universal Visual Studio E2E - Generative SVG & Educational Archiv
             topic: 'Newton Color Wheel',
             notes: ['Additive color synthesis experiment'],
             visualType: 'photo',
-            imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Newton_colour_circle.png/400px-Newton_colour_circle.png',
+            imageUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><circle cx="200" cy="200" r="180" fill="%23fef3c7"/><text x="50%" y="50%" text-anchor="middle">Color Wheel</text></svg>',
             imageTitle: 'Newton Colour Circle',
             attribution: 'Wikimedia Commons',
             caption: 'Historic color wheel diagram by Isaac Newton',

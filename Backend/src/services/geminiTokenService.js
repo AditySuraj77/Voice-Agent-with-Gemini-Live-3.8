@@ -55,6 +55,10 @@ export const GEMINI_TOOLS = [
               type: 'STRING',
               description: 'Optional search query to fetch an authentic educational photo/map from Wikimedia Commons archive',
             },
+            imagePrompt: {
+              type: 'STRING',
+              description: 'Optional descriptive prompt for FLUX AI image generator (mode "ai_image") with concept title in single quotes (e.g. "Photorealistic 3D Mitochondria with title \'MITOCHONDRIA\' ")',
+            },
             caption: {
               type: 'STRING',
               description: 'Educational caption for the attached visual illustration',
@@ -64,8 +68,34 @@ export const GEMINI_TOOLS = [
         },
       },
       {
+        name: 'generate_ai_image',
+        description: 'DEDICATED FLUX.1 AI IMAGE GENERATION TOOL: Call this whenever the student asks to generate an AI image, asks about AI image tools, or requests a realistic conceptual 3D render, futuristic scene, quantum processor chip, or illustration with clear text labels. Uses the FLUX.1 model for high-fidelity graphics and accurate typography.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            prompt: {
+              type: 'STRING',
+              description: 'Detailed visual prompt for FLUX.1. Always enclose the primary title or label in single quotes for crisp typography (e.g. "Photorealistic 3D cross-section of Mitochondria with glowing title \'MITOCHONDRIA\', studio lighting, 8k, scientific illustration").',
+            },
+            topic: {
+              type: 'STRING',
+              description: 'Topic title for the visual card (e.g. "Quantum Computer Processor", "Mars Human Colony", "Mitochondria 3D")',
+            },
+            caption: {
+              type: 'STRING',
+              description: 'Short 1-2 sentence educational explanation of what this AI visual illustrates',
+            },
+            subject: {
+              type: 'STRING',
+              description: 'Academic subject (e.g. "Computer Science", "Physics", "Biology", "Astronomy")',
+            },
+          },
+          required: ['prompt', 'topic'],
+        },
+      },
+      {
         name: 'render_visual',
-        description: 'MANDATORY FOR ANY SUBJECT: Display an educational visual on the student whiteboard whenever explaining concepts, objects, processes, or historical/scientific topics. Mode "svg_sketch" generates a custom-drawn vector diagram (physics rays, biology cells, atoms, math shapes, geography). Mode "photo_search" retrieves authentic educational photographs (space telescopes, monuments, historical maps, medical scans).',
+        description: 'MANDATORY FOR ANY SUBJECT: Display an educational visual on the student whiteboard whenever explaining concepts, objects, processes, or historical/scientific topics. Mode "svg_sketch" generates a custom-drawn vector diagram (physics rays, biology cells, atoms, math shapes, geography). Mode "photo_search" retrieves authentic educational photographs (space telescopes, monuments, historical maps, medical scans). Mode "ai_image" generates photorealistic 3D scientific scenes, anatomical models, or conceptual artwork with clear legible text titles using FLUX AI.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -75,7 +105,7 @@ export const GEMINI_TOOLS = [
             },
             mode: {
               type: 'STRING',
-              description: 'Visual creation mode: "svg_sketch" for custom vector diagrams drawn from scratch, or "photo_search" for authentic real-world photos/maps from educational archives',
+              description: 'Visual creation mode: "svg_sketch" for custom vector diagrams drawn from scratch, "photo_search" for authentic real-world photos/maps from educational archives, or "ai_image" for realistic AI-generated conceptual artwork / 3D scientific renders with clear text labels',
             },
             svgCode: {
               type: 'STRING',
@@ -84,6 +114,10 @@ export const GEMINI_TOOLS = [
             searchQuery: {
               type: 'STRING',
               description: 'When mode="photo_search": Precise search query for educational archive (e.g. "James Webb Space Telescope", "Taj Mahal", "Human Heart Anatomy")',
+            },
+            imagePrompt: {
+              type: 'STRING',
+              description: 'When mode="ai_image": Detailed visual description for the FLUX AI image generator. Always include the concept title/label in single quotes for accurate typography (e.g. "Realistic 3D cross-section of Mitochondria with glowing title \'MITOCHONDRIA\', studio lighting, 8k, scientific illustration").',
             },
             caption: {
               type: 'STRING',
