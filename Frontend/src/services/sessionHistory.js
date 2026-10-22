@@ -62,13 +62,26 @@ export function saveActiveSession(items = [], studentProfile = {}, options = {})
         const resolvedSnapshot =
           canvasSnapshot !== null ? canvasSnapshot : (sessions[existingIdx].canvasSnapshot || null);
 
+        // Strip massive Base64 data URLs from storage items to prevent LocalStorage 5MB quota overflows
+        const sanitizedItems = (items || []).map((item) => {
+          if (item && item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('data:image/')) {
+            return {
+              ...item,
+              imageUrl: null,
+              aiImageUrl: null,
+              hasInlineDataUrl: true,
+            };
+          }
+          return item;
+        });
+
         sessions[existingIdx] = {
           ...sessions[existingIdx],
           title: hasItems ? title : (sessions[existingIdx].title || title),
           updatedAt: now.toISOString(),
           timeStr,
-          itemsCount: (items || []).length,
-          items: items || [],
+          itemsCount: sanitizedItems.length,
+          items: sanitizedItems,
           canvasSnapshot: resolvedSnapshot,
         };
         sessionEntry = sessions[existingIdx];
@@ -76,6 +89,18 @@ export function saveActiveSession(items = [], studentProfile = {}, options = {})
     }
 
     if (!sessionEntry) {
+      const sanitizedItems = (items || []).map((item) => {
+        if (item && item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('data:image/')) {
+          return {
+            ...item,
+            imageUrl: null,
+            aiImageUrl: null,
+            hasInlineDataUrl: true,
+          };
+        }
+        return item;
+      });
+
       currentId = 'session_' + Date.now();
       sessionStorage.setItem(CURRENT_SESSION_ID_KEY, currentId);
       sessionEntry = {
@@ -86,8 +111,8 @@ export function saveActiveSession(items = [], studentProfile = {}, options = {})
         dateStr,
         timeStr,
         studentName: studentProfile?.name || 'Student',
-        itemsCount: (items || []).length,
-        items: items || [],
+        itemsCount: sanitizedItems.length,
+        items: sanitizedItems,
         canvasSnapshot: canvasSnapshot || null,
       };
       sessions.unshift(sessionEntry);

@@ -53,7 +53,7 @@ export const GEMINI_TOOLS = [
             },
             visualQuery: {
               type: 'STRING',
-              description: 'Optional search query to fetch an authentic educational photo/map from Wikimedia Commons archive',
+              description: 'MANDATORY FOR ANY CONCEPT, MACHINE, ANATOMY, OR DOUBT: Search query to instantly fetch an authentic high-resolution labeled diagram or photograph from Google & educational archives (e.g. "transformer architecture diagram", "human heart anatomy labeled diagram", "electric generator parts diagram"). Pass this whenever explaining objects or when the student is confused!',
             },
             imagePrompt: {
               type: 'STRING',
@@ -95,17 +95,17 @@ export const GEMINI_TOOLS = [
       },
       {
         name: 'render_visual',
-        description: 'MANDATORY FOR ANY SUBJECT: Display an educational visual on the student whiteboard whenever explaining concepts, objects, processes, or historical/scientific topics. Mode "svg_sketch" generates a custom-drawn vector diagram (physics rays, biology cells, atoms, math shapes, geography). Mode "photo_search" retrieves authentic educational photographs (space telescopes, monuments, historical maps, medical scans). Mode "ai_image" generates photorealistic 3D scientific scenes, anatomical models, or conceptual artwork with clear legible text titles using FLUX AI.',
+        description: 'MANDATORY PRIMARY VISUAL TOOL: Display a high-definition educational visual or diagram on the student whiteboard whenever explaining concepts, objects, processes, machines, or historical/scientific topics. Mode "photo_search" retrieves authentic, high-resolution labeled diagrams and photographs directly from Google/Web & educational archives (e.g. transformer architecture diagram, human heart anatomy, electric generator parts, plant cell). Mode "svg_sketch" generates custom vector sketches (physics light rays, circuits, math shapes). Mode "ai_image" generates futuristic AI scenes.',
         parameters: {
           type: 'OBJECT',
           properties: {
             topic: {
               type: 'STRING',
-              description: 'Clear title of the visual (e.g. "Refraction through Prism", "Plant Cell Organelles", "James Webb Space Telescope", "Bohr Model of Carbon")',
+              description: 'Clear title of the visual (e.g. "Transformer Architecture Diagram", "Refraction through Prism", "Plant Cell Organelles", "Human Heart Anatomy")',
             },
             mode: {
               type: 'STRING',
-              description: 'Visual creation mode: "svg_sketch" for custom vector diagrams drawn from scratch, "photo_search" for authentic real-world photos/maps from educational archives, or "ai_image" for realistic AI-generated conceptual artwork / 3D scientific renders with clear text labels',
+              description: 'Visual creation mode: "photo_search" for authentic high-res diagrams/photos from Google & educational archives (PREFERRED FOR ALL CONCEPTS), "svg_sketch" for custom vector diagrams drawn from scratch, or "ai_image" for futuristic AI scenes',
             },
             svgCode: {
               type: 'STRING',

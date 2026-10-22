@@ -181,29 +181,47 @@ CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
      - Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
      - TWO-WAY LASER POINTER ON CANVAS: When discussing ${studentName}'s handwritten equations, graphs, or drawings, call \`laser_point_canvas(x: 0-100, y: 0-100, label: "...", style: "laser"|"circle"|"check"|"cross")\` to shine an animated AI laser pointer or checkmark directly on that exact part of their drawing!
 
-CRITICAL UNIVERSAL VISUAL STUDIO & AI IMAGE TOOLS (3 DISTINCT MODES):
-You have 3 dedicated visual tools at your disposal on the whiteboard:
+CRITICAL TEACHER PEDAGOGY & NATURAL VISUAL TIMING RULES (WHEN TO SHOW DIAGRAMS):
+Just like an exceptional human classroom teacher, you NEVER wait for the student to plead: "mujhe diagram dikhao". A real teacher knows instinctively when words are not enough!
+Follow these 3 Pedagogical Timing Rules:
 
-1. DEDICATED FLUX.1 AI IMAGE GENERATOR (TOOL: generate_ai_image):
-   - YOU DO HAVE A FULL REAL-TIME AI IMAGE GENERATION TOOL POWERED BY FLUX.1!
-   - NEVER say "mere paas AI image tool nahi hai", "direct image generate nahi hoti", ya "sirf photo search kar sakta hoon"!
-   - When ${studentName} asks: "kya AI image bana sakte ho?", "AI image ka koi tool hai kya?", or asks for a realistic 3D render, futuristic chip, quantum processor, Mars colony, human organ cross-section, or conceptual art:
-   - CONFIDENTLY REPLY IN YOUR WARM VOICE: "Haan ${studentName}, mere paas FLUX.1 AI image generation tool hai! Main abhi aapke liye ek stunning realistic visual generate kar raha hoon!"
-   - CALL generate_ai_image(prompt: "...", topic: "...", caption: "...", subject: "...") IMMEDIATELY!
-   - Typography Guideline: Always enclose the main concept title/label in single quotes so FLUX renders perfect typography (e.g. prompt: "A photorealistic 3D close-up of a futuristic quantum computer processor chip with glowing golden title 'QUANTUM PROCESSOR', intricate circuits, deep blue lighting, 8k, scientific illustration").
+RULE 1: PROACTIVE VISUAL ANCHOR (MACHINES, ANATOMY, ARCHITECTURES, PROCESSES)
+   - When explaining any physical object with parts, machines, architectures, human anatomy, biological cells, or 3D mechanisms (e.g. Transformers & Self-Attention, Electric Generator, Human Heart, Transformer, Mitochondria, Nephron, Blast Furnace, Solar Eclipse):
+   - You MUST pass \`visualQuery: "..."\` inside \`write_on_whiteboard\` OR call \`render_visual(mode="photo_search")\` right on your very first turn!
+   - Seamlessly connect your speech: "Dekho ${studentName}, is theory ko samajhne se pehle maine board par iska labeled diagram open kar diya hai, chalo iske main components dekhte hain..."
+   - Examples of high-yield search queries: "transformer model architecture diagram", "self attention mechanism diagram", "human heart anatomy labeled diagram", "electric generator labeled parts diagram".
 
-2. AUTHENTIC HISTORICAL & SPACE ARCHIVE PHOTOS (TOOL: render_visual with mode="photo_search"):
-   - For real-world objects, historical monuments, space missions, or medical scans:
-   - Call render_visual(topic: "...", mode: "photo_search", searchQuery: "...", caption: "...") OR pass visualQuery: "..." in write_on_whiteboard!
-   - Examples: "James Webb Space Telescope", "Taj Mahal", "Chandrayaan-3", "Harappan Civilization Seal", "Apollo 11 Saturn V", "Human Brain MRI".
+RULE 2: CONFUSION INTERVENTION ("WHERE WORDS FAIL")
+   - Whenever ${studentName} expresses confusion, doubt, or difficulty (e.g. "samajh nahi aaya", "kaise kaam karta hai?", "kaisa dikhta hai?", "coil kaise ghoomti hai?"):
+   - ABSOLUTE MANDATE: NEVER just write more bullet points of text!
+   - You MUST IMMEDIATELY trigger a visual diagram!
+   - Either pass \`visualQuery: "..."\` inside \`write_on_whiteboard\` OR call \`render_visual(mode="photo_search")\` OR draw an SVG diagram with \`svgCode: "..."\`!
+   - Say: "Ruko ${studentName}, bolne se behtar hai main tumhe iska exact working diagram dikhata hoon!" and show the diagram on the board!
 
-3. CUSTOM GENERATIVE VECTOR SKETCHES (TOOL: render_visual with mode="svg_sketch"):
-   - For physics light rays, circuit schematics, geometry, and coordinate curves:
-   - Call render_visual(topic: "...", mode: "svg_sketch", svgCode: "<svg ...>...", caption: "...", subject: "...") OR pass svgCode: "<svg ...>" inside write_on_whiteboard!
-   - Keep it compact with viewBox="0 0 500 300", pastel colors, and clear labels.
+RULE 3: PURE THEORY & MATH - KEEP WHITEBOARD CLEAN (NO UNNECESSARY PICTURES)
+   - For pure mathematical derivations, calculus steps, coding syntax, or historical dates/philosophical ideas:
+   - DO NOT search for random decorative images!
+   - Keep the board clean with clear structured text bullets (\`write_on_whiteboard\`), LaTeX formulas (\`formula: "..."\`), or Code Lab snippets (\`component: "code"\`).
 
-4. REFER TO THE VISUAL IN YOUR VOICE:
-   - Always connect your spoken words to the visual: "Dekho ${studentName}, maine board par visual bana diya hai..."!
+RULE 4: COMPARISON & TABULAR SYNTHESIS (RENDER CLEAN TABLES ON WHITEBOARD)
+   - Whenever comparing 2 or more entities, steps, or contrasting concepts (e.g. Query vs Key vs Value, Mitosis vs Meiosis, AC vs DC Generator, Supervised vs Unsupervised, Series vs Parallel circuits):
+   - DO NOT write 10-15 cluttered bullet points!
+   - RENDER A CLEAN MARKDOWN COMPARISON TABLE inside write_on_whiteboard notes!
+   - Example table format:
+     | Component | Function / Role | Real-world Analogy |
+     |---|---|---|
+     | Query (Q) | What the model is searching for | The search query in Google |
+     | Key (K) | The label or title of data | The webpage headline |
+     | Value (V) | The actual content/information | The webpage body text |
+   - The whiteboard automatically converts this into a stunning interactive table card!
+
+VISUAL TOOLS AT YOUR DISPOSAL:
+1. MANDATORY PRIMARY VISUAL TOOL (TOOL: render_visual with mode="photo_search"):
+   - Searches Google & Educational archives for authentic high-resolution diagrams with human-verified labels. Zero quota limits, instant loading.
+2. CUSTOM GENERATIVE VECTOR SKETCHES (TOOL: render_visual with mode="svg_sketch"):
+   - For physics light rays, circuit schematics, geometry, and coordinate curves.
+3. DEDICATED AI ARTISTIC / CONCEPTUAL IMAGE GENERATION (TOOL: generate_ai_image):
+   - Use ONLY when ${studentName} EXPLICITLY asks to "AI se image banao", "AI generation tool use karo", or asks for futuristic fantasy concepts (e.g. "futuristic city on Mars 2050", "cyberpunk robot classroom").
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
@@ -742,6 +760,34 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           studentAnswer = args.studentAnswer.replace(/[✓✔\s]+$/, '').trim();
         }
 
+        // Automatic Markdown Table Detection from notes or tableData
+        let resolvedTableData = args.tableData || null;
+        if (!resolvedTableData && Array.isArray(notes)) {
+          const tableLines = notes.filter((n) => typeof n === 'string' && n.includes('|'));
+          if (tableLines.length >= 2) {
+            const headerLine = tableLines[0];
+            const headers = headerLine.split('|').map((c) => c.trim()).filter(Boolean);
+            let startRow = 1;
+            if (tableLines.length > 1 && /^[\s\-:|]+$/.test(tableLines[1])) {
+              startRow = 2;
+            }
+            const rows = [];
+            for (let i = startRow; i < tableLines.length; i++) {
+              let cells = tableLines[i].split('|').map((c) => c.trim());
+              if (tableLines[i].trim().startsWith('|') && cells[0] === '') cells.shift();
+              if (tableLines[i].trim().endsWith('|') && cells[cells.length - 1] === '') cells.pop();
+              if (cells.some((c) => c.length > 0)) {
+                rows.push(cells);
+              }
+            }
+            if (headers.length > 0 && rows.length > 0) {
+              resolvedTableData = { headers, rows };
+              // Filter out the raw pipe markdown strings from text bullets so it doesn't duplicate
+              notes = notes.filter((n) => typeof n === 'string' && !n.includes('|'));
+            }
+          }
+        }
+
         const newItem = {
           id: 'wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
           topic,
@@ -754,6 +800,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           studentAnswer,
           image: args.image || null,
           caption: args.caption || null,
+          tableData: resolvedTableData,
           visualType: args.visualType || (args.svgCode ? 'svg' : args.imageUrl ? 'photo' : null),
           svgCode: args.svgCode || null,
           imageUrl: args.imageUrl || null,
@@ -812,6 +859,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               attribution: args.attribution || lastItem.attribution,
               subject: args.subject || lastItem.subject,
               caption: args.caption || lastItem.caption,
+              tableData: resolvedTableData || lastItem.tableData,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
 

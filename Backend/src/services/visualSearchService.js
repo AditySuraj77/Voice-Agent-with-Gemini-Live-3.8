@@ -14,7 +14,7 @@ export async function searchTavilyImages(query, { maxResults = 3 } = {}) {
   console.log(`[VisualSearchService] Searching Tavily web images for: "${cleanQuery}"`);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 9000);
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
     const response = await fetch('https://api.tavily.com/search', {

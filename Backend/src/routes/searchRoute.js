@@ -61,7 +61,7 @@ router.post('/tools/visual-search', async (req, res) => {
 });
 
 /**
- * Endpoint for generating educational AI illustrations via FLUX.1 (Pollinations.ai)
+ * Endpoint for generating educational AI illustrations via Cloudflare Workers AI FLUX.1-schnell
  * POST /api/tools/generate-image
  * Body: { prompt: string, topic?: string, subject?: string }
  */
@@ -78,22 +78,65 @@ router.post('/tools/generate-image', async (req, res) => {
       return res.status(400).json({ error: 'Image prompt exceeds maximum allowed length of 500 characters.' });
     }
 
-    // Enhance prompt for clean educational illustration and legible typography
-    const seed = Math.floor(Math.random() * 1000000);
-    const encodedPrompt = encodeURIComponent(cleanPrompt);
-    const apiKey = process.env.POLLINATIONS_API_KEY;
-    const imageUrl = apiKey
-      ? `https://gen.pollinations.ai/image/${encodedPrompt}?model=flux&width=1024&height=640&nologo=true&seed=${seed}&key=${apiKey}`
-      : `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=1024&height=640&nologo=true&seed=${seed}`;
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
+
+    if (!accountId || !apiToken) {
+      return res.status(503).json({
+        error: 'Cloudflare credentials not configured',
+        message: 'CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN must be set in Backend/.env',
+      });
+    }
+
+    console.log(`[searchRoute] Generating AI illustration via Cloudflare Workers AI FLUX.1-schnell for: "${cleanPrompt}"`);
+
+    const cfResponse = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: cleanPrompt,
+        }),
+      }
+    );
+
+    if (!cfResponse.ok) {
+      const errText = await cfResponse.text();
+      console.error('[searchRoute] Cloudflare Workers AI error response:', cfResponse.status, errText);
+      return res.status(cfResponse.status).json({
+        error: 'Cloudflare Workers AI generation failed',
+        details: errText,
+      });
+    }
+
+    const contentType = cfResponse.headers.get('content-type') || '';
+    let dataUrl = '';
+
+    if (contentType.includes('application/json')) {
+      const json = await cfResponse.json();
+      if (json.result?.image) {
+        dataUrl = `data:image/jpeg;base64,${json.result.image}`;
+      } else {
+        throw new Error('No image payload returned in Cloudflare response.');
+      }
+    } else {
+      const arrayBuffer = await cfResponse.arrayBuffer();
+      const base64Image = Buffer.from(arrayBuffer).toString('base64');
+      dataUrl = `data:image/jpeg;base64,${base64Image}`;
+    }
 
     return res.json({
       success: true,
-      imageUrl,
+      imageUrl: dataUrl,
       prompt: cleanPrompt,
       topic: topic || cleanPrompt,
       subject: subject || 'general',
-      source: 'FLUX.1 AI Generator',
-      attribution: 'Generated via FLUX.1 by Black Forest Labs'
+      source: 'Cloudflare Workers AI (FLUX.1 Schnell)',
+      attribution: 'Generated via FLUX.1 Schnell on Cloudflare Workers AI',
     });
   } catch (err) {
     console.error('[searchRoute] Error during AI image generation:', err);
