@@ -95,7 +95,7 @@ export const GEMINI_TOOLS = [
       },
       {
         name: 'render_visual',
-        description: 'MANDATORY PRIMARY VISUAL & ANIMATION SUITE: Display a high-definition visual, animation loop, mathematical simulation, or diagram on the whiteboard. Supports 4 specialized animation modes: "animated_svg" (instant zero-latency vector loops with CSS keyframes for rays, circuits, waves), "interactive_sim" (hands-on playable HTML5 canvas experiments with sliders for physics/algorithms), "manim_video" (3Blue1Brown mathematical and calculus animations), "archive_animation" (authentic scientific/biological animation loops from Wikimedia like heart cycle, engine, DNA helicase), plus "photo_search", "svg_sketch", and "ai_image".',
+        description: 'MANDATORY PRIMARY VISUAL & ANIMATION SUITE: Display a high-definition visual, animation loop, mathematical simulation, or diagram on the whiteboard. Supports 4 specialized animation modes across all subjects: "animated_svg" (instant zero-latency vector loops with CSS keyframes), "interactive_sim" (hands-on playable HTML5 canvas experiments with sliders for physics, chemistry gas laws, CS sorting, math waves), "manim_video" (3Blue1Brown mathematical and calculus animations), "archive_animation" (authentic scientific/biological animation loops from Wikimedia like heart cycle, engine, DNA helicase), plus "photo_search", "svg_sketch", and "ai_image". ANTI-DUPLICATION: Never call repeatedly if an animation for this topic is already displayed on the board.',
         parameters: {
           type: 'OBJECT',
           properties: {

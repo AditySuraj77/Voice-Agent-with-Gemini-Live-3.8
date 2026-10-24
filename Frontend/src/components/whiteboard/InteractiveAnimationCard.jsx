@@ -19,6 +19,15 @@ function resolveSimulationType(rawType, topic = '', caption = '') {
   if (text.includes('pendulum') || text.includes('lola') || text.includes('oscillation') || text.includes('string')) {
     return 'pendulum';
   }
+  if (text.includes('sort') || text.includes('bubble') || text.includes('array') || text.includes('algorithm') || text.includes('search')) {
+    return 'sorting';
+  }
+  if (text.includes('gas') || text.includes('molecule') || text.includes('kinetic') || text.includes('brownian') || text.includes('pressure') || text.includes('temperature') || text.includes('ideal gas')) {
+    return 'gas_molecules';
+  }
+  if (text.includes('orbit') || text.includes('planet') || text.includes('solar') || text.includes('kepler') || text.includes('satellite')) {
+    return 'gravity_orbit';
+  }
   if (text.includes('projectile') || text.includes('parabola') || text.includes('trajectory') || text.includes('cannon') || text.includes('gravity')) {
     return 'projectile';
   }
@@ -32,6 +41,8 @@ function getEnhancedPhysicsSvg(topic = '', rawSvg = '') {
   const t = topic.toLowerCase();
   const isPrism = t.includes('prism') || t.includes('dispersion') || t.includes('refraction');
   const isCircuit = t.includes('circuit') || t.includes('electron') || t.includes('resistor') || t.includes('current');
+  const isAtom = t.includes('atom') || t.includes('bohr') || t.includes('orbital') || t.includes('nucleus');
+  const isDna = t.includes('dna') || t.includes('helix') || t.includes('genetic') || t.includes('nucleotide');
 
   if (isPrism) {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" width="100%" height="auto">
@@ -167,6 +178,96 @@ function getEnhancedPhysicsSvg(topic = '', rawSvg = '') {
     </svg>`;
   }
 
+  if (isAtom) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" width="100%" height="auto">
+      <defs>
+        <radialGradient id="nucleusGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#f59e0b" stop-opacity="1"/>
+          <stop offset="60%" stop-color="#ea580c" stop-opacity="0.8"/>
+          <stop offset="100%" stop-color="#0a0f1d" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <style>
+        @keyframes orbitRotate1 { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes orbitRotate2 { from { transform: rotate(60deg); } to { transform: rotate(420deg); } }
+        @keyframes orbitRotate3 { from { transform: rotate(-60deg); } to { transform: rotate(300deg); } }
+        .orbit-group1 { transform-origin: 300px 180px; animation: orbitRotate1 4s linear infinite; }
+        .orbit-group2 { transform-origin: 300px 180px; animation: orbitRotate2 5.5s linear infinite; }
+        .orbit-group3 { transform-origin: 300px 180px; animation: orbitRotate3 4.8s linear infinite; }
+      </style>
+      <rect width="100%" height="100%" fill="#0a0f1d" rx="12"/>
+      <text x="300" y="40" fill="#f8fafc" font-size="15" font-family="sans-serif" font-weight="bold" text-anchor="middle">Bohr Atomic Model • Quantum Electron Shells</text>
+      
+      <!-- Central Nucleus -->
+      <circle cx="300" cy="180" r="38" fill="url(#nucleusGlow)"/>
+      <circle cx="295" cy="175" r="9" fill="#ef4444"/>
+      <circle cx="305" cy="178" r="9" fill="#3b82f6"/>
+      <circle cx="298" cy="188" r="8.5" fill="#ef4444"/>
+      <circle cx="308" cy="186" r="8.5" fill="#3b82f6"/>
+      <text x="300" y="235" fill="#fbbf24" font-size="12" font-family="sans-serif" font-weight="bold" text-anchor="middle">Nucleus (p⁺ + n⁰)</text>
+
+      <!-- Orbit 1 -->
+      <g class="orbit-group1">
+        <ellipse cx="300" cy="180" rx="190" ry="65" fill="none" stroke="rgba(56, 189, 248, 0.45)" stroke-width="1.8" stroke-dasharray="6 3"/>
+        <circle cx="490" cy="180" r="7" fill="#38bdf8"/>
+        <circle cx="110" cy="180" r="7" fill="#38bdf8"/>
+      </g>
+
+      <!-- Orbit 2 -->
+      <g class="orbit-group2">
+        <ellipse cx="300" cy="180" rx="190" ry="65" fill="none" stroke="rgba(168, 85, 247, 0.45)" stroke-width="1.8" stroke-dasharray="6 3"/>
+        <circle cx="490" cy="180" r="7" fill="#c084fc"/>
+        <circle cx="110" cy="180" r="7" fill="#c084fc"/>
+      </g>
+
+      <!-- Orbit 3 -->
+      <g class="orbit-group3">
+        <ellipse cx="300" cy="180" rx="190" ry="65" fill="none" stroke="rgba(34, 197, 94, 0.45)" stroke-width="1.8" stroke-dasharray="6 3"/>
+        <circle cx="490" cy="180" r="7" fill="#4ade80"/>
+        <circle cx="110" cy="180" r="7" fill="#4ade80"/>
+      </g>
+
+      <text x="300" y="335" fill="#94a3b8" font-size="12" font-family="sans-serif" text-anchor="middle">Electrons (e⁻) in quantized energy states</text>
+    </svg>`;
+  }
+
+  if (isDna) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" width="100%" height="auto">
+      <style>
+        @keyframes dnaShift {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: 80; }
+        }
+        .dna-strand1 { stroke: #38bdf8; stroke-dasharray: 8 4; animation: dnaShift 2s linear infinite; }
+        .dna-strand2 { stroke: #ec4899; stroke-dasharray: 8 4; animation: dnaShift 2s linear infinite; }
+      </style>
+      <rect width="100%" height="100%" fill="#0a0f1d" rx="12"/>
+      <text x="300" y="40" fill="#f8fafc" font-size="15" font-family="sans-serif" font-weight="bold" text-anchor="middle">DNA Double Helix Structure • Complementary Base Pairs</text>
+      
+      <!-- Base Pair Rungs -->
+      <line x1="80" y1="180" x2="80" y2="180" stroke="#a855f7" stroke-width="3"/>
+      <g transform="translate(60, 40)">
+        <line x1="40" y1="110" x2="40" y2="170" stroke="#22c55e" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="80" y1="80" x2="80" y2="200" stroke="#eab308" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="120" y1="65" x2="120" y2="215" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="160" y1="75" x2="160" y2="205" stroke="#3b82f6" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="200" y1="105" x2="200" y2="175" stroke="#22c55e" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="240" y1="140" x2="240" y2="140" stroke="#eab308" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="280" y1="105" x2="280" y2="175" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="320" y1="75" x2="320" y2="205" stroke="#3b82f6" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="360" y1="65" x2="360" y2="215" stroke="#22c55e" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="400" y1="80" x2="400" y2="200" stroke="#eab308" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="440" y1="110" x2="440" y2="170" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round"/>
+      </g>
+
+      <!-- Helical Outer Sugar-Phosphate Strands -->
+      <path d="M 60,180 Q 180,60 300,180 T 540,180" fill="none" stroke-width="4.5" class="dna-strand1"/>
+      <path d="M 60,180 Q 180,300 300,180 T 540,180" fill="none" stroke-width="4.5" class="dna-strand2"/>
+
+      <text x="300" y="335" fill="#cbd5e1" font-size="12" font-family="sans-serif" text-anchor="middle">Adenine (A) = Thymine (T) | Guanine (G) ≡ Cytosine (C)</text>
+    </svg>`;
+  }
+
   return rawSvg;
 }
 
@@ -215,6 +316,9 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
       frequency: 2.0,
       amplitude: 32,
       angleDeg: 45,
+      temperature: 300,
+      particleCount: 28,
+      sortSpeed: 3,
     };
     return { ...defaultParams, ...(item.parameters || {}) };
   });
@@ -361,6 +465,81 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
         ctx.fillText(`sin(θ) = ${Math.sin(angle).toFixed(2)}`, width * 0.65, cy + 5);
         ctx.fillStyle = '#fbbf24';
         ctx.fillText(`Angle θ = ${curDeg}°`, width * 0.65, cy + 30);
+      } else if (simType === 'gas_molecules') {
+        // Chemistry: Kinetic Gas Theory & Brownian Motion
+        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+        ctx.strokeRect(20, 20, width - 40, height - 60);
+
+        const temp = simParams.temperature || 300;
+        const speed = (temp / 100) * 1.6;
+        const count = Math.min(simParams.particleCount || 28, 50);
+
+        for (let i = 0; i < count; i++) {
+          const seed = i * 137.5;
+          const vx = Math.cos(seed) * speed;
+          const vy = Math.sin(seed) * speed;
+          const rangeX = width - 70;
+          const rangeY = height - 90;
+          const px = 30 + Math.abs((((i * 45) + vx * t * 35) % (rangeX * 2)) - rangeX);
+          const py = 30 + Math.abs((((i * 33) + vy * t * 35) % (rangeY * 2)) - rangeY);
+
+          ctx.fillStyle = i % 3 === 0 ? '#38bdf8' : (i % 3 === 1 ? '#f43f5e' : '#fbbf24');
+          ctx.beginPath();
+          ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '11px monospace';
+        const pressure = ((count * 1.38 * temp) / 800).toFixed(1);
+        ctx.fillText(`Ideal Gas: PV = NkT | Temp T = ${temp} K | Particles N = ${count} | Pressure P ≈ ${pressure} kPa`, 20, height - 16);
+      } else if (simType === 'sorting') {
+        // Computer Science: Sorting Algorithm Array Comparison & Swap
+        const totalBars = 16;
+        const barWidth = (width - 60) / totalBars;
+        const stepIdx = Math.floor(t * (simParams.sortSpeed || 3)) % (totalBars * 2);
+        const activePair = stepIdx % (totalBars - 1);
+
+        for (let i = 0; i < totalBars; i++) {
+          const baseHeight = (((i * 7 + 11) % totalBars) + 1) * ((height - 80) / totalBars);
+          const x = 30 + i * barWidth;
+          const y = height - 40 - baseHeight;
+
+          const isActive = i === activePair || i === activePair + 1;
+          ctx.fillStyle = isActive ? '#ec4899' : (i < (stepIdx / 2) ? '#22c55e' : '#6366f1');
+          ctx.fillRect(x, y, barWidth - 4, baseHeight);
+        }
+
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '11px monospace';
+        ctx.fillText(`Algorithm: Bubble Sort [${totalBars} elements] | Step: Comparing arr[${activePair}] & arr[${activePair + 1}]`, 20, height - 16);
+      } else if (simType === 'gravity_orbit') {
+        // Astronomy / Universal Gravitation: Keplerian Planetary Orbit
+        const cx = width / 2;
+        const cy = height / 2;
+
+        // Central Sun
+        ctx.fillStyle = '#fbbf24';
+        ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 18;
+        ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Elliptical Orbit
+        const a = width * 0.38;
+        const b = height * 0.32;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, a, b, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Planet
+        const orbitAngle = t * 0.9;
+        const px = cx + a * Math.cos(orbitAngle);
+        const py = cy + b * Math.sin(orbitAngle);
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath(); ctx.arc(px, py, 6.5, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '11px monospace';
+        const r = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2).toFixed(0);
+        ctx.fillText(`Gravitation: F = G(M·m)/r² | Distance r = ${r} AU | Orbital Period T ≈ 365 days`, 20, height - 16);
       } else {
         // Projectile Motion Simulator
         const v = simParams.velocity;
@@ -771,6 +950,79 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
                       className="w-24 accent-indigo-600 cursor-pointer"
                     />
                   </label>
+                </>
+              )}
+
+              {resolvedSimType === 'gas_molecules' && (
+                <>
+                  <label className="flex items-center gap-1.5 font-medium text-stone-700">
+                    <span>Temp T: {simParams.temperature || 300}K</span>
+                    <input
+                      type="range"
+                      min={100}
+                      max={800}
+                      step={20}
+                      value={simParams.temperature || 300}
+                      onChange={(e) => setSimParams((p) => ({ ...p, temperature: Number(e.target.value) }))}
+                      className="w-24 accent-indigo-600 cursor-pointer"
+                      data-testid="slider-gas-temp"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1.5 font-medium text-stone-700">
+                    <span>Molecules N: {simParams.particleCount || 28}</span>
+                    <input
+                      type="range"
+                      min={10}
+                      max={50}
+                      step={2}
+                      value={simParams.particleCount || 28}
+                      onChange={(e) => setSimParams((p) => ({ ...p, particleCount: Number(e.target.value) }))}
+                      className="w-20 accent-indigo-600 cursor-pointer"
+                      data-testid="slider-gas-count"
+                    />
+                  </label>
+                </>
+              )}
+
+              {resolvedSimType === 'sorting' && (
+                <>
+                  <label className="flex items-center gap-1.5 font-medium text-stone-700">
+                    <span>Algorithm Speed: {simParams.sortSpeed || 3}x</span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={8}
+                      step={1}
+                      value={simParams.sortSpeed || 3}
+                      onChange={(e) => setSimParams((p) => ({ ...p, sortSpeed: Number(e.target.value) }))}
+                      className="w-28 accent-indigo-600 cursor-pointer"
+                      data-testid="slider-sort-speed"
+                    />
+                  </label>
+                  <span className="text-[11px] font-mono text-stone-600">
+                    Time Complexity: O(n²)
+                  </span>
+                </>
+              )}
+
+              {resolvedSimType === 'gravity_orbit' && (
+                <>
+                  <label className="flex items-center gap-1.5 font-medium text-stone-700">
+                    <span>Gravity G: {simParams.gravity}</span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={20}
+                      step={1}
+                      value={simParams.gravity}
+                      onChange={(e) => setSimParams((p) => ({ ...p, gravity: Number(e.target.value) }))}
+                      className="w-24 accent-indigo-600 cursor-pointer"
+                      data-testid="slider-gravity-orbit"
+                    />
+                  </label>
+                  <span className="text-[11px] font-mono text-stone-600">
+                    Orbit: Elliptical
+                  </span>
                 </>
               )}
             </div>

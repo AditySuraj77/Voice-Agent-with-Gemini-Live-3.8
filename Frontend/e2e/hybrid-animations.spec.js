@@ -194,6 +194,58 @@ test.describe('Hybrid Animation Suite E2E - 4-Tier Interactive Visuals', () => {
     await expect(page.getByText('Angle θ: 90°')).toBeVisible();
   });
 
+  test('2c. Mode B (Multi-Subject Labs: Chemistry Gas Laws & CS Sorting): Generic simulations', async ({ page }) => {
+    await page.evaluate(() => {
+      const session = {
+        id: 'session_test_multi_subject',
+        title: 'Multi-Subject Simulation Labs',
+        dateStr: 'Today',
+        timeStr: '12:00 PM',
+        studentName: 'Adi',
+        itemsCount: 2,
+        items: [
+          {
+            id: 'wb-test-gas',
+            topic: 'Ideal Gas Law & Kinetic Theory',
+            caption: 'Particles colliding in container box with temperature variations',
+            visualType: 'animation',
+            animationType: 'simulation',
+            simType: 'gas_molecules',
+            parameters: { temperature: 350, particleCount: 30 },
+          },
+          {
+            id: 'wb-test-sorting',
+            topic: 'Bubble Sort Algorithm Visualization',
+            caption: 'Array bar comparisons and adjacent swaps step-by-step',
+            visualType: 'animation',
+            animationType: 'simulation',
+            simType: 'sorting',
+            parameters: { sortSpeed: 4 },
+          },
+        ],
+      };
+      localStorage.setItem('aristotle_session_history_v1', JSON.stringify([session]));
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.getByTitle('Past Study Sessions').click();
+    await page.getByTestId('session-history-item').first().click();
+
+    // Chemistry Gas Law sliders check
+    const tempSlider = page.locator('[data-testid="slider-gas-temp"]');
+    await expect(tempSlider).toBeVisible();
+    await tempSlider.fill('400');
+
+    const countSlider = page.locator('[data-testid="slider-gas-count"]');
+    await expect(countSlider).toBeVisible();
+
+    // Computer Science Sorting speed slider check
+    const sortSpeedSlider = page.locator('[data-testid="slider-sort-speed"]');
+    await expect(sortSpeedSlider).toBeVisible();
+    await sortSpeedSlider.fill('5');
+    await expect(page.getByText('Time Complexity: O(n²)')).toBeVisible();
+  });
+
   test('3. Mode C (3Blue1Brown Manim Mathematical Scene): Renders vector canvas and formula HUD', async ({ page }) => {
     await page.evaluate(() => {
       const session = {

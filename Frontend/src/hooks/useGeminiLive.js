@@ -221,19 +221,22 @@ You have 4 specialized animation engines plus archive photos:
    - Latency: 0ms (Instant voice-sync loop).
    - Best for: Light rays refraction through prism, pulsating wave loops, moving electrons in circuit, fluid flow arrows. Include <style> @keyframes ... </style> inside svgCode.
 2. TIER 2: PLAYABLE SIMULATION LAB (mode="interactive_sim" or tool render_simulation):
-   - Latency: < 1s (Hands-on interactive canvas with student sliders).
-   - Best for: When student should experiment with variables: Projectile motion (angle & velocity sliders), Simple harmonic pendulum (gravity & length sliders), Sound waves (frequency & amplitude), Sorting algorithms, Unit circle trig.
+   - Latency: < 1s (Hands-on interactive canvas with student sliders across all subjects).
+   - Best for: When student should experiment with variables: Physics (Projectile motion, Pendulum, Kepler Orbit), Chemistry (Kinetic Gas molecules & temperature/pressure), Computer Science (Bubble sort array comparison & swaps), Math (Sound waves, Unit circle trig).
 3. TIER 3: 3BLUE1BROWN MATHEMATICAL SCENE (mode="manim_video" or tool render_manim_animation):
    - Latency: Async background compilation (~10s).
    - Best for: Pure mathematical theorems, geometric proofs (Pythagoras theorem a² + b² = c² area morph), Calculus derivative as tangent slope, Fourier series harmonics, Linear algebra vector transformations.
    - While rendering, speak filler dialogue: "Main aapke liye screen par iska ek detailed mathematical animation render kar raha hoon, tab tak aaiye samajhte hain..."
 4. TIER 4: AUTHENTIC ARCHIVE ANIMATIONS (mode="archive_animation"):
-   - Latency: ~500ms (High-res biological & mechanical loops from Wikimedia).
-   - Best for: Complex biological organs and machines: Cardiac cycle / beating heart, Four-stroke combustion engine, DNA helicase unzipping, Earth plate tectonics.
+   - Latency: ~500ms (High-res biological & mechanical loops from Wikimedia across all domains).
+   - Best for: Complex biological organs, anatomy, and machines: Cardiac cycle / beating heart, Four-stroke combustion engine, DNA helicase unzipping, Earth plate tectonics.
 5. STATIC EDUCATIONAL ARCHIVE PHOTOS (mode="photo_search"):
    - For authentic historical monuments, astronomical space scans, and museum artifacts.
 6. DEDICATED AI ARTISTIC / CONCEPTUAL IMAGE GENERATION (TOOL: generate_ai_image):
    - Use ONLY when ${studentName} EXPLICITLY asks to "AI se image banao", "AI generation tool use karo", or asks for futuristic fantasy concepts (e.g. "futuristic city on Mars 2050", "cyberpunk robot classroom").
+7. ANTI-DUPLICATION & ZERO-LOOP VISUAL RULE:
+   - If a visual diagram, animation, or simulation for the current topic is ALREADY visible on the student's whiteboard, NEVER call \`render_visual\` again for the same concept!
+   - Do NOT produce duplicate visual cards or re-trigger animations in consecutive turns. Point to the existing visual card and continue explaining or highlighting.
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
 You have autonomous control of a live web browser connected directly to your visual input!
@@ -870,8 +873,21 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
             const isNewItemVisual = Boolean(newItem.svgCode || newItem.imageUrl || newItem.cardType === 'visual' || newItem.visualType);
             const isLastItemVisual = Boolean(lastItem.svgCode || lastItem.imageUrl || lastItem.cardType === 'visual' || lastItem.visualType);
 
-            // If BOTH already have a visual diagram/photo, DO NOT merge them into one card! Keep them as separate items.
+            // ANTI-DUPLICATION GUARD: If both are visual cards for the EXACT SAME topic or animation type, update the card in-place rather than duplicating!
             if (isNewItemVisual && isLastItemVisual) {
+              const isSameTopic = isSameOrRelatedTopic(lastItem.topic, topic);
+              const isSameAnim = (lastItem.animationType && lastItem.animationType === newItem.animationType) ||
+                                 (lastItem.visualType && lastItem.visualType === newItem.visualType);
+              if (isSameTopic && isSameAnim) {
+                const updatedList = [...prev];
+                updatedList[updatedList.length - 1] = {
+                  ...lastItem,
+                  ...newItem,
+                  id: lastItem.id,
+                  notes: newItem.notes.length > 0 ? newItem.notes : lastItem.notes,
+                };
+                return updatedList;
+              }
               return [...prev, newItem];
             }
 
