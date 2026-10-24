@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:eval": "playwright test e2e/animation-eval.spec.js --reporter=list"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

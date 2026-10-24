@@ -961,7 +961,7 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
                       type="range"
                       min={100}
                       max={800}
-                      step={20}
+                      step={10}
                       value={simParams.temperature || 300}
                       onChange={(e) => setSimParams((p) => ({ ...p, temperature: Number(e.target.value) }))}
                       className="w-24 accent-indigo-600 cursor-pointer"

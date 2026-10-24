@@ -1,0 +1,114 @@
+[
+  {
+    "id": "PHYS-01",
+    "subject": "Physics (Optics)",
+    "prompt": "Prism se white light pass karne par kya hota hai? Dispersion animation dikhao.",
+    "expectedMode": "animated_svg",
+    "scientificRules": ["vibgyor_order", "red_least_deviated", "violet_most_deviated"]
+  },
+  {
+    "id": "PHYS-02",
+    "subject": "Physics (Electricity)",
+    "prompt": "Electric circuit me current aur electrons ka flow opposite kyu hota hai? Animated diagram dikhao.",
+    "expectedMode": "animated_svg",
+    "scientificRules": ["conventional_current_clockwise", "electron_drift_counter_clockwise"]
+  },
+  {
+    "id": "PHYS-03",
+    "subject": "Physics (Waves)",
+    "prompt": "Sound wave ki frequency aur amplitude badhne par wave shape kaise badalti hai? Simulation dikhao.",
+    "expectedMode": "interactive_sim",
+    "expectedSimType": "wave",
+    "scientificRules": ["wavelength_inversely_proportional_to_frequency", "amplitude_scales_crest_trough"]
+  },
+  {
+    "id": "PHYS-04",
+    "subject": "Physics (Kinematics)",
+    "prompt": "Projectile motion me launch angle badhane se range aur max height par kya asar padta hai? Parabolic simulation do.",
+    "expectedMode": "interactive_sim",
+    "expectedSimType": "projectile",
+    "scientificRules": ["parabolic_gravity_trajectory", "max_range_at_45_deg"]
+  },
+  {
+    "id": "PHYS-05",
+    "subject": "Physics (Mechanics)",
+    "prompt": "Simple pendulum ka time period length aur gravity par kaise depend karta hai? Oscillation simulator dikhao.",
+    "expectedMode": "interactive_sim",
+    "expectedSimType": "pendulum",
+    "scientificRules": ["period_proportional_to_sqrt_length", "simple_harmonic_oscillation"]
+  },
+  {
+    "id": "PHYS-06",
+    "subject": "Physics (Astronomy)",
+    "prompt": "Sun ke around planet ka elliptical Keplerian orbit dikhao gravitation law ke sath.",
+    "expectedMode": "interactive_sim",
+    "expectedSimType": "gravity_orbit",
+    "scientificRules": ["kepler_elliptical_orbit", "inverse_square_gravity"]
+  },
+  {
+    "id": "CHEM-01",
+    "subject": "Chemistry (Kinetic Theory)",
+    "prompt": "Temperature badhane se gas molecules ka motion aur pressure kaise badalta hai? PV=NkT simulation dikhao.",
+    "expectedMode": "interactive_sim",
+    "expectedSimType": "gas_molecules",
+    "scientificRules": ["speed_scales_with_temp", "pressure_formula_p_equals_nkt"]
+  },
+  {
+    "id": "CHEM-02",
+    "subject": "Chemistry (Atomic Structure)",
+    "prompt": "Bohr model me electrons energy levels me kaise revolve karte hain? Atom animation dikhao.",
+    "expectedMode": "animated_svg",
+    "scientificRules": ["quantized_electron_orbits", "central_nucleus_protons_neutrons"]
+  },
+  {
+    "id": "BIO-01",
+    "subject": "Biology (Cardiology)",
+    "prompt": "Human heart ka pumping cycle loop dikhao systole aur diastole ke sath.",
+    "expectedMode": "archive_animation",
+    "scientificRules": ["cardiac_systole_diastole_cycle", "wikimedia_200_ok"]
+  },
+  {
+    "id": "BIO-02",
+    "subject": "Biology (Genetics)",
+    "prompt": "DNA double helix structure me complementary base pairs kaise jude hote hain? Animation dikhao.",
+    "expectedMode": "animated_svg",
+    "scientificRules": ["adenine_pairs_thymine", "guanine_pairs_cytosine", "antiparallel_helix"]
+  },
+  {
+    "id": "CS-01",
+    "subject": "Computer Science (Algorithms)",
+    "prompt": "Bubble sort algorithm me adjacent elements kaise compare aur swap hote hain? Sorting simulation dikhao.",
+    "expectedMode": "interactive_sim",
+    "expectedSimType": "sorting",
+    "scientificRules": ["adjacent_comparison_swap", "quadratic_time_complexity"]
+  },
+  {
+    "id": "MATH-01",
+    "subject": "Mathematics (Geometry)",
+    "prompt": "Pythagoras theorem a^2 + b^2 = c^2 ka geometric square area equivalence proof Manim style me dikhao.",
+    "expectedMode": "manim_video",
+    "scientificRules": ["square_area_transformation", "right_triangle_hypotenuse"]
+  },
+  {
+    "id": "MATH-02",
+    "subject": "Mathematics (Trigonometry)",
+    "prompt": "Unit circle me angle theta ke sath sine aur cosine coordinates kaise change hote hain? Interactive simulator dikhao.",
+    "expectedMode": "interactive_sim",
+    "expectedSimType": "trig_circle",
+    "scientificRules": ["x_equals_cos_theta", "y_equals_sin_theta", "unit_radius_equals_one"]
+  },
+  {
+    "id": "NEG-01",
+    "subject": "Negative Control (History)",
+    "prompt": "India ko aazadi kab mili thi aur first Prime Minister kaun the?",
+    "expectedMode": "none",
+    "scientificRules": ["zero_animation_cards"]
+  },
+  {
+    "id": "NEG-02",
+    "subject": "Negative Control (Literature)",
+    "prompt": "Premchand ke novel Godan ka main plot summary kya hai?",
+    "expectedMode": "none",
+    "scientificRules": ["zero_animation_cards"]
+  }
+]
