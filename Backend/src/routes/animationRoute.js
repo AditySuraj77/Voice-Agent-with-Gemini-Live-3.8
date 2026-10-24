@@ -57,4 +57,47 @@ router.post('/tools/animation-search', async (req, res) => {
   }
 });
 
+/**
+ * Endpoint for safely proxying educational media to bypass CDN hotlinking / CORS restrictions
+ * GET /api/tools/proxy-media?url=...
+ */
+router.get('/tools/proxy-media', async (req, res) => {
+  try {
+    const mediaUrl = req.query.url;
+    if (!mediaUrl || typeof mediaUrl !== 'string') {
+      return res.status(400).send('URL query parameter is required.');
+    }
+
+    const parsed = new URL(mediaUrl);
+    // Allow wikimedia and standard educational CDN domains
+    const isAllowed = parsed.hostname.endsWith('wikimedia.org') ||
+                      parsed.hostname.endsWith('wikipedia.org') ||
+                      parsed.hostname.endsWith('tavily.com');
+    if (!isAllowed) {
+      return res.status(403).send('Restricted domain');
+    }
+
+    const response = await fetch(mediaUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        Accept: '*/*',
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).send('Failed to fetch upstream media.');
+    }
+
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    const arrayBuffer = await response.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    console.error('[animationRoute] Proxy error:', err.message);
+    return res.status(500).send('Media proxy failed');
+  }
+});
+
 export default router;

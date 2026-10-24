@@ -129,6 +129,69 @@ test.describe('Hybrid Animation Suite E2E - 4-Tier Interactive Visuals', () => {
 
     // Canvas should still be actively rendering
     await expect(simCanvas).toBeVisible();
+
+    // Verify fullscreen modal canvas renders at 60fps
+    const expandBtn = page.locator('[data-testid="anim-expand-btn"]');
+    await expect(expandBtn).toBeVisible();
+    await expandBtn.click();
+
+    const modalCanvas = page.locator('[data-testid="modal-simulation-canvas"]');
+    await expect(modalCanvas).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(modalCanvas).not.toBeVisible();
+  });
+
+  test('2b. Mode B (Sound Wave Lab & Unit Circle): Renders specialized sliders for wave & trig', async ({ page }) => {
+    await page.evaluate(() => {
+      const session = {
+        id: 'session_test_wave_trig',
+        title: 'Wave and Trig Labs',
+        dateStr: 'Today',
+        timeStr: '12:00 PM',
+        studentName: 'Adi',
+        itemsCount: 2,
+        items: [
+          {
+            id: 'wb-test-wave',
+            topic: 'Sound Wave Frequency & Amplitude',
+            caption: 'Oscillating acoustic longitudinal wave',
+            visualType: 'animation',
+            animationType: 'simulation',
+            simType: 'wave',
+            parameters: { frequency: 1.5, amplitude: 35 },
+          },
+          {
+            id: 'wb-test-circle',
+            topic: 'Unit Circle Trigonometry',
+            caption: 'Sine and cosine coordinate visualization',
+            visualType: 'animation',
+            animationType: 'simulation',
+            simType: 'trig_circle',
+            parameters: { angleDeg: 60 },
+          },
+        ],
+      };
+      localStorage.setItem('aristotle_session_history_v1', JSON.stringify([session]));
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.getByTitle('Past Study Sessions').click();
+    await page.getByTestId('session-history-item').first().click();
+
+    // Wave sliders check
+    const freqSlider = page.locator('[data-testid="slider-frequency"]');
+    await expect(freqSlider).toBeVisible();
+    await freqSlider.fill('2.5');
+
+    const ampSlider = page.locator('[data-testid="slider-amplitude"]');
+    await expect(ampSlider).toBeVisible();
+    await ampSlider.fill('45');
+
+    // Trig slider check
+    const trigSlider = page.locator('[data-testid="slider-trig-angle"]');
+    await expect(trigSlider).toBeVisible();
+    await trigSlider.fill('90');
+    await expect(page.getByText('Angle θ: 90°')).toBeVisible();
   });
 
   test('3. Mode C (3Blue1Brown Manim Mathematical Scene): Renders vector canvas and formula HUD', async ({ page }) => {

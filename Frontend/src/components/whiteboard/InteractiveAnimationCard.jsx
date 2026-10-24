@@ -1,9 +1,174 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Play, Pause, RotateCcw, Maximize2, Minimize2, Download,
-  Copy, Check, Sparkles, Activity, Compass, Sliders, Eye, RefreshCw, Zap
+  Copy, Check, Sparkles, Activity, Sliders, RefreshCw, Zap
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
+
+/**
+ * Normalizes and resolves simulation preset type based on user request keywords & topic
+ */
+function resolveSimulationType(rawType, topic = '', caption = '') {
+  const text = `${rawType || ''} ${topic || ''} ${caption || ''}`.toLowerCase();
+  if (text.includes('wave') || text.includes('sound') || text.includes('frequency') || text.includes('amplitude') || text.includes('dhwani')) {
+    return 'wave';
+  }
+  if (text.includes('circle') || text.includes('trig') || text.includes('unit circle') || text.includes('sine') || text.includes('cosine') || text.includes('cos') || text.includes('sin')) {
+    return 'trig_circle';
+  }
+  if (text.includes('pendulum') || text.includes('lola') || text.includes('oscillation') || text.includes('string')) {
+    return 'pendulum';
+  }
+  if (text.includes('projectile') || text.includes('parabola') || text.includes('trajectory') || text.includes('cannon') || text.includes('gravity')) {
+    return 'projectile';
+  }
+  return rawType || 'wave'; // sensible educational default instead of projectile!
+}
+
+/**
+ * Built-in high-fidelity animated SVG templates for common Physics topics
+ */
+function getEnhancedPhysicsSvg(topic = '', rawSvg = '') {
+  const t = topic.toLowerCase();
+  const isPrism = t.includes('prism') || t.includes('dispersion') || t.includes('refraction');
+  const isCircuit = t.includes('circuit') || t.includes('electron') || t.includes('resistor') || t.includes('current');
+
+  if (isPrism) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" width="100%" height="auto">
+      <defs>
+        <linearGradient id="prismGlass" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"/>
+          <stop offset="50%" stop-color="#0284c7" stop-opacity="0.12"/>
+          <stop offset="100%" stop-color="#bae6fd" stop-opacity="0.3"/>
+        </linearGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      <style>
+        @keyframes beamFlow {
+          from { stroke-dashoffset: 40; }
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes photonMove {
+          0% { offset-distance: 0%; opacity: 0; }
+          20% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { offset-distance: 100%; opacity: 0; }
+        }
+        .light-beam {
+          stroke-dasharray: 6 3;
+          animation: beamFlow 0.8s linear infinite;
+        }
+        .spectral-beam {
+          stroke-dasharray: 8 4;
+          animation: beamFlow 1.1s linear infinite;
+        }
+      </style>
+      <rect width="100%" height="100%" fill="#0a0f1d" rx="12"/>
+      
+      <!-- Prism Glass Body -->
+      <polygon points="300,50 160,290 440,290" fill="url(#prismGlass)" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round"/>
+      <polygon points="300,50 170,285 430,285" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+
+      <!-- Incident White Light Ray -->
+      <line x1="40" y1="210" x2="210" y2="200" stroke="#ffffff" stroke-width="3.5" class="light-beam" filter="url(#glow)"/>
+      <text x="70" y="195" fill="#f8fafc" font-size="12" font-family="sans-serif" font-weight="bold">White Light Beam</text>
+
+      <!-- Internal Refraction Dispersing Rays -->
+      <line x1="210" y1="200" x2="350" y2="185" stroke="#ef4444" stroke-width="2.5" stroke-opacity="0.8"/>
+      <line x1="210" y1="200" x2="355" y2="195" stroke="#eab308" stroke-width="2" stroke-opacity="0.8"/>
+      <line x1="210" y1="200" x2="360" y2="205" stroke="#22c55e" stroke-width="2" stroke-opacity="0.8"/>
+      <line x1="210" y1="200" x2="365" y2="215" stroke="#3b82f6" stroke-width="2" stroke-opacity="0.8"/>
+      <line x1="210" y1="200" x2="370" y2="225" stroke="#a855f7" stroke-width="2.5" stroke-opacity="0.8"/>
+
+      <!-- Exiting Dispersed Rainbow Spectrum -->
+      <line x1="350" y1="185" x2="560" y2="140" stroke="#ef4444" stroke-width="3" class="spectral-beam" filter="url(#glow)"/>
+      <text x="565" y="145" fill="#ef4444" font-size="11" font-family="sans-serif" font-weight="bold">Red (Least bent)</text>
+
+      <line x1="355" y1="195" x2="560" y2="175" stroke="#f97316" stroke-width="2.5" class="spectral-beam"/>
+      <text x="565" y="180" fill="#f97316" font-size="10" font-family="sans-serif">Orange</text>
+
+      <line x1="358" y1="200" x2="560" y2="205" stroke="#eab308" stroke-width="2.5" class="spectral-beam"/>
+      <text x="565" y="210" fill="#eab308" font-size="10" font-family="sans-serif">Yellow</text>
+
+      <line x1="360" y1="205" x2="560" y2="235" stroke="#22c55e" stroke-width="2.5" class="spectral-beam"/>
+      <text x="565" y="240" fill="#22c55e" font-size="10" font-family="sans-serif">Green</text>
+
+      <line x1="365" y1="215" x2="560" y2="265" stroke="#3b82f6" stroke-width="2.5" class="spectral-beam"/>
+      <text x="565" y="270" fill="#3b82f6" font-size="10" font-family="sans-serif">Blue</text>
+
+      <line x1="370" y1="225" x2="560" y2="295" stroke="#a855f7" stroke-width="3" class="spectral-beam" filter="url(#glow)"/>
+      <text x="565" y="300" fill="#a855f7" font-size="11" font-family="sans-serif" font-weight="bold">Violet (Most bent)</text>
+
+      <!-- Glass Prism Label -->
+      <text x="300" y="325" fill="#94a3b8" font-size="12" font-family="sans-serif" text-anchor="middle">Dense Optical Medium (Glass Prism n ≈ 1.5)</text>
+    </svg>`;
+  }
+
+  if (isCircuit) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" width="100%" height="auto">
+      <defs>
+        <filter id="glowCirc">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <style>
+        @keyframes electronLoop {
+          from { stroke-dashoffset: 120; }
+          to { stroke-dashoffset: 0; }
+        }
+        .wire-path {
+          stroke: #334155;
+          stroke-width: 6;
+          fill: none;
+        }
+        .electron-flow {
+          stroke: #38bdf8;
+          stroke-width: 3.5;
+          stroke-dasharray: 8 16;
+          fill: none;
+          animation: electronLoop 1.5s linear infinite;
+        }
+      </style>
+      <rect width="100%" height="100%" fill="#0a0f1d" rx="12"/>
+
+      <!-- Wire Circuit Loop -->
+      <rect x="80" y="60" width="440" height="240" rx="16" class="wire-path"/>
+      <rect x="80" y="60" width="440" height="240" rx="16" class="electron-flow" filter="url(#glowCirc)"/>
+
+      <!-- Battery Voltage Source (Left) -->
+      <g transform="translate(80, 180)">
+        <rect x="-18" y="-30" width="36" height="60" fill="#0a0f1d"/>
+        <line x1="-15" y1="-22" x2="15" y2="-22" stroke="#ef4444" stroke-width="4"/>
+        <line x1="-8" y1="-6" x2="8" y2="-6" stroke="#64748b" stroke-width="2.5"/>
+        <line x1="-15" y1="10" x2="15" y2="10" stroke="#ef4444" stroke-width="4"/>
+        <line x1="-8" y1="24" x2="8" y2="24" stroke="#64748b" stroke-width="2.5"/>
+        <text x="-40" y="-12" fill="#ef4444" font-size="14" font-weight="bold">+</text>
+        <text x="-40" y="24" fill="#38bdf8" font-size="16" font-weight="bold">-</text>
+        <text x="-70" y="5" fill="#f8fafc" font-size="12" font-weight="bold">Battery V</text>
+      </g>
+
+      <!-- Resistor (Right) -->
+      <g transform="translate(520, 180)">
+        <rect x="-16" y="-45" width="32" height="90" fill="#0a0f1d"/>
+        <polyline points="0,-45 10,-35 -10,-20 10,-5 -10,10 10,25 0,35 0,45" fill="none" stroke="#f59e0b" stroke-width="4" stroke-linejoin="round"/>
+        <text x="25" y="5" fill="#f59e0b" font-size="13" font-weight="bold">Resistor R</text>
+      </g>
+
+      <!-- Current & Electron Labels -->
+      <text x="300" y="45" fill="#f8fafc" font-size="13" font-family="sans-serif" font-weight="bold" text-anchor="middle">Conventional Current I (Clockwise) →</text>
+      <text x="300" y="325" fill="#38bdf8" font-size="13" font-family="sans-serif" font-weight="bold" text-anchor="middle">← Electron Drift Velocity (Counter-Clockwise)</text>
+    </svg>`;
+  }
+
+  return rawSvg;
+}
 
 /**
  * InteractiveAnimationCard
@@ -19,6 +184,27 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
   const [copied, setCopied] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
 
+  // Resolved simulation preset type
+  const resolvedSimType = resolveSimulationType(item.simType, item.topic, item.caption);
+
+  // Media loading & proxy fallback for Archive Animations
+  const [mediaSrc, setMediaSrc] = useState(item.animationUrl);
+  const [mediaLoadError, setMediaLoadError] = useState(false);
+
+  useEffect(() => {
+    setMediaSrc(item.animationUrl);
+    setMediaLoadError(false);
+  }, [item.animationUrl]);
+
+  const handleMediaError = () => {
+    if (item.animationUrl && !mediaSrc?.includes('proxy-media')) {
+      const backendUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_URL) || 'http://localhost:3001';
+      setMediaSrc(`${backendUrl}/api/tools/proxy-media?url=${encodeURIComponent(item.animationUrl)}`);
+    } else {
+      setMediaLoadError(true);
+    }
+  };
+
   // Simulation parameters state
   const [simParams, setSimParams] = useState(() => {
     const defaultParams = {
@@ -26,14 +212,16 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
       angle: 45,
       gravity: 9.8,
       length: 120,
-      frequency: 2,
-      amplitude: 35,
+      frequency: 2.0,
+      amplitude: 32,
+      angleDeg: 45,
     };
     return { ...defaultParams, ...(item.parameters || {}) };
   });
 
-  // Canvas ref for simulations and Manim vector scenes
+  // Canvas refs for inline and modal fullscreen rendering
   const canvasRef = useRef(null);
+  const modalCanvasRef = useRef(null);
   const animFrameRef = useRef(null);
   const simProgressRef = useRef(0);
 
@@ -49,33 +237,32 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isExpanded]);
 
-  // Clean SVG sanitization with DOMPurify
+  // Enhanced SVG sanitization with DOMPurify
   const sanitizedSvg = useMemo(() => {
-    if (!item.svgCode) return '';
+    const effectiveSvg = getEnhancedPhysicsSvg(item.topic || '', item.svgCode || '');
+    if (!effectiveSvg) return '';
     try {
-      return DOMPurify.sanitize(item.svgCode, {
+      return DOMPurify.sanitize(effectiveSvg, {
         USE_PROFILES: { svg: true, svgFilters: true },
-        ADD_TAGS: ['style', 'animate', 'animateTransform', 'animateMotion'],
-        ADD_ATTR: ['keyTimes', 'values', 'dur', 'repeatCount', 'calcMode', 'from', 'to'],
+        ADD_TAGS: ['style', 'animate', 'animateTransform', 'animateMotion', 'polygon', 'polyline', 'feGaussianBlur', 'feMerge', 'feMergeNode'],
+        ADD_ATTR: ['keyTimes', 'values', 'dur', 'repeatCount', 'calcMode', 'from', 'to', 'filter', 'stdDeviation', 'result', 'in'],
       });
     } catch {
-      return item.svgCode;
+      return effectiveSvg;
     }
-  }, [item.svgCode]);
+  }, [item.svgCode, item.topic]);
 
   // -------------------------------------------------------------
   // Mode B: Interactive Canvas Simulation Engine
   // -------------------------------------------------------------
   useEffect(() => {
     if (animationType !== 'simulation' && animationType !== 'interactive_sim') return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let startTime = performance.now();
 
-    const simType = (item.simType || 'projectile').toLowerCase();
+    const simType = resolvedSimType;
 
-    const renderFrame = (now) => {
+    const drawFrameOnCanvas = (canvas, t) => {
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
       const width = canvas.width;
       const height = canvas.height;
       ctx.clearRect(0, 0, width, height);
@@ -94,106 +281,88 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
       }
 
-      if (isPlaying) {
-        simProgressRef.current += 0.016;
-      }
-      const t = simProgressRef.current;
-
       if (simType === 'pendulum') {
-        // Simple Harmonic Pendulum
         const originX = width / 2;
         const originY = 40;
-        const L = simParams.length;
+        const L = (simParams.length / 120) * (height * 0.45);
         const g = simParams.gravity;
         const omega = Math.sqrt(g / (L / 10));
-        const theta0 = 0.6; // initial angle in radians (~35 deg)
+        const theta0 = 0.6;
         const theta = theta0 * Math.cos(omega * t);
 
         const bobX = originX + L * Math.sin(theta);
         const bobY = originY + L * Math.cos(theta);
 
-        // String
         ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(originX, originY);
-        ctx.lineTo(bobX, bobY);
-        ctx.stroke();
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(originX, originY); ctx.lineTo(bobX, bobY); ctx.stroke();
 
-        // Pivot
         ctx.fillStyle = '#f8fafc';
         ctx.beginPath(); ctx.arc(originX, originY, 4, 0, Math.PI * 2); ctx.fill();
 
-        // Bob
         ctx.fillStyle = '#38bdf8';
-        ctx.shadowColor = '#0284c7';
-        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#0284c7'; ctx.shadowBlur = 14;
         ctx.beginPath(); ctx.arc(bobX, bobY, 14, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
 
-        // Info HUD
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '12px monospace';
-        ctx.fillText(`Period T = ${(2 * Math.PI / omega).toFixed(2)}s | g = ${g} m/s²`, 16, height - 16);
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '12px monospace';
+        ctx.fillText(`Period T = ${(2 * Math.PI / omega).toFixed(2)}s | Gravity g = ${g} m/s²`, 16, height - 16);
       } else if (simType === 'wave') {
-        // Harmonic Wave Simulation
-        const f = simParams.frequency;
-        const A = simParams.amplitude;
+        const f = simParams.frequency || 2.0;
+        const A = simParams.amplitude || 32;
         const cy = height / 2;
 
         ctx.strokeStyle = '#a855f7';
-        ctx.lineWidth = 3;
-        ctx.shadowColor = '#9333ea';
-        ctx.shadowBlur = 10;
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = '#9333ea'; ctx.shadowBlur = 12;
         ctx.beginPath();
         for (let x = 0; x < width; x += 2) {
-          const y = cy + A * Math.sin((x * 0.02) - (t * f * 2));
+          const y = cy + A * Math.sin((x * 0.02) - (t * f * 2.2));
           if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
         ctx.shadowBlur = 0;
 
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '12px monospace';
-        ctx.fillText(`Frequency: ${f} Hz | Amplitude: ${A}px`, 16, height - 16);
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '12px monospace';
+        const lambda = (200 / f).toFixed(0);
+        ctx.fillText(`Frequency f = ${f.toFixed(1)} Hz | Amplitude A = ${A}px | Wavelength λ ≈ ${lambda}px`, 16, height - 16);
       } else if (simType === 'trig_circle') {
-        // Trigonometric Unit Circle
-        const cx = 140, cy = height / 2, r = 70;
-        const angle = t * 1.2;
+        const cx = width * 0.35, cy = height / 2, r = Math.min(height * 0.35, 75);
+        const angle = isPlaying ? (t * 1.2) : ((simParams.angleDeg * Math.PI) / 180);
 
-        // Circle
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
 
-        // Axes
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.beginPath();
-        ctx.moveTo(cx - r - 20, cy); ctx.lineTo(cx + r + 20, cy);
-        ctx.moveTo(cx, cy - r - 20); ctx.lineTo(cx, cy + r + 20);
+        ctx.moveTo(cx - r - 25, cy); ctx.lineTo(cx + r + 25, cy);
+        ctx.moveTo(cx, cy - r - 25); ctx.lineTo(cx, cy + r + 25);
         ctx.stroke();
 
         const px = cx + r * Math.cos(angle);
         const py = cy - r * Math.sin(angle);
 
-        // Cosine (horizontal) & Sine (vertical) projections
-        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5; // Cosine
+        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(px, cy); ctx.stroke();
 
-        ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 2.5; // Sine
+        ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(px, cy); ctx.lineTo(px, py); ctx.stroke();
 
-        // Radius
         ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(px, py); ctx.stroke();
 
-        // Angle text
-        ctx.fillStyle = '#38bdf8'; ctx.font = '11px monospace';
-        ctx.fillText(`cos(θ) = ${Math.cos(angle).toFixed(2)}`, 240, cy - 15);
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+
+        const curDeg = Math.round(((angle % (Math.PI * 2)) * 180) / Math.PI + 360) % 360;
+        ctx.fillStyle = '#38bdf8'; ctx.font = '12px monospace';
+        ctx.fillText(`cos(θ) = ${Math.cos(angle).toFixed(2)}`, width * 0.65, cy - 20);
         ctx.fillStyle = '#f43f5e';
-        ctx.fillText(`sin(θ) = ${Math.sin(angle).toFixed(2)}`, 240, cy + 10);
+        ctx.fillText(`sin(θ) = ${Math.sin(angle).toFixed(2)}`, width * 0.65, cy + 5);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(`Angle θ = ${curDeg}°`, width * 0.65, cy + 30);
       } else {
-        // Projectile Motion Simulator (Default)
+        // Projectile Motion Simulator
         const v = simParams.velocity;
         const deg = simParams.angle;
         const rad = (deg * Math.PI) / 180;
@@ -203,13 +372,11 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
         const vy = v * Math.sin(rad);
         const totalTime = (2 * vy) / g;
 
-        const scale = 5;
-        const originX = 40;
-        const originY = height - 40;
+        const scale = width / 95;
+        const originX = 35;
+        const originY = height - 35;
 
-        // Draw parabolic path
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)'; ctx.lineWidth = 2;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
         for (let s = 0; s <= totalTime; s += 0.05) {
@@ -220,63 +387,63 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Ground line
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(20, originY); ctx.lineTo(width - 20, originY); ctx.stroke();
+        ctx.strokeStyle = '#475569'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(15, originY); ctx.lineTo(width - 15, originY); ctx.stroke();
 
-        // Projectile current position
         const curT = t % (totalTime + 0.8);
         if (curT <= totalTime) {
           const curX = originX + (vx * curT) * scale;
           const curY = originY - (vy * curT - 0.5 * g * curT * curT) * scale;
 
           ctx.fillStyle = '#f59e0b';
-          ctx.shadowColor = '#d97706';
-          ctx.shadowBlur = 14;
+          ctx.shadowColor = '#d97706'; ctx.shadowBlur = 14;
           ctx.beginPath(); ctx.arc(curX, curY, 7, 0, Math.PI * 2); ctx.fill();
           ctx.shadowBlur = 0;
         }
 
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '11px monospace';
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '11px monospace';
         const maxHeight = ((vy * vy) / (2 * g)).toFixed(1);
         const maxRange = ((v * v * Math.sin(2 * rad)) / g).toFixed(1);
         ctx.fillText(`v = ${v} m/s | θ = ${deg}° | H_max = ${maxHeight}m | Range = ${maxRange}m`, 16, 25);
       }
-
-      animFrameRef.current = requestAnimationFrame(renderFrame);
     };
 
-    animFrameRef.current = requestAnimationFrame(renderFrame);
+    const renderLoop = () => {
+      if (isPlaying) {
+        simProgressRef.current += 0.016;
+      }
+      const t = simProgressRef.current;
+      drawFrameOnCanvas(canvasRef.current, t);
+      if (isExpanded) {
+        drawFrameOnCanvas(modalCanvasRef.current, t);
+      }
+      animFrameRef.current = requestAnimationFrame(renderLoop);
+    };
+
+    animFrameRef.current = requestAnimationFrame(renderLoop);
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [animationType, isPlaying, item.simType, simParams]);
+  }, [animationType, isPlaying, resolvedSimType, simParams, isExpanded]);
 
   // -------------------------------------------------------------
   // Mode C: 3Blue1Brown Mathematical Vector Canvas Renderer
   // -------------------------------------------------------------
   useEffect(() => {
     if (animationType !== 'manim_video') return;
-    if (item.videoUrl) return; // Native MP4 video uses HTML5 video element
+    if (item.videoUrl) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-
-    const renderManimFrame = () => {
+    const drawManimOnCanvas = (canvas, progress) => {
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
       const width = canvas.width;
       const height = canvas.height;
       ctx.clearRect(0, 0, width, height);
 
-      // Signature 3Blue1Brown dark midnight background
       ctx.fillStyle = '#0c1021';
       ctx.fillRect(0, 0, width, height);
 
-      // Coordinate axes & subtle grid
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'; ctx.lineWidth = 1;
       for (let x = 40; x < width; x += 40) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
       }
@@ -284,48 +451,47 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
       }
 
-      if (isPlaying) {
-        simProgressRef.current = (simProgressRef.current + 0.008) % 1;
-      }
-      const progress = simProgressRef.current;
-
-      // Execute mathematical scene code or default derivative curve
       try {
         if (item.sceneCode) {
           const runFn = new Function('ctx', 'progress', 'width', 'height', item.sceneCode);
           runFn(ctx, progress, width, height);
         } else {
           // Default Pythagoras proof geometric transformation
-          const x0 = 160, y0 = 220, a = 100, b = 75;
-          ctx.strokeStyle = '#58C4DD'; ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.moveTo(x0, y0); ctx.lineTo(x0 + a, y0); ctx.lineTo(x0, y0 - b);
-          ctx.closePath(); ctx.stroke();
+          const x0 = width * 0.32, y0 = height * 0.72, a = width * 0.22, b = width * 0.16;
+          ctx.strokeStyle = '#58C4DD'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + a, y0); ctx.lineTo(x0, y0 - b); ctx.closePath(); ctx.stroke();
 
-          ctx.fillStyle = 'rgba(88, 196, 221, 0.25)';
-          ctx.fillRect(x0, y0, a, a); ctx.strokeRect(x0, y0, a, a);
-
-          ctx.fillStyle = 'rgba(248, 198, 48, 0.25)';
-          ctx.fillRect(x0 - b, y0 - b, b, b); ctx.strokeRect(x0 - b, y0 - b, b, b);
+          ctx.fillStyle = 'rgba(88, 196, 221, 0.25)'; ctx.fillRect(x0, y0, a, a); ctx.strokeRect(x0, y0, a, a);
+          ctx.fillStyle = 'rgba(248, 198, 48, 0.25)'; ctx.fillRect(x0 - b, y0 - b, b, b); ctx.strokeRect(x0 - b, y0 - b, b, b);
 
           ctx.fillStyle = '#ffffff'; ctx.font = '14px serif';
           ctx.fillText('a²', x0 + a/2 - 8, y0 + a/2 + 5);
           ctx.fillText('b²', x0 - b/2 - 8, y0 - b/2 + 5);
           ctx.fillStyle = '#58C4DD';
-          ctx.fillText('a² + b² = c²', x0 + a + 20, y0 - 30);
+          ctx.fillText('a² + b² = c²', x0 + a + 15, y0 - 25);
         }
       } catch (e) {
         console.warn('[InteractiveAnimationCard] Error rendering vector scene:', e);
       }
-
-      animFrameRef.current = requestAnimationFrame(renderManimFrame);
     };
 
-    animFrameRef.current = requestAnimationFrame(renderManimFrame);
+    const renderManimLoop = () => {
+      if (isPlaying) {
+        simProgressRef.current = (simProgressRef.current + 0.008) % 1;
+      }
+      const p = simProgressRef.current;
+      drawManimOnCanvas(canvasRef.current, p);
+      if (isExpanded) {
+        drawManimOnCanvas(modalCanvasRef.current, p);
+      }
+      animFrameRef.current = requestAnimationFrame(renderManimLoop);
+    };
+
+    animFrameRef.current = requestAnimationFrame(renderManimLoop);
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [animationType, isPlaying, item.videoUrl, item.sceneCode]);
+  }, [animationType, isPlaying, item.videoUrl, item.sceneCode, isExpanded]);
 
   const handleCopySvg = () => {
     if (!item.svgCode) return;
@@ -397,7 +563,7 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
               {animationType === 'simulation' || animationType === 'interactive_sim'
-                ? 'Playable Simulation Lab'
+                ? `Playable Simulation: ${resolvedSimType.toUpperCase()}`
                 : animationType === 'manim_video'
                 ? '3Blue1Brown Math Scene'
                 : animationType === 'archive_animation'
@@ -495,7 +661,7 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
             />
             {/* Interactive Parameter Sliders */}
             <div className="p-2.5 bg-stone-100 border-t border-stone-200 flex flex-wrap gap-3 items-center justify-between text-xs">
-              {item.simType === 'projectile' && (
+              {resolvedSimType === 'projectile' && (
                 <>
                   <label className="flex items-center gap-1.5 font-medium text-stone-700">
                     <span>Angle: {simParams.angle}°</span>
@@ -524,7 +690,63 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
                 </>
               )}
 
-              {item.simType === 'pendulum' && (
+              {resolvedSimType === 'wave' && (
+                <>
+                  <label className="flex items-center gap-1.5 font-medium text-stone-700">
+                    <span>Freq: {simParams.frequency.toFixed(1)} Hz</span>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={5.0}
+                      step={0.5}
+                      value={simParams.frequency}
+                      onChange={(e) => setSimParams((p) => ({ ...p, frequency: Number(e.target.value) }))}
+                      className="w-22 accent-indigo-600 cursor-pointer"
+                      data-testid="slider-frequency"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1.5 font-medium text-stone-700">
+                    <span>Amp: {simParams.amplitude}px</span>
+                    <input
+                      type="range"
+                      min={10}
+                      max={55}
+                      step={1}
+                      value={simParams.amplitude}
+                      onChange={(e) => setSimParams((p) => ({ ...p, amplitude: Number(e.target.value) }))}
+                      className="w-22 accent-indigo-600 cursor-pointer"
+                      data-testid="slider-amplitude"
+                    />
+                  </label>
+                </>
+              )}
+
+              {resolvedSimType === 'trig_circle' && (
+                <>
+                  <label className="flex items-center gap-1.5 font-medium text-stone-700">
+                    <span>Angle θ: {simParams.angleDeg || 45}°</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={360}
+                      step={5}
+                      value={simParams.angleDeg || 45}
+                      onChange={(e) => {
+                        const deg = Number(e.target.value);
+                        setSimParams((p) => ({ ...p, angleDeg: deg }));
+                        simProgressRef.current = (deg * Math.PI) / 180 / 1.2;
+                      }}
+                      className="w-24 accent-indigo-600 cursor-pointer"
+                      data-testid="slider-trig-angle"
+                    />
+                  </label>
+                  <span className="text-[11px] font-mono text-stone-600">
+                    cos={Math.cos(((simParams.angleDeg || 45) * Math.PI) / 180).toFixed(2)} | sin={Math.sin(((simParams.angleDeg || 45) * Math.PI) / 180).toFixed(2)}
+                  </span>
+                </>
+              )}
+
+              {resolvedSimType === 'pendulum' && (
                 <>
                   <label className="flex items-center gap-1.5 font-medium text-stone-700">
                     <span>Gravity: {simParams.gravity}</span>
@@ -586,23 +808,28 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
         )}
 
         {/* Mode D: Archive Educational Animation Loop (GIF or Video) */}
-        {animationType === 'archive_animation' && item.animationUrl && (
+        {animationType === 'archive_animation' && mediaSrc && !mediaLoadError && (
           <div className="w-full max-h-[260px] flex items-center justify-center bg-stone-900 overflow-hidden">
             {item.isVideo ? (
               <video
-                src={item.animationUrl}
+                src={mediaSrc}
                 autoPlay={isPlaying}
                 loop
                 muted
                 playsInline
+                crossOrigin="anonymous"
                 className="w-full max-h-[260px] object-contain"
+                onError={handleMediaError}
                 data-testid="archive-video-element"
               />
             ) : (
               <img
-                src={item.animationUrl}
+                src={mediaSrc}
                 alt={item.topic || 'Animation'}
+                referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
                 className="w-full max-h-[260px] object-contain"
+                onError={handleMediaError}
                 data-testid="archive-gif-element"
               />
             )}
@@ -654,15 +881,19 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
               )}
               {animationType === 'archive_animation' && (
                 item.isVideo ? (
-                  <video src={item.animationUrl} autoPlay loop muted playsInline className="max-h-[65vh] object-contain rounded-lg" />
+                  <video src={mediaSrc} autoPlay loop muted playsInline crossOrigin="anonymous" className="max-h-[65vh] object-contain rounded-lg" />
                 ) : (
-                  <img src={item.animationUrl} alt={item.topic} className="max-h-[65vh] object-contain rounded-lg" />
+                  <img src={mediaSrc} alt={item.topic} referrerPolicy="no-referrer" crossOrigin="anonymous" className="max-h-[65vh] object-contain rounded-lg" />
                 )
               )}
-              {(animationType === 'simulation' || animationType === 'manim_video') && (
-                <div className="text-center text-slate-400 text-sm py-12">
-                  Simulation / Math Scene running at native 60 FPS in interactive canvas.
-                </div>
+              {(animationType === 'simulation' || animationType === 'interactive_sim' || animationType === 'manim_video') && (
+                <canvas
+                  ref={modalCanvasRef}
+                  width={760}
+                  height={420}
+                  className="w-full max-h-[65vh] bg-slate-950 rounded-xl block"
+                  data-testid="modal-simulation-canvas"
+                />
               )}
             </div>
           </div>
