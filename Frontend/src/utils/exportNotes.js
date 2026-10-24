@@ -56,6 +56,21 @@ export function exportWhiteboardToMarkdown(items = [], studentProfile = {}) {
       }
     }
 
+    if (item.animationUrl) {
+      md += `![${item.caption || item.topic || 'Educational Animation'}](${item.animationUrl})\n\n`;
+      if (item.attribution) {
+        md += `*Source: ${item.attribution}*\n\n`;
+      }
+    }
+
+    if (item.animationType === 'manim_video') {
+      md += `> 🎬 **3Blue1Brown Mathematical Visualization:** ${item.equation || item.topic}\n\n`;
+    }
+
+    if (item.animationType === 'simulation') {
+      md += `> 🕹️ **Interactive Simulation Lab:** ${item.topic} (Type: ${item.simType || 'physics'})\n\n`;
+    }
+
     if (item.svgCode) {
       md += `\n**Visual Vector Diagram:**\n\n\`\`\`xml\n${item.svgCode}\n\`\`\`\n\n`;
       if (item.caption) {

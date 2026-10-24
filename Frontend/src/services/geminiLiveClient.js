@@ -5,7 +5,7 @@
  */
 export class GeminiLiveClient {
   constructor({
-    backendUrl = 'http://localhost:3001',
+    backendUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_URL) || 'http://localhost:3001',
     onOpen,
     onClose,
     onError,
@@ -261,33 +261,49 @@ export class GeminiLiveClient {
               },
               {
                 name: 'render_visual',
-                description: 'MANDATORY PRIMARY VISUAL TOOL FOR ANY CONCEPT: Display a high-definition educational visual or diagram on the student whiteboard whenever explaining concepts, objects, processes, machines, or historical/scientific topics. Mode "photo_search" retrieves authentic, high-resolution labeled diagrams and photographs directly from Google/Web & educational archives (e.g. human heart anatomy, electric generator parts, plant cell). Mode "svg_sketch" generates custom vector sketches (physics light rays, circuits, math shapes). Mode "ai_image" generates futuristic AI scenes.',
+                description: 'MANDATORY PRIMARY VISUAL & ANIMATION SUITE: Display a high-definition visual, animation loop, mathematical simulation, or diagram on the whiteboard. Supports 4 specialized animation modes: "animated_svg" (instant zero-latency vector loops with CSS keyframes for rays, circuits, waves), "interactive_sim" (hands-on playable HTML5 canvas experiments with sliders for physics/algorithms), "manim_video" (3Blue1Brown mathematical and calculus animations), "archive_animation" (authentic scientific/biological animation loops from Wikimedia like heart cycle, engine, DNA helicase), plus "photo_search", "svg_sketch", and "ai_image".',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
                     topic: {
                       type: 'STRING',
-                      description: 'Clear title of the visual (e.g. "Refraction through Prism", "Plant Cell Organelles", "James Webb Space Telescope", "Bohr Model of Carbon")',
+                      description: 'Clear title of the visual or animation (e.g. "Refraction through Prism", "Projectile Motion Simulator", "Pythagoras Theorem Proof", "Cardiac Cycle Animation")',
                     },
                     mode: {
                       type: 'STRING',
-                      description: 'Visual creation mode: "svg_sketch" for custom vector diagrams drawn from scratch, "photo_search" for authentic real-world photos/maps from educational archives, or "ai_image" for realistic AI-generated conceptual artwork / 3D scientific renders with clear text labels',
+                      description: 'Visual creation mode: "animated_svg" for real-time CSS vector loops, "interactive_sim" for hands-on playable simulation, "manim_video" for 3Blue1Brown mathematical scenes, "archive_animation" for scientific/biological archive animation loops (.gif/.webm), "photo_search" for static archive photographs, "svg_sketch" for static vector drawings, or "ai_image" for futuristic 3D scenes.',
                     },
                     svgCode: {
                       type: 'STRING',
-                      description: 'When mode="svg_sketch": Full valid standalone SVG string with compact viewBox="0 0 500 300" (e.g. <svg viewBox="0 0 500 300" xmlns="http://www.w3.org/2000/svg">...). Include clean shapes, soft pastel colors, and clear text labels with pointer lines.',
+                      description: 'When mode="animated_svg" or "svg_sketch": Full valid standalone SVG string with compact viewBox="0 0 500 300". For "animated_svg", include <style> @keyframes ... </style> for smooth perpetual motion loops (e.g. pulsating waves, moving electrons, rotating rays).',
+                    },
+                    simType: {
+                      type: 'STRING',
+                      description: 'When mode="interactive_sim": Simulation preset: "projectile", "pendulum", "wave", "sorting", "orbit", "trig_circle", "spring", or "custom".',
+                    },
+                    simulationCode: {
+                      type: 'STRING',
+                      description: 'When mode="interactive_sim": Optional JavaScript canvas simulation code if custom simulation is needed.',
+                    },
+                    equation: {
+                      type: 'STRING',
+                      description: 'When mode="manim_video": Mathematical equation or theorem formula (e.g. "a^2 + b^2 = c^2", "f\'(x) = lim(h->0) [f(x+h)-f(x)]/h", "e^(i*pi) + 1 = 0").',
+                    },
+                    manimCode: {
+                      type: 'STRING',
+                      description: 'When mode="manim_video": Optional Python Manim script definition for the mathematical scene.',
                     },
                     searchQuery: {
                       type: 'STRING',
-                      description: 'When mode="photo_search": Precise search query for educational archive (e.g. "James Webb Space Telescope", "Taj Mahal", "Human Heart Anatomy")',
+                      description: 'When mode="photo_search" or "archive_animation": Precise search query for educational archive (e.g. "Cardiac cycle animation", "Four-stroke engine animation", "DNA replication animation", "James Webb Space Telescope")',
                     },
                     imagePrompt: {
                       type: 'STRING',
-                      description: 'When mode="ai_image": Detailed visual description for the FLUX AI image generator. Always include the concept title/label in single quotes for accurate typography (e.g. "Realistic 3D cross-section of Mitochondria with glowing title \'MITOCHONDRIA\', studio lighting, 8k, scientific illustration").',
+                      description: 'When mode="ai_image": Detailed visual description for the FLUX AI image generator.',
                     },
                     caption: {
                       type: 'STRING',
-                      description: 'Short 1-2 sentence educational explanation of what this visual illustrates',
+                      description: 'Short 1-2 sentence educational explanation of what this visual or animation demonstrates',
                     },
                     subject: {
                       type: 'STRING',
@@ -295,6 +311,62 @@ export class GeminiLiveClient {
                     },
                   },
                   required: ['topic', 'mode'],
+                },
+              },
+              {
+                name: 'render_manim_animation',
+                description: 'DEDICATED 3BLUE1BROWN MATHEMATICAL ANIMATION ENGINE: Call this whenever explaining calculus, geometry proofs, linear algebra, vector fields, or complex mathematical transformations. Renders a cinematic mathematical visualization with dark theme and smooth geometric morphing.',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    topic: {
+                      type: 'STRING',
+                      description: 'Title of the mathematical concept (e.g. "Pythagorean Theorem Geometric Proof", "Derivative as Tangent Slope", "Fourier Series Epicycles", "Eigenvector Transformation")',
+                    },
+                    equation: {
+                      type: 'STRING',
+                      description: 'The primary mathematical equation or formula being animated (e.g. "a² + b² = c²", "f\'(x) = 2x", "T(v) = λv")',
+                    },
+                    sceneType: {
+                      type: 'STRING',
+                      description: 'Type of mathematical scene: "pythagoras", "derivative", "fourier", "vector", or "custom"',
+                    },
+                    manimCode: {
+                      type: 'STRING',
+                      description: 'Optional Python Manim Scene code if customized.',
+                    },
+                    caption: {
+                      type: 'STRING',
+                      description: 'Brief educational explanation of what the mathematical animation proves.',
+                    },
+                  },
+                  required: ['topic', 'equation'],
+                },
+              },
+              {
+                name: 'render_simulation',
+                description: 'DEDICATED PLAYABLE INTERACTIVE EXPERIMENT LAB: Call this whenever the student should interact with variables, drag sliders, or test physical laws (e.g. changing projectile velocity, altering pendulum gravity, adjusting sound wave frequency, stepping through sorting algorithms).',
+                parameters: {
+                  type: 'OBJECT',
+                  properties: {
+                    topic: {
+                      type: 'STRING',
+                      description: 'Title of the simulation (e.g. "Projectile Motion Simulator", "Simple Harmonic Pendulum", "Trigonometric Unit Circle", "Bubble Sort Visualizer")',
+                    },
+                    simType: {
+                      type: 'STRING',
+                      description: 'Simulation preset type: "projectile", "pendulum", "wave", "sorting", "orbit", "trig_circle", "spring", or "custom"',
+                    },
+                    caption: {
+                      type: 'STRING',
+                      description: 'Short explanation instructing the student what parameters to test or adjust.',
+                    },
+                    parameters: {
+                      type: 'OBJECT',
+                      description: 'Optional default parameters (e.g. { gravity: 9.8, velocity: 25, angle: 45 }).',
+                    },
+                  },
+                  required: ['topic', 'simType'],
                 },
               },
               {
@@ -1004,9 +1076,10 @@ export class GeminiLiveClient {
           .catch((err) => console.warn('[GeminiLiveClient] Backend generate-image error:', err.message));
       } else if (call.name === 'render_visual') {
         console.log(`[GeminiLiveClient #${this.clientId}] Executing render_visual call:`, call.args);
-        const { topic, mode, svgCode, searchQuery, imagePrompt, caption, subject } = call.args || {};
+        const { topic, mode, svgCode, simType, simulationCode, equation, manimCode, searchQuery, imagePrompt, caption, subject } = call.args || {};
 
         const visualPayload = {
+          id: 'anim-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
           topic: topic || 'Educational Visual',
           caption: caption || '',
           subject: subject || 'general',
@@ -1014,7 +1087,74 @@ export class GeminiLiveClient {
           notes: caption ? [caption] : [],
         };
 
-        if (mode === 'photo_search') {
+        if (mode === 'animated_svg') {
+          // Mode A: Animated Vector Loop with CSS keyframes
+          visualPayload.visualType = 'animation';
+          visualPayload.animationType = 'animated_svg';
+          visualPayload.svgCode = svgCode || '';
+        } else if (mode === 'interactive_sim') {
+          // Mode B: Interactive Canvas Simulation Lab
+          visualPayload.visualType = 'animation';
+          visualPayload.animationType = 'simulation';
+          visualPayload.simType = (simType || 'projectile').toLowerCase();
+          visualPayload.simulationCode = simulationCode || null;
+        } else if (mode === 'manim_video') {
+          // Mode C: 3Blue1Brown Mathematical Scene
+          visualPayload.visualType = 'animation';
+          visualPayload.animationType = 'manim_video';
+          visualPayload.equation = equation || '';
+          visualPayload.isRendering = true;
+
+          // Asynchronously trigger backend Manim compilation and update whiteboard card in-place
+          fetch(`${this.backendUrl}/api/tools/render-manim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: manimCode, topic, equation, sceneType: simType || 'pythagoras' }),
+          })
+            .then((res) => res.json())
+            .then((manimData) => {
+              if (manimData.success) {
+                console.log('[GeminiLiveClient] Manim scene compiled successfully:', manimData.engine);
+                if (this.onWhiteboardCall) {
+                  this.onWhiteboardCall({
+                    ...visualPayload,
+                    isRendering: false,
+                    videoUrl: manimData.videoUrl || null,
+                    sceneCode: manimData.sceneCode || null,
+                    engine: manimData.engine,
+                  });
+                }
+              }
+            })
+            .catch((err) => console.warn('[GeminiLiveClient] Manim render request error:', err.message));
+        } else if (mode === 'archive_animation') {
+          // Mode D: Authentic Educational Animation Loop from Archives (.gif, .webm, .mp4)
+          visualPayload.visualType = 'animation';
+          visualPayload.animationType = 'archive_animation';
+          const query = searchQuery || topic || '';
+          console.log(`[GeminiLiveClient] Searching educational archive for animation loop: "${query}"`);
+
+          try {
+            const res = await fetch(`${this.backendUrl}/api/tools/animation-search`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query, maxResults: 3 }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.success && data.selectedAnimation) {
+                visualPayload.animationUrl = data.selectedAnimation.animationUrl;
+                visualPayload.thumbnailUrl = data.selectedAnimation.thumbnailUrl;
+                visualPayload.isVideo = data.selectedAnimation.isVideo;
+                visualPayload.isGif = data.selectedAnimation.isGif;
+                visualPayload.attribution = data.selectedAnimation.attribution;
+                visualPayload.caption = caption || data.selectedAnimation.description || data.selectedAnimation.title;
+              }
+            }
+          } catch (animErr) {
+            console.error('[GeminiLiveClient] Archive animation search error:', animErr);
+          }
+        } else if (mode === 'photo_search') {
           const query = searchQuery || topic || '';
           console.log(`[GeminiLiveClient] Searching educational archive for photo: "${query}"`);
           try {
@@ -1083,8 +1223,79 @@ export class GeminiLiveClient {
           response: {
             result: {
               status: 'success',
-              message: `Visual ${mode === 'photo_search' ? 'photograph' : 'vector diagram'} "${topic}" successfully displayed on student whiteboard canvas.`,
+              message: `Visual ${mode} "${topic}" successfully displayed on student whiteboard canvas.`,
             },
+          },
+        });
+      } else if (call.name === 'render_manim_animation') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing render_manim_animation call:`, call.args);
+        const { topic, equation, sceneType, manimCode, caption } = call.args || {};
+        const animPayload = {
+          id: 'manim-' + Date.now(),
+          topic: topic || 'Mathematical Animation',
+          equation: equation || '',
+          caption: caption || '',
+          visualType: 'animation',
+          animationType: 'manim_video',
+          isRendering: true,
+          cardType: 'visual',
+          notes: caption ? [caption] : [],
+        };
+
+        if (this.onWhiteboardCall) {
+          this.onWhiteboardCall(animPayload);
+        }
+
+        fetch(`${this.backendUrl}/api/tools/render-manim`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: manimCode, topic, equation, sceneType: sceneType || 'pythagoras' }),
+        })
+          .then((res) => res.json())
+          .then((manimData) => {
+            if (manimData.success && this.onWhiteboardCall) {
+              this.onWhiteboardCall({
+                ...animPayload,
+                isRendering: false,
+                videoUrl: manimData.videoUrl || null,
+                sceneCode: manimData.sceneCode || null,
+                engine: manimData.engine,
+              });
+            }
+          })
+          .catch((err) => console.warn('[GeminiLiveClient] Manim error:', err.message));
+
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: { status: 'success', message: `3Blue1Brown Mathematical scene for "${topic}" is rendering.` },
+          },
+        });
+      } else if (call.name === 'render_simulation') {
+        console.log(`[GeminiLiveClient #${this.clientId}] Executing render_simulation call:`, call.args);
+        const { topic, simType, caption, parameters } = call.args || {};
+        const simPayload = {
+          id: 'sim-' + Date.now(),
+          topic: topic || 'Physics Experiment Lab',
+          simType: (simType || 'projectile').toLowerCase(),
+          caption: caption || '',
+          parameters: parameters || null,
+          visualType: 'animation',
+          animationType: 'simulation',
+          cardType: 'visual',
+          notes: caption ? [caption] : [],
+        };
+
+        if (this.onWhiteboardCall) {
+          this.onWhiteboardCall(simPayload);
+        }
+
+        responses.push({
+          id: call.id,
+          name: call.name,
+          response: {
+            result: { status: 'success', message: `Interactive simulation lab "${topic}" mounted on whiteboard.` },
           },
         });
       } else if (call.name === 'clear_whiteboard') {

@@ -148,3 +148,6 @@ export async function searchUniversalVisual(query, { maxResults = 3 } = {}) {
     results: [],
   };
 }
+
+
+export { searchEducationalAnimation } from './wikimediaService.js';

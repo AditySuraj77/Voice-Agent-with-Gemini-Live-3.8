@@ -1,19 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, Maximize2, Image as ImageIcon, Sparkles, AlertCircle, Compass, Check, X, Wand2 } from 'lucide-react';
+import DOMPurify from 'dompurify';
+import { InteractiveAnimationCard } from './InteractiveAnimationCard.jsx';
 
 /**
  * UniversalVisualCard
  * Renders either:
- * 1. Autonomous Generative SVG Vector Diagrams (Custom sketches for Physics, Biology, Chemistry, Math, Geography)
- * 2. Authentic Educational Archive Photos (Real Space, Historical Monuments, Microscopic Scans from Wikimedia Commons)
- * 3. FLUX AI Conceptual Illustrations (High-realism 3D concepts, scientific renders, and bold text typography)
- *
- * Dedicated Fullscreen Lightbox Modal:
- * - Only zooms into the single selected visual (never squishes multiple images side-by-side).
- * - High-res presentation with prominent Close (✕) button, Escape key listener, and backdrop dismiss.
+ * 1. Hybrid Interactive Animations (Animated SVG, Playable Simulation, Manim Math Scene, Archive Loops)
+ * 2. Autonomous Generative SVG Vector Diagrams
+ * 3. Authentic Educational Archive Photos
+ * 4. FLUX AI Conceptual Illustrations
  */
 export function UniversalVisualCard({ item, onOpenInCodeLab }) {
+  if (
+    item?.visualType === 'animation' ||
+    item?.visualType === 'simulation' ||
+    Boolean(item?.animationType) ||
+    item?.cardType === 'animation' ||
+    item?.cardType === 'simulation'
+  ) {
+    return <InteractiveAnimationCard item={item} onOpenInCodeLab={onOpenInCodeLab} />;
+  }
+
+  return <StandardUniversalVisualCard item={item} onOpenInCodeLab={onOpenInCodeLab} />;
+}
+
+function StandardUniversalVisualCard({ item, onOpenInCodeLab }) {
   const [expandedView, setExpandedView] = useState(null); // 'svg' | 'photo' | 'ai_image' | null
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -128,7 +141,7 @@ export function UniversalVisualCard({ item, onOpenInCodeLab }) {
           data-testid="svg-diagram-container"
           onClick={() => setExpandedView('svg')}
           title="Click to view full size"
-          dangerouslySetInnerHTML={{ __html: item.svgCode }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.svgCode, { USE_PROFILES: { svg: true, svgFilters: true } }) }}
         />
       </div>
 
@@ -455,7 +468,7 @@ export function UniversalVisualCard({ item, onOpenInCodeLab }) {
               {expandedView === 'svg' && item.svgCode && (
                 <div
                   className="w-full max-w-3xl bg-white rounded-xl p-4 shadow-xl flex items-center justify-center max-h-[72vh] [&>svg]:max-h-[68vh] [&>svg]:w-auto [&>svg]:h-auto [&>svg]:max-w-full [&>svg]:mx-auto"
-                  dangerouslySetInnerHTML={{ __html: item.svgCode }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.svgCode, { USE_PROFILES: { svg: true, svgFilters: true } }) }}
                 />
               )}
 

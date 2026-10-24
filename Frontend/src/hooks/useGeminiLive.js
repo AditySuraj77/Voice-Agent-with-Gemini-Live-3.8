@@ -4,7 +4,7 @@ import { AudioPlayer } from '../audio/audioPlayer.js';
 import { GeminiLiveClient } from '../services/geminiLiveClient.js';
 import { saveActiveSession } from '../services/sessionHistory.js';
 
-const BACKEND_URL = 'http://localhost:3001';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 /**
  * Normalizes and extracts key topic root words to detect when the teacher is elaborating on the same concept
@@ -215,12 +215,24 @@ RULE 4: COMPARISON & TABULAR SYNTHESIS (RENDER CLEAN TABLES ON WHITEBOARD)
      | Value (V) | The actual content/information | The webpage body text |
    - The whiteboard automatically converts this into a stunning interactive table card!
 
-VISUAL TOOLS AT YOUR DISPOSAL:
-1. MANDATORY PRIMARY VISUAL TOOL (TOOL: render_visual with mode="photo_search"):
-   - Searches Google & Educational archives for authentic high-resolution diagrams with human-verified labels. Zero quota limits, instant loading.
-2. CUSTOM GENERATIVE VECTOR SKETCHES (TOOL: render_visual with mode="svg_sketch"):
-   - For physics light rays, circuit schematics, geometry, and coordinate curves.
-3. DEDICATED AI ARTISTIC / CONCEPTUAL IMAGE GENERATION (TOOL: generate_ai_image):
+HYBRID ANIMATION & VISUAL SUITE (SELECT OPTIMAL ENGINE BY TOPIC):
+You have 4 specialized animation engines plus archive photos:
+1. TIER 1: INSTANT ANIMATED SVG (render_visual with mode="animated_svg"):
+   - Latency: 0ms (Instant voice-sync loop).
+   - Best for: Light rays refraction through prism, pulsating wave loops, moving electrons in circuit, fluid flow arrows. Include <style> @keyframes ... </style> inside svgCode.
+2. TIER 2: PLAYABLE SIMULATION LAB (mode="interactive_sim" or tool render_simulation):
+   - Latency: < 1s (Hands-on interactive canvas with student sliders).
+   - Best for: When student should experiment with variables: Projectile motion (angle & velocity sliders), Simple harmonic pendulum (gravity & length sliders), Sound waves (frequency & amplitude), Sorting algorithms, Unit circle trig.
+3. TIER 3: 3BLUE1BROWN MATHEMATICAL SCENE (mode="manim_video" or tool render_manim_animation):
+   - Latency: Async background compilation (~10s).
+   - Best for: Pure mathematical theorems, geometric proofs (Pythagoras theorem a² + b² = c² area morph), Calculus derivative as tangent slope, Fourier series harmonics, Linear algebra vector transformations.
+   - While rendering, speak filler dialogue: "Main aapke liye screen par iska ek detailed mathematical animation render kar raha hoon, tab tak aaiye samajhte hain..."
+4. TIER 4: AUTHENTIC ARCHIVE ANIMATIONS (mode="archive_animation"):
+   - Latency: ~500ms (High-res biological & mechanical loops from Wikimedia).
+   - Best for: Complex biological organs and machines: Cardiac cycle / beating heart, Four-stroke combustion engine, DNA helicase unzipping, Earth plate tectonics.
+5. STATIC EDUCATIONAL ARCHIVE PHOTOS (mode="photo_search"):
+   - For authentic historical monuments, astronomical space scans, and museum artifacts.
+6. DEDICATED AI ARTISTIC / CONCEPTUAL IMAGE GENERATION (TOOL: generate_ai_image):
    - Use ONLY when ${studentName} EXPLICITLY asks to "AI se image banao", "AI generation tool use karo", or asks for futuristic fantasy concepts (e.g. "futuristic city on Mars 2050", "cyberpunk robot classroom").
 
 CRITICAL LIVE WEB BROWSER AUTOMATION DIRECTIVE:
@@ -789,10 +801,10 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
         }
 
         const newItem = {
-          id: 'wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          id: args.id || ('wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
           topic,
           notes,
-          cardType: args.cardType || (args.image ? 'image' : args.formula ? 'formula' : args.code ? 'code' : 'concept'),
+          cardType: args.cardType || (args.animationType || args.visualType === 'animation' ? 'visual' : args.image ? 'image' : args.formula ? 'formula' : args.code ? 'code' : 'concept'),
           formula: args.formula || null,
           code: args.code || (args.component === 'code' ? args.content : null),
           language: (args.language || '').toLowerCase().trim() || null,
@@ -801,7 +813,19 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           image: args.image || null,
           caption: args.caption || null,
           tableData: resolvedTableData,
-          visualType: args.visualType || (args.svgCode ? 'svg' : args.imageUrl ? 'photo' : null),
+          visualType: args.visualType || (args.animationType ? 'animation' : args.svgCode ? 'svg' : args.imageUrl ? 'photo' : null),
+          animationType: args.animationType || null,
+          animationUrl: args.animationUrl || null,
+          thumbnailUrl: args.thumbnailUrl || null,
+          isVideo: Boolean(args.isVideo),
+          isGif: Boolean(args.isGif),
+          simType: args.simType || null,
+          simulationCode: args.simulationCode || null,
+          equation: args.equation || null,
+          sceneCode: args.sceneCode || null,
+          videoUrl: args.videoUrl || null,
+          isRendering: Boolean(args.isRendering),
+          parameters: args.parameters || null,
           svgCode: args.svgCode || null,
           imageUrl: args.imageUrl || null,
           imageTitle: args.imageTitle || null,
@@ -814,6 +838,21 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
 
         // Merge notes if teacher continues elaborating on same topic
         setWhiteboardItems((prev) => {
+          // If updating an existing item in-place by ID (e.g. Manim async compilation finished)
+          if (args.id) {
+            const existingIdx = prev.findIndex((it) => it.id === args.id);
+            if (existingIdx !== -1) {
+              const updatedList = [...prev];
+              updatedList[existingIdx] = {
+                ...updatedList[existingIdx],
+                ...newItem,
+                id: args.id,
+                notes: newItem.notes.length > 0 ? newItem.notes : updatedList[existingIdx].notes,
+              };
+              return updatedList;
+            }
+          }
+
           const lastItem = prev[prev.length - 1];
           if (
             lastItem &&
