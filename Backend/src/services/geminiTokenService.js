@@ -49,7 +49,7 @@ export const GEMINI_TOOLS = [
             },
             svgCode: {
               type: 'STRING',
-              description: 'Optional complete valid standalone SVG diagram (viewBox="0 0 600 400") to illustrate the concept visually alongside the notes',
+              description: 'MANDATORY FOR EVERY TOPIC EXPLAINED ACROSS ALL SUBJECTS: Complete valid standalone SVG diagram (viewBox="0 0 600 400" with shapes, text labels, colors) illustrating the core concept, anatomy, geometry, molecular structure, setup, or process alongside the notes. Do not omit!',
             },
             visualQuery: {
               type: 'STRING',
@@ -64,7 +64,7 @@ export const GEMINI_TOOLS = [
               description: 'Educational caption for the attached visual illustration',
             },
           },
-          required: ['topic', 'notes'],
+          required: ['topic', 'notes', 'svgCode'],
         },
       },
       {

@@ -3,6 +3,7 @@ import { AudioRecorder } from '../audio/audioRecorder.js';
 import { AudioPlayer } from '../audio/audioPlayer.js';
 import { GeminiLiveClient } from '../services/geminiLiveClient.js';
 import { saveActiveSession } from '../services/sessionHistory.js';
+import { generateUniversalTopicSvg } from '../utils/universalSvgGenerator.js';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -184,12 +185,25 @@ CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
 CRITICAL TEACHER PEDAGOGY & 2-STAGE VISUAL FLOW RULES (TEXTBOOK FIRST -> ANIMATION ON CONFUSION):
 Just like an exceptional human classroom teacher, you teach in a structured 2-Stage pedagogical flow:
 
-STAGE 1: TOPIC INTRODUCTION (TEXTBOOK FIRST: STRUCTURED NOTES + STATIC LABELED DIAGRAM)
-- Whenever you introduce, explain, or teach ANY new concept, machine, anatomy, or theory on your first turn:
-- ALWAYS follow the clean textbook layout: Call \`write_on_whiteboard\` with concise bullet notes, definitions, formulas, AND a clean static labeled diagram or photograph (\`visualQuery: "..."\` or static SVG \`svgCode: "..."\`).
+STAGE 1: TOPIC INTRODUCTION (TEXTBOOK FIRST: STRUCTURED NOTES + MANDATORY TOPIC SVG DIAGRAM)
+- Whenever you introduce, explain, or teach ANY topic on your first turn:
+- HAR TOPIC MEIN IMAGE/SVG COMPULSORY HAI! Chahe Physics ho, Chemistry, Biology, Mathematics, Computer Science, History, Geography, ya Economics!
+- ALWAYS follow the clean textbook layout: Call \`write_on_whiteboard\` with concise bullet notes, definitions, formulas, AND you MUST ALWAYS generate a topic-relevant, standalone, beautiful SVG diagram in \`svgCode\` (viewBox="0 0 600 400") alongside!
+- DO NOT HARDCODE OR RESTRICT VISUALS TO ONLY 1 OR 2 SUBJECTS. Visual diagrams are required for ALL subjects:
+  * Math: Geometry proofs, coordinate Cartesian planes, right triangles, curves, Venn diagrams, set relations, angle bisectors.
+  * Physics: Ray optics, electrical circuit schematics, free-body force diagrams, magnetic poles, pulleys, wave forms.
+  * Chemistry: Molecular geometry, covalent/ionic bonds, Bohr atomic models, reaction flowcharts, periodic trends.
+  * Biology: Anatomical organs (heart, eye, nephron), cell organelle anatomy (mitochondria, chloroplast), DNA double helix, photosynthesis light reactions.
+  * Computer Science: Tree structures, array memory slots, stack/queue pointers, client-server network diagrams, algorithm flowcharts.
+  * History & Geography: Milestone chronology arrows, tectonic plates, layers of atmosphere/earth, trade routes, volcanic cross-sections.
+  * Economics & Social Studies: Supply-demand curves, market equilibrium, circular flow diagrams.
+- CRITICAL SVG QUALITY GUIDELINES:
+  * Valid standalone XML: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="100%" height="100%">
+  * Modern dark palette: dark slate background (#0b1329 or #0f172a), vivid accent lines/shapes (#38bdf8, #818cf8, #34d399, #fbbf24, #f472b6), and crisp <text> labels (#f8fafc).
+  * Never write raw HTML inside SVG. Keep shapes (<rect>, <circle>, <path>, <line>, <polygon>, <text>) properly closed.
 - NEVER jump directly into motion animations or simulation labs on Turn 1 unless ${studentName} EXPLICITLY asks for an animation!
 - Why? In cognitive learning, students must first absorb the anatomy, parts, and vocabulary in a calm static reference diagram without distracting motion!
-- Seamlessly connect your speech: "Dekho ${studentName}, is theory ko samajhne ke liye maine board par iska labeled textbook diagram open kiya hai. Chalo pehle iske main parts aur definitions samajhte hain..."
+- Seamlessly connect your speech: "Dekho ${studentName}, is topic ko samajhne ke liye maine board par iska labeled textbook diagram aur notes open kiye hain. Chalo pehle iske main parts aur definitions samajhte hain..."
 
 STAGE 2: ESCALATION TO ANIMATION (TRIGGER ON CONFUSION, DOUBT, OR DYNAMIC MECHANISM)
 - If ${studentName} expresses confusion, doubt, or difficulty after 1-2 attempts (e.g. "samajh nahi aaya", "kaise kaam karta hai?", "coil kaise ghoomti hai?", "blood flow kaise hota hai?", "visualize nahi ho raha"):
@@ -205,10 +219,9 @@ STAGE 0: EXPLICIT STUDENT OVERRIDE
 - If ${studentName} explicitly requests an animation from the very beginning (e.g. "Heart ka pumping animation dikhao", "Prism ka simulation chalao"):
 - Respect the student's request immediately and trigger the animation right away!
 
-RULE 3: PURE THEORY & MATH - KEEP WHITEBOARD CLEAN (NO UNNECESSARY PICTURES)
-   - For pure mathematical derivations, calculus steps, coding syntax, or historical dates/philosophical ideas:
-   - DO NOT search for random decorative images!
-   - Keep the board clean with clear structured text bullets (\`write_on_whiteboard\`), LaTeX formulas (\`formula: "..."\`), or Code Lab snippets (\`component: "code"\`).
+RULE 3: ALL-SUBJECT VISUAL RIGOR (DIAGRAM FOR EVERY TOPIC)
+   - Every educational topic explained on the whiteboard must be visually accompanied by its structural SVG diagram in \`svgCode\`!
+   - For pure mathematical derivations, calculus steps, or historical events, draw the corresponding coordinate curve, geometric figure, or chronological timeline arrow in \`svgCode\`!
 
 RULE 4: COMPARISON & TABULAR SYNTHESIS (RENDER CLEAN TABLES ON WHITEBOARD)
    - Whenever comparing 2 or more entities, steps, or contrasting concepts (e.g. Query vs Key vs Value, Mitosis vs Meiosis, AC vs DC Generator, Supervised vs Unsupervised, Series vs Parallel circuits):
@@ -810,6 +823,15 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           }
         }
 
+        // Resolve SVG diagram: use Gemini's svgCode, or generate an authentic domain SVG across any subject so every concept card is visually illustrated
+        const isAnimationOrMedia = Boolean(args.animationType || args.visualType === 'animation' || args.imageUrl || args.image || args.animationUrl);
+        const resolvedSvgCode = args.svgCode || (
+          !isAnimationOrMedia && topic && topic.length > 1
+            ? generateUniversalTopicSvg(topic, notes, args.formula, args.subject)
+            : null
+        );
+        const resolvedVisualType = args.visualType || (args.animationType ? 'animation' : resolvedSvgCode ? 'svg' : args.imageUrl ? 'photo' : null);
+
         const newItem = {
           id: args.id || ('wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
           topic,
@@ -823,7 +845,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           image: args.image || null,
           caption: args.caption || null,
           tableData: resolvedTableData,
-          visualType: args.visualType || (args.animationType ? 'animation' : args.svgCode ? 'svg' : args.imageUrl ? 'photo' : null),
+          visualType: resolvedVisualType,
           animationType: args.animationType || null,
           animationUrl: args.animationUrl || null,
           thumbnailUrl: args.thumbnailUrl || null,
@@ -836,7 +858,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           videoUrl: args.videoUrl || null,
           isRendering: Boolean(args.isRendering),
           parameters: args.parameters || null,
-          svgCode: args.svgCode || null,
+          svgCode: resolvedSvgCode,
           imageUrl: args.imageUrl || null,
           imageTitle: args.imageTitle || null,
           attribution: args.attribution || null,
@@ -923,8 +945,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               language: (args.language || '').toLowerCase().trim() || lastItem.language,
               question: args.question || lastItem.question,
               studentAnswer: studentAnswer || lastItem.studentAnswer,
-              visualType: args.visualType || lastItem.visualType,
-              svgCode: args.svgCode || lastItem.svgCode,
+              visualType: args.visualType || (resolvedSvgCode ? 'svg' : lastItem.visualType),
+              svgCode: args.svgCode || lastItem.svgCode || resolvedSvgCode,
               imageUrl: args.imageUrl || lastItem.imageUrl,
               imageTitle: args.imageTitle || lastItem.imageTitle,
               attribution: args.attribution || lastItem.attribution,
