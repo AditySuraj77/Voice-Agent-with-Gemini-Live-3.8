@@ -261,7 +261,7 @@ export class GeminiLiveClient {
               },
               {
                 name: 'render_visual',
-                description: 'MANDATORY PRIMARY VISUAL & ANIMATION SUITE: Display a high-definition visual, animation loop, mathematical simulation, or diagram on the whiteboard. Supports 4 specialized animation modes: "animated_svg" (instant zero-latency vector loops with CSS keyframes for rays, circuits, waves), "interactive_sim" (hands-on playable HTML5 canvas experiments with sliders for physics/algorithms), "manim_video" (3Blue1Brown mathematical and calculus animations), "archive_animation" (authentic scientific/biological animation loops from Wikimedia like heart cycle, engine, DNA helicase), plus "photo_search", "svg_sketch", and "ai_image".',
+                description: 'STAGE 2 DYNAMIC ANIMATION & SIMULATION SUITE: Call this when student needs animated motion/working mechanism after introductory explanation, OR when student expresses confusion ("samajh nahi aaya", "kaise kaam karta hai"), OR when student explicitly requests animation. For Stage 1 initial topic introduction, use write_on_whiteboard with notes and a static labeled diagram. Supports 4 specialized animation modes across all subjects: "animated_svg" (instant zero-latency vector loops), "interactive_sim" (hands-on playable HTML5 canvas experiments with sliders), "manim_video" (3Blue1Brown mathematical and calculus animations), "archive_animation" (authentic scientific/biological animation loops from Wikimedia). Never overwrite initial textbook notes; animations append below.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {

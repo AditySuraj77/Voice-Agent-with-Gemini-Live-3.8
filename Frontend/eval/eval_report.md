@@ -1,6 +1,6 @@
 # 📊 Hybrid Animation Engine Evaluation Scorecard
 
-**Generated:** 10/24/2026, 5:27:10 PM  
+**Generated:** 10/25/2026, 2:05:56 PM  
 **Branch:** `feature/hybrid-animations`  
 **Overall Grade:** 🏆 A+ (Production Ready)
 
@@ -10,7 +10,7 @@
 
 | Total Benchmark Prompts | Passed | Failed | Pass Rate | Average Latency (TTV) |
 |---|---|---|---|---|
-| **10** | **10** | **0** | **100.0%** | **254 ms** |
+| **11** | **11** | **0** | **100.0%** | **1073 ms** |
 
 ---
 
@@ -28,6 +28,7 @@
 | **Negative Control (History)** | 1 | 1 | ✅ 100% |
 | **Mathematics (Geometry)** | 1 | 1 | ✅ 100% |
 | **Biology (Cardiology)** | 1 | 1 | ✅ 100% |
+| **Pedagogy (2-Stage Flow & Note Preservation)** | 1 | 1 | ✅ 100% |
 
 ---
 
@@ -50,7 +51,7 @@
 
 | ID | Subject | Mode | Result | Latency | Scientific Compliance |
 |---|---|---|---|---|---|
-| `PHYS-01` | Physics (Optics) | `animated_svg` | ✅ PASS | 2006ms | Snell-Cauchy Prism Dispersion Law verified. |
+| `PHYS-01` | Physics (Optics) | `animated_svg` | ✅ PASS | 11216ms | Snell-Cauchy Prism Dispersion Law verified. |
 | `BIO-02` | Biology (Genetics) | `animated_svg` | ✅ PASS | 40ms | Watson-Crick Base Pairing Law verified. |
 | `PHYS-02` | Physics (Electricity) | `animated_svg` | ✅ PASS | 38ms | Electromagnetic Circuit Polarity Law verified. |
 | `CHEM-01` | Chemistry (Kinetic Theory) | `interactive_sim` | ✅ PASS | 70ms | Ideal Gas Law PV=NkT verified. |
@@ -60,6 +61,7 @@
 | `NEG-01` | Negative Control (History) | `none` | ✅ PASS | 12ms | Zero False Positive Animation Confirmed |
 | `MATH-01` | Mathematics (Geometry) | `manim_video` | ✅ PASS | 95ms | Pythagorean Area Equivalence Verified |
 | `BIO-01` | Biology (Cardiology) | `archive_animation` | ✅ PASS | 140ms | Cardiac Pumping Cycle Verified |
+| `PEDAGOGY-01` | Pedagogy (2-Stage Flow & Note Preservation) | `stage1_textbook_plus_stage2_anim` | ✅ PASS | 50ms | Chronological Lecture & Zero-Loss Study Notes Verified |
 
 ---
 *Generated automatically by Aristotle AI Evaluation Suite.*

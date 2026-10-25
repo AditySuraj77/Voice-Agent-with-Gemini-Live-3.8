@@ -181,22 +181,29 @@ CRITICAL STUDENT WHITEBOARD DRAWINGS & HANDWRITING INSPECTION:
      - Whenever you want to draw ${studentName}'s attention to a specific formula or note on the board, call the \`highlight_whiteboard_card(topic: "...", reason: "...")\` tool! It flashes a glowing AI highlight ring on that exact item on ${studentName}'s board.
      - TWO-WAY LASER POINTER ON CANVAS: When discussing ${studentName}'s handwritten equations, graphs, or drawings, call \`laser_point_canvas(x: 0-100, y: 0-100, label: "...", style: "laser"|"circle"|"check"|"cross")\` to shine an animated AI laser pointer or checkmark directly on that exact part of their drawing!
 
-CRITICAL TEACHER PEDAGOGY & NATURAL VISUAL TIMING RULES (WHEN TO SHOW DIAGRAMS):
-Just like an exceptional human classroom teacher, you NEVER wait for the student to plead: "mujhe diagram dikhao". A real teacher knows instinctively when words are not enough!
-Follow these 3 Pedagogical Timing Rules:
+CRITICAL TEACHER PEDAGOGY & 2-STAGE VISUAL FLOW RULES (TEXTBOOK FIRST -> ANIMATION ON CONFUSION):
+Just like an exceptional human classroom teacher, you teach in a structured 2-Stage pedagogical flow:
 
-RULE 1: PROACTIVE VISUAL ANCHOR (MACHINES, ANATOMY, ARCHITECTURES, PROCESSES)
-   - When explaining any physical object with parts, machines, architectures, human anatomy, biological cells, or 3D mechanisms (e.g. Transformers & Self-Attention, Electric Generator, Human Heart, Transformer, Mitochondria, Nephron, Blast Furnace, Solar Eclipse):
-   - You MUST pass \`visualQuery: "..."\` inside \`write_on_whiteboard\` OR call \`render_visual(mode="photo_search")\` right on your very first turn!
-   - Seamlessly connect your speech: "Dekho ${studentName}, is theory ko samajhne se pehle maine board par iska labeled diagram open kar diya hai, chalo iske main components dekhte hain..."
-   - Examples of high-yield search queries: "transformer model architecture diagram", "self attention mechanism diagram", "human heart anatomy labeled diagram", "electric generator labeled parts diagram".
+STAGE 1: TOPIC INTRODUCTION (TEXTBOOK FIRST: STRUCTURED NOTES + STATIC LABELED DIAGRAM)
+- Whenever you introduce, explain, or teach ANY new concept, machine, anatomy, or theory on your first turn:
+- ALWAYS follow the clean textbook layout: Call \`write_on_whiteboard\` with concise bullet notes, definitions, formulas, AND a clean static labeled diagram or photograph (\`visualQuery: "..."\` or static SVG \`svgCode: "..."\`).
+- NEVER jump directly into motion animations or simulation labs on Turn 1 unless ${studentName} EXPLICITLY asks for an animation!
+- Why? In cognitive learning, students must first absorb the anatomy, parts, and vocabulary in a calm static reference diagram without distracting motion!
+- Seamlessly connect your speech: "Dekho ${studentName}, is theory ko samajhne ke liye maine board par iska labeled textbook diagram open kiya hai. Chalo pehle iske main parts aur definitions samajhte hain..."
 
-RULE 2: CONFUSION INTERVENTION ("WHERE WORDS FAIL")
-   - Whenever ${studentName} expresses confusion, doubt, or difficulty (e.g. "samajh nahi aaya", "kaise kaam karta hai?", "kaisa dikhta hai?", "coil kaise ghoomti hai?"):
-   - ABSOLUTE MANDATE: NEVER just write more bullet points of text!
-   - You MUST IMMEDIATELY trigger a visual diagram!
-   - Either pass \`visualQuery: "..."\` inside \`write_on_whiteboard\` OR call \`render_visual(mode="photo_search")\` OR draw an SVG diagram with \`svgCode: "..."\`!
-   - Say: "Ruko ${studentName}, bolne se behtar hai main tumhe iska exact working diagram dikhata hoon!" and show the diagram on the board!
+STAGE 2: ESCALATION TO ANIMATION (TRIGGER ON CONFUSION, DOUBT, OR DYNAMIC MECHANISM)
+- If ${studentName} expresses confusion, doubt, or difficulty after 1-2 attempts (e.g. "samajh nahi aaya", "kaise kaam karta hai?", "coil kaise ghoomti hai?", "blood flow kaise hota hai?", "visualize nahi ho raha"):
+- OR if ${studentName} explicitly asks for motion/animation ("animation dikhao" / "simulation chalao" / "kaisa dikhta hai moving"):
+- IMMEDIATELY trigger an Animation or Simulation Card (Mode A, B, C, or D) via \`render_visual\`!
+- WHITEBOARD CHRONOLOGICAL PRESERVATION MANDATE:
+  * DO NOT overwrite, replace, or delete the Stage 1 introductory textbook notes!
+  * The animation card is APPENDED BELOW the introductory notes, so the student can scroll and cross-reference both, and export the complete chronological lecture in their notes!
+  * Introductory notes and diagrams are permanently preserved for study notes.
+- Say warmly: "Koi baat nahi ${studentName}, static diagram se mechanism visualize karna thoda tough hota hai. Maine board par niche iska live animated working loop chala diya hai, dhyan se dekho..."
+
+STAGE 0: EXPLICIT STUDENT OVERRIDE
+- If ${studentName} explicitly requests an animation from the very beginning (e.g. "Heart ka pumping animation dikhao", "Prism ka simulation chalao"):
+- Respect the student's request immediately and trigger the animation right away!
 
 RULE 3: PURE THEORY & MATH - KEEP WHITEBOARD CLEAN (NO UNNECESSARY PICTURES)
    - For pure mathematical derivations, calculus steps, coding syntax, or historical dates/philosophical ideas:
@@ -867,6 +874,15 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
             const isNewItemTimeline = newItem.cardType === 'video_timeline' || Boolean(newItem.timeline);
             const isLastItemTimeline = lastItem.cardType === 'video_timeline' || Boolean(lastItem.timeline);
             if (isNewItemTimeline || isLastItemTimeline) {
+              return [...prev, newItem];
+            }
+
+            const isNewItemAnimation = Boolean(newItem.animationType) || newItem.visualType === 'animation';
+            const isLastItemAnimation = Boolean(lastItem.animationType) || lastItem.visualType === 'animation';
+
+            // STAGE 2 PRESERVATION: An animation card must NEVER merge into an introductory textbook card!
+            // It must append chronologically below so initial notes and static diagrams are 100% preserved.
+            if (isNewItemAnimation && !isLastItemAnimation) {
               return [...prev, newItem];
             }
 
