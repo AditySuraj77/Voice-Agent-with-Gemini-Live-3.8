@@ -25,7 +25,7 @@ export function ControlsBar({
   };
 
   return (
-    <footer className="fixed bottom-4 left-0 right-0 z-30 px-4 flex justify-center pointer-events-none">
+    <footer data-testid="controls-bar" className="fixed bottom-4 left-0 right-0 z-30 px-4 flex justify-center pointer-events-none print:hidden">
       <div className="w-full max-w-2xl h-14 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-300/90 shadow-2xl px-3 flex items-center gap-3 pointer-events-auto font-sans">
         {/* Text Input to Teacher */}
         <form onSubmit={handleSend} className="flex-1 min-w-0 flex items-center gap-2">

@@ -10,3 +10,78 @@
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   }
 }
+
+/* 
+  Multi-Page Print & PDF Generation Rules:
+  Unlocks full-height multi-page layout from virtual scroll containers.
+  Normal screen UI behavior is 100% untouched.
+*/
+@media print {
+  @page {
+    size: auto;
+    margin: 12mm 14mm 14mm 14mm;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    background-color: #ffffff !important;
+    color: #1c1917 !important;
+  }
+
+  /* Unconstrain viewport-locked parent containers */
+  #root,
+  .h-screen,
+  .w-screen,
+  main,
+  [data-testid="direct-whiteboard"],
+  div[style*="width"] {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Hide app floating controls and interactive-only widgets */
+  .print\:hidden,
+  footer,
+  aside,
+  header,
+  nav,
+  .fixed,
+  button,
+  [data-testid="controls-bar"],
+  [data-testid="drawing-toolbar"],
+  [data-testid="drawing-canvas-overlay"],
+  [data-testid="ai-laser-pointer"],
+  .cursor-col-resize {
+    display: none !important;
+  }
+
+  /* Whiteboard canvas reset for clean paper print */
+  [data-testid="direct-whiteboard"] {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* Avoid cutting individual topic cards in the middle across page breaks */
+  [data-testid^="whiteboard-item-"] {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin-bottom: 2rem !important;
+    padding-bottom: 1.5rem !important;
+    border-bottom: 1px dashed #d6d3d1 !important;
+  }
+
+  /* Force background colors and vector graphic prints in Chrome / Edge */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

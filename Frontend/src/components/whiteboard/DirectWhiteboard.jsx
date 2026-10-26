@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trash2, BookOpen, Check, Download, Printer, ArrowDown, History,
   Pen, Highlighter, Eraser, Eye, Sparkles, CheckCircle2, XCircle,
-  Undo2, Redo2, MousePointer
+  Undo2, Redo2, MousePointer, ChevronDown, Globe, FileText
 } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
@@ -10,7 +10,7 @@ import { MathFormula } from './MathFormula.jsx';
 import { InlineFormattedNote } from './InlineFormattedNote.jsx';
 import { UniversalVisualCard } from './UniversalVisualCard.jsx';
 import { VideoTimelineCard } from './VideoTimelineCard.jsx';
-import { exportWhiteboardToMarkdown, printWhiteboard } from '../../utils/exportNotes.js';
+import { exportWhiteboardToMarkdown, exportWhiteboardToInteractiveHtml, printWhiteboard } from '../../utils/exportNotes.js';
 import { captureElementWithOverlay } from '../../utils/whiteboardSnapshot.js';
 import { saveActiveSession } from '../../services/sessionHistory.js';
 
@@ -53,6 +53,7 @@ export function DirectWhiteboard({
   const [activeDrawTool, setActiveDrawTool] = useState('none'); // 'none' | 'pen' | 'highlighter' | 'tick' | 'cross' | 'eraser'
   const [eraserSize, setEraserSize] = useState(26); // 12 (fine), 26 (medium), 48 (large)
   const [showEraserMenu, setShowEraserMenu] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [isInspecting, setIsInspecting] = useState(false);
 
@@ -814,17 +815,77 @@ export function DirectWhiteboard({
               </button>
             )}
 
-            {/* Download Markdown Notes (only if items present) */}
+            {/* Export Notes Dropdown (Interactive HTML + Markdown) */}
             {items.length > 0 && (
-              <button
-                type="button"
-                onClick={() => exportWhiteboardToMarkdown(items, studentProfile)}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-600 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
-                title="Download Study Notes (.md)"
-              >
-                <Download className="w-3.5 h-3.5 text-amber-600" />
-                <span className="hidden sm:inline">Export Notes</span>
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowExportMenu((prev) => !prev)}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans text-stone-600 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer border border-transparent hover:border-amber-200"
+                  title="Export Study Notes"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="hidden sm:inline">Export Notes</span>
+                  <ChevronDown className="w-3 h-3 text-stone-400" />
+                </button>
+
+                {showExportMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setShowExportMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-stone-200 rounded-2xl shadow-xl p-1.5 z-40 font-sans text-xs animate-fadeIn">
+                      <div className="px-2.5 py-1.5 text-[11px] font-bold text-stone-400 uppercase tracking-wider border-b border-stone-100">
+                        Choose Export Format
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          exportWhiteboardToInteractiveHtml(items, studentProfile);
+                          setShowExportMenu(false);
+                        }}
+                        className="w-full flex items-start gap-2.5 p-2 rounded-xl text-left hover:bg-amber-50/80 transition-colors cursor-pointer group mt-1"
+                      >
+                        <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0 group-hover:bg-amber-200">
+                          <Globe className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-stone-900 group-hover:text-amber-900 flex items-center gap-1.5">
+                            <span>Interactive HTML (.html)</span>
+                            <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.2 rounded font-bold">New</span>
+                          </div>
+                          <div className="text-[11px] text-stone-500 leading-tight mt-0.5">
+                            Includes animated SVGs, formulas & full whiteboard styling
+                          </div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          exportWhiteboardToMarkdown(items, studentProfile);
+                          setShowExportMenu(false);
+                        }}
+                        className="w-full flex items-start gap-2.5 p-2 rounded-xl text-left hover:bg-stone-100 transition-colors cursor-pointer group mt-0.5"
+                      >
+                        <div className="p-1.5 rounded-lg bg-stone-100 text-stone-600 shrink-0 group-hover:bg-stone-200">
+                          <FileText className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-stone-800">
+                            Markdown (.md)
+                          </div>
+                          <div className="text-[11px] text-stone-500 leading-tight mt-0.5">
+                            Original text format for Obsidian & GitHub
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             {/* Print / Save as PDF (only if items present) */}
