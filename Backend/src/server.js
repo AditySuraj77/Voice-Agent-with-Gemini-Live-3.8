@@ -20,6 +20,7 @@ import animationRouter from './routes/animationRoute.js';
 import { browserService } from './services/browserService.js';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
@@ -35,7 +36,7 @@ app.use(express.json());
 // Rate limiting for token endpoint to prevent spamming
 const tokenLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 30, // Limit each IP to 30 token requests per windowMs
+  max: 60, // Limit each IP to 60 token requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many token requests, please try again shortly.' }

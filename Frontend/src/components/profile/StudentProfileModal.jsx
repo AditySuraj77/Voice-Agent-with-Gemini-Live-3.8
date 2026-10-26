@@ -12,6 +12,7 @@ export function StudentProfileModal({
   const [interests, setInterests] = useState(profile.interests || 'Cricket, Science experiments, Video games');
   const [preferredLanguage, setPreferredLanguage] = useState(profile.preferredLanguage || 'Hinglish (Hindi + English mix)');
   const [learningGoal, setLearningGoal] = useState(profile.learningGoal || 'Conceptual clarity and step-by-step problem solving');
+  const [customApiKey, setCustomApiKey] = useState(profile.customApiKey || '');
   const [savedToast, setSavedToast] = useState(false);
 
   if (!isOpen) return null;
@@ -24,6 +25,7 @@ export function StudentProfileModal({
       interests: interests.trim(),
       preferredLanguage: preferredLanguage.trim(),
       learningGoal: learningGoal.trim(),
+      customApiKey: customApiKey.trim(),
     };
     onSaveProfile(updated);
     setSavedToast(true);
@@ -123,6 +125,24 @@ export function StudentProfileModal({
               placeholder="e.g. Deep concepts, Exam prep, Basics from scratch"
               className="w-full px-3.5 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
             />
+          </div>
+
+
+          <div className="pt-2 border-t border-stone-100">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-semibold text-stone-700">Custom Gemini API Key (Optional BYOK)</label>
+              <span className="text-[10px] text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">20+ Key Pool Active</span>
+            </div>
+            <input
+              type="password"
+              value={customApiKey}
+              onChange={(e) => setCustomApiKey(e.target.value)}
+              placeholder="Paste custom key (e.g. AIzaSy...)"
+              className="w-full px-3.5 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500/30 font-mono text-xs"
+            />
+            <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
+              Khali chhodne par server ke 20+ keys pool se automatic rotation hoga. Apni key daalenge toh direct priority milegi.
+            </p>
           </div>
 
           {/* Footer Save Button */}

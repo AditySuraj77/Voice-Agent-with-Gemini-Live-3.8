@@ -78,14 +78,50 @@ function formatWhiteboardSummary(items = []) {
 /**
  * Builds rich, adaptive, human-like system prompt for Aristotle AI Voice Tutor.
  */
-function buildTeacherSystemInstruction(studentProfile, recentTopicsSummary = '', whiteboardSummary = '') {
+
+/**
+ * Formats rolling multi-turn dialogue history for seamless continuous session rotation.
+ */
+/**
+ * Formats rolling multi-turn dialogue history for continuous context memory across reconnections & rotations.
+ */
+function formatDialogueHistory(messagesList = []) {
+  if (!messagesList || messagesList.length === 0) return '';
+  const relevant = messagesList
+    .filter((m) => (m.sender === 'user' || m.sender === 'assistant') && m.text && !m.isPartial)
+    .slice(-10);
+
+  if (relevant.length === 0) return '';
+
+  return relevant
+    .map((m) => {
+      const role = m.sender === 'user' ? 'Student' : 'Tutor (Aristotle)';
+      const cleanText = m.text.replace(/\s+/g, ' ').trim();
+      return `${role}: "${cleanText}"`;
+    })
+    .join('\n');
+}
+
+function buildTeacherSystemInstruction(studentProfile, recentTopicsSummary = '', whiteboardSummary = '', dialogueHistorySummary = '') {
   const studentName = studentProfile?.name || 'Bhai or Bro';
   const studentGrade = studentProfile?.grade || 'Class 1-12 / Middle School , College';
   const studentInterests = studentProfile?.interests || 'Cricket, Science experiments, Video games';
   const studentLang = studentProfile?.preferredLanguage || 'Hinglish (Hindi + English mix)';
   const studentGoal = studentProfile?.learningGoal || 'Conceptual clarity and step-by-step problem solving';
 
-  return `You are Aristotle, an exceptional 1-on-1 human-like AI voice tutor with an interactive real-time whiteboard.
+  return `You are Socrates, an exceptional 1-on-1 human-like AI voice tutor with an interactive real-time whiteboard.
+
+  Act as an expert Socratic tutor. My goal is to learn or master
+
+Follow these strict rules for our conversation:
+1. Do not give me the direct answer right away.
+2. Ask me only one question at a time to test or build my reasoning.
+3. If my answer is incomplete or wrong, point out the gap gently and give me a small hint.
+4. If I get completely stuck, ask if I want a deeper explanation or a simpler breakdown.
+5. After we finish exploring a concept, summarize what I learned and ask if I want to test it with a new scenario.
+
+Acknowledge these rules, state my topic, and ask your very first question to start.
+
 
 STUDENT IDENTITY & PROFILE (ALREADY LOADED & CONFIRMED):
 - Student Name: "${studentName}". You ALREADY know this student well! Always greet them warmly by their name ("${studentName}"), and address them as "${studentName}".
@@ -343,6 +379,10 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   const inputVolumeRef = useRef(0);
   const [error, setError] = useState(null);
   const [messages, setMessages] = useState([]);
+  const messagesRef = useRef([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -393,6 +433,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   const hasTurnWhiteboardUpdateRef = useRef(false);
   const currentTurnAssistantTextRef = useRef('');
   const lastUserQueryRef = useRef('');
+  const conversationHistoryRef = useRef([]);
 
   // Session lifecycle & auto-reconnect refs
   const isExplicitlyEndedRef = useRef(false);
@@ -501,67 +542,96 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   /**
    * Core function to establish or rotate Gemini Live WebSocket session.
    */
-  const establishLiveSession = async (targetModel, { isRotation = false } = {}) => {
+  const createAndConnectClient = async (targetModel, { isRotation = false } = {}) => {
     const token = await fetchEphemeralToken(targetModel);
 
-    // Summary of topics discussed so far to maintain continuous context across rotations
-    const recentTopics = whiteboardItemsRef.current
+    // 1. Gather all whiteboard notes
+    const whiteboardSummary = formatWhiteboardSummary(whiteboardItemsRef.current);
+
+    // 2. Gather conversation transcript history
+    const dialogueHistorySummary = formatDialogueHistory(messagesRef.current);
+
+    // 3. Determine recent topics (from whiteboard items OR from last student questions)
+    let recentTopics = whiteboardItemsRef.current
       .map((item) => item.topic)
       .filter(Boolean)
       .slice(-6)
       .join(', ');
 
-    const whiteboardSummary = formatWhiteboardSummary(whiteboardItemsRef.current);
+    if (!recentTopics && messagesRef.current.length > 0) {
+      const userMsgs = messagesRef.current.filter((m) => m.sender === 'user' && m.text);
+      if (userMsgs.length > 0) {
+        const lastQ = userMsgs[userMsgs.length - 1].text.slice(0, 100);
+        recentTopics = `Student topic/question: "${lastQ}"`;
+      }
+    }
+
+    const hasPriorContext = Boolean(dialogueHistorySummary || whiteboardSummary || isRotation);
+
+    console.log('[useGeminiLive] Establishing session:', {
+      isRotation,
+      hasPriorContext,
+      dialogueTurnsCount: messagesRef.current.length,
+      recentTopics: recentTopics || 'none',
+    });
+
     const teacherSystemInstruction = buildTeacherSystemInstruction(
       studentProfileRef.current,
       recentTopics,
-      whiteboardSummary
+      whiteboardSummary,
+      dialogueHistorySummary
     );
 
-    liveClientRef.current = new GeminiLiveClient({
+    let clientInstance;
+    clientInstance = new GeminiLiveClient({
       backendUrl: BACKEND_URL,
       onOpen: () => {
-        console.log(`[useGeminiLive] Live session connected & established (isRotation: ${isRotation}).`);
+        console.log(`[useGeminiLive] Live session connected & established (isRotation: ${isRotation}, hasPriorContext: ${hasPriorContext}).`);
         setSessionStatus('connected');
         setConversationState('listening');
         reconnectAttemptsRef.current = 0;
         isRotatingRef.current = false;
 
-        // Schedule proactive session rotation at 9 min 30 sec (570,000 ms)
-        // to seamlessly renew the connection before Google's 10-minute timeout
+        // Schedule proactive session rotation at 8 min 45 sec (525,000 ms)
         if (rotationTimerRef.current) clearTimeout(rotationTimerRef.current);
         rotationTimerRef.current = setTimeout(() => {
-          console.log('[useGeminiLive] 9.5-minute timer fired: Proactively rotating session to prevent Google timeout.');
+          console.log('[useGeminiLive] 8.75-minute timer fired: Proactively rotating session via Hot-Handoff (0ms gap).');
           handleAutoReconnect(true);
-        }, 570000);
+        }, 525000);
 
-        // Send handshake
+        // Send handshake directly to clientInstance
         const sName = studentProfileRef.current?.name || 'Adi';
-        setTimeout(() => {
-          if (liveClientRef.current && liveClientRef.current.isConnected) {
-            const currentWbItems = whiteboardItemsRef.current || [];
-            if (!isRotation) {
-              const sGrade = studentProfileRef.current?.grade || 'Class 8-10 / Middle School';
-              const sInterests = studentProfileRef.current?.interests || 'Cricket, Science experiments, Video games';
-              const sLang = studentProfileRef.current?.preferredLanguage || 'Hinglish (Hindi + English mix)';
+        const sGrade = studentProfileRef.current?.grade || 'Class 8-10 / Middle School';
+        const sInterests = studentProfileRef.current?.interests || 'Cricket, Science experiments, Video games';
+        const sLang = studentProfileRef.current?.preferredLanguage || 'Hinglish (Hindi + English mix)';
 
-              if (currentWbItems.length > 0) {
-                const wbSummary = formatWhiteboardSummary(currentWbItems);
-                liveClientRef.current.sendContextNotification(
-                  `[STUDENT PROFILE & RESTORED STUDY SESSION HANDSHAKE]: The student's name is "${sName}", Grade: "${sGrade}", Interests: "${sInterests}", Language: "${sLang}".\nCRITICAL CONTEXT: ${sName}'s whiteboard is ALREADY LOADED with notes from their study session:\n${wbSummary}\n\nYou ALREADY know all these notes and topics! When greeting ${sName}, acknowledge that you see their notes on the board (e.g. on "${recentTopics}") and ask if they'd like to pick up right where they left off. NEVER say "mujhe yaad nahi" or "har naye session me data save nahi hota".`
-                );
-              } else {
-                liveClientRef.current.sendContextNotification(
-                  `[STUDENT PROFILE HANDSHAKE]: The student's name is "${sName}", Grade: "${sGrade}", Interests: "${sInterests}", Language: "${sLang}". You ALREADY know them. Greet them warmly by name.`
-                );
-              }
+        setTimeout(() => {
+          if (clientInstance && clientInstance.isConnected) {
+            if (hasPriorContext) {
+              const continuationPayload = `[STUDENT ONGOING LESSON CONTINUATION CONTEXT]:
+The student's name is "${sName}", Grade: "${sGrade}", Language: "${sLang}".
+You are in the middle of an active live voice conversation with ${sName}.
+Recent spoken dialogue transcript:
+${dialogueHistorySummary || 'Continuing discussion from previous turns.'}
+
+Current Whiteboard Notes / Topics:
+${whiteboardSummary || recentTopics || 'Discussed in dialogue above'}
+
+CRITICAL DIRECTIVES:
+1. DO NOT SAY "Ab main naya topic padhaunga", "Aaj hum kya padhenge", or "Let's start a fresh topic"!
+2. You ALREADY know what you were teaching. When ${sName} asks "kya topic hai?" or "hum kya padh rahe the?", directly state the active topic: "${recentTopics || 'jo topic hum discuss kar rahe the'}"!
+3. DO NOT repeat greetings or ask what ${sName} wants to learn. Continue directly from where you paused.`;
+
+              console.log('[useGeminiLive] Sending continuation handshake to clientInstance:', continuationPayload.slice(0, 150));
+              clientInstance.sendContextNotification(continuationPayload);
             } else {
-              liveClientRef.current.sendContextNotification(
-                `[SESSION CONTINUATION]: Seamlessly continuing tutoring session with ${sName}. Whiteboard has notes on: ${recentTopics || 'various topics'}. Pick up right where we left off. DO NOT repeat greetings.`
+              console.log('[useGeminiLive] Sending fresh student profile handshake to clientInstance.');
+              clientInstance.sendContextNotification(
+                `[STUDENT PROFILE HANDSHAKE]: The student's name is "${sName}", Grade: "${sGrade}", Interests: "${sInterests}", Language: "${sLang}". You ALREADY know them. Greet them warmly by name.`
               );
             }
           }
-        }, 350);
+        }, 200);
       },
       onClose: (event) => {
         console.log(`[useGeminiLive] Live session closed (code: ${event?.code}, reason: ${event?.reason || 'none'}).`);
@@ -703,10 +773,10 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
           prev.map((m) =>
             m.sender === 'tool' && m.isSearching
               ? {
-                  ...m,
-                  isSearching: false,
-                  text: `Completed request for: "${m.query}"`,
-                }
+                ...m,
+                isSearching: false,
+                text: `Completed request for: "${m.query}"`,
+              }
               : m
           )
         );
@@ -915,7 +985,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
             if (isNewItemVisual && isLastItemVisual) {
               const isSameTopic = isSameOrRelatedTopic(lastItem.topic, topic);
               const isSameAnim = (lastItem.animationType && lastItem.animationType === newItem.animationType) ||
-                                 (lastItem.visualType && lastItem.visualType === newItem.visualType);
+                (lastItem.visualType && lastItem.visualType === newItem.visualType);
               if (isSameTopic && isSameAnim) {
                 const updatedList = [...prev];
                 updatedList[updatedList.length - 1] = {
@@ -997,9 +1067,10 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
               text: nextText,
               isPartial,
             };
+            messagesRef.current = updated;
             return updated;
           } else {
-            return [
+            const updated = [
               ...prev,
               {
                 id: Date.now() + Math.random().toString(36).slice(2, 6),
@@ -1009,6 +1080,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               },
             ];
+            messagesRef.current = updated;
+            return updated;
           }
         });
       },
@@ -1022,7 +1095,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     while (connectAttempt < 2 && !connectedSuccessfully) {
       connectAttempt++;
       try {
-        await liveClientRef.current.connect(token, {
+        await clientInstance.connect(token, {
           model: targetModel,
           voiceName: selectedVoiceRef.current,
           systemInstruction: teacherSystemInstruction,
@@ -1040,6 +1113,17 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     if (!connectedSuccessfully) {
       throw lastConnectError || new Error('Failed to connect to Gemini Live session.');
     }
+
+    return clientInstance;
+  };
+
+  /**
+   * Establishes active live session using createAndConnectClient
+   */
+  const establishLiveSession = async (targetModel, { isRotation = false } = {}) => {
+    const client = await createAndConnectClient(targetModel, { isRotation });
+    liveClientRef.current = client;
+    return client;
   };
 
   /**
@@ -1049,8 +1133,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     if (isExplicitlyEndedRef.current) return;
     if (isRotatingRef.current) return;
 
-    if (reconnectAttemptsRef.current >= 4) {
-      console.error('[useGeminiLive] Maximum auto-reconnect attempts reached (4). Terminating session.');
+    if (reconnectAttemptsRef.current >= 5) {
+      console.error('[useGeminiLive] Maximum auto-reconnect attempts reached (5). Terminating session.');
       setSessionStatus('disconnected');
       setConversationState('idle');
       if (audioRecorderRef.current) {
@@ -1064,9 +1148,39 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     reconnectAttemptsRef.current += 1;
     console.log(`[useGeminiLive] Auto-reconnecting session (attempt #${reconnectAttemptsRef.current}, proactive: ${isProactive})...`);
 
-    // Cleanly close old client
+    if (isProactive && liveClientRef.current && liveClientRef.current.isConnected) {
+      // ZERO-STUTTER HOT-HANDOFF: Keep old client active, connect new client in background
+      try {
+        const model = currentModelRef.current;
+        const oldClient = liveClientRef.current;
+        console.log('[useGeminiLive] Starting Hot-Handoff background connection with next pool key...');
+
+        const newClient = await createAndConnectClient(model, { isRotation: true });
+
+        // Atomically switch active client reference (0ms downtime)
+        liveClientRef.current = newClient;
+        isRotatingRef.current = false;
+        reconnectAttemptsRef.current = 0;
+        console.log('[useGeminiLive] Hot-Handoff completed successfully! Audio routed to new connection with 0ms gap.');
+
+        // Allow 1.5s for any pending audio from oldClient to finish playing, then retire oldClient
+        setTimeout(() => {
+          try {
+            oldClient.disconnect();
+          } catch (_) { }
+        }, 1500);
+
+        return;
+      } catch (hotErr) {
+        console.warn('[useGeminiLive] Hot-Handoff background connection failed, falling back to standard reconnect:', hotErr);
+      }
+    }
+
+    // Standard fallback reconnect (for unexpected network drop or socket error)
     if (liveClientRef.current) {
-      liveClientRef.current.disconnect();
+      try {
+        liveClientRef.current.disconnect();
+      } catch (_) { }
       liveClientRef.current = null;
     }
 
@@ -1075,12 +1189,12 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
       rotationTimerRef.current = null;
     }
 
-    await new Promise((r) => setTimeout(r, 450));
+    await new Promise((r) => setTimeout(r, 400));
 
     try {
       const model = currentModelRef.current;
       await establishLiveSession(model, { isRotation: true });
-      console.log('[useGeminiLive] Session rotated & reconnected successfully.');
+      console.log('[useGeminiLive] Session reconnected successfully via standard fallback.');
     } catch (err) {
       console.error('[useGeminiLive] Auto-reconnect attempt failed:', err);
       isRotatingRef.current = false;

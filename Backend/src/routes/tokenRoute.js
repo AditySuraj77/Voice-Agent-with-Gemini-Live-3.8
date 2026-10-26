@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { geminiTokenService } from '../services/geminiTokenService.js';
+import { geminiKeyPool } from '../services/geminiKeyPool.js';
 
 const router = Router();
 
@@ -12,12 +13,12 @@ const ALLOWED_MODELS = new Set([
 ]);
 
 /**
- * GET /api/token
- * Returns a short-lived ephemeral token for the requested Gemini Live model.
+ * Handler for token generation (supports both GET and POST for BYOK)
  */
-router.get('/token', async (req, res) => {
+async function handleTokenRequest(req, res) {
   try {
-    const requestedModel = (req.query.model || 'gemini-3.8-live').toString();
+    const requestedModel = (req.query.model || req.body?.model || 'gemini-3.8-live').toString();
+    const customApiKey = req.headers['x-gemini-api-key'] || req.body?.apiKey || req.query.apiKey || null;
 
     if (!ALLOWED_MODELS.has(requestedModel)) {
       return res.status(400).json({
@@ -28,7 +29,8 @@ router.get('/token', async (req, res) => {
 
     const tokenData = await geminiTokenService.createEphemeralToken({
       model: requestedModel,
-      uses: 1
+      uses: 1,
+      customApiKey
     });
 
     return res.json({
@@ -36,7 +38,8 @@ router.get('/token', async (req, res) => {
       token: tokenData.token,
       expireTime: tokenData.expireTime,
       newSessionExpireTime: tokenData.newSessionExpireTime,
-      model: tokenData.model
+      model: tokenData.model,
+      keyInfo: tokenData.keyInfo
     });
   } catch (error) {
     console.error('[TokenRoute] Error provisioning ephemeral token:', error.message);
@@ -46,6 +49,19 @@ router.get('/token', async (req, res) => {
       details: error.message
     });
   }
+}
+
+router.get('/token', handleTokenRequest);
+router.post('/token', handleTokenRequest);
+
+/**
+ * Health & Pool Status endpoint
+ */
+router.get('/pool-status', (req, res) => {
+  res.json({
+    success: true,
+    status: geminiKeyPool.getPoolStatus()
+  });
 });
 
 export default router;
