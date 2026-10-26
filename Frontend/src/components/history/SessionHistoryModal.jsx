@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { History, X, Trash2, Calendar, FileText, ChevronRight, PlusCircle } from 'lucide-react';
-import { getAllSessions, deleteSession, clearAllHistory, startNewSession, setActiveSessionId } from '../../services/sessionHistory.js';
+import { getAllSessions, deleteSession, clearAllHistory, startNewSession, setActiveSessionId, subscribeSessionHistory } from '../../services/sessionHistory.js';
 
 /**
  * Slide-over drawer to browse, restore, and review previous multi-day study sessions
@@ -11,11 +11,15 @@ export function SessionHistoryModal({
   onRestoreSession,
   onStartFreshSession,
 }) {
-  const [sessions, setSessions] = useState([]);
+  const [sessions, setSessions] = useState(() => getAllSessions());
 
   useEffect(() => {
     if (isOpen) {
       setSessions(getAllSessions());
+      const unsubscribe = subscribeSessionHistory((updated) => {
+        setSessions(updated);
+      });
+      return unsubscribe;
     }
   }, [isOpen]);
 

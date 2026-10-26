@@ -82,10 +82,12 @@ export class GeminiKeyPool {
     this.ensurePool();
     const now = Date.now();
     const healthy = this.keyRecords.filter((k) => now >= k.cooldownUntil).length;
+    const totalConcurrency = this.keyRecords.reduce((sum, k) => sum + (k.concurrency || 0), 0);
     return {
       totalKeys: this.keyRecords.length,
       healthyKeys: healthy,
       cooldownKeys: this.keyRecords.length - healthy,
+      activeConcurrency: totalConcurrency,
     };
   }
 
@@ -145,9 +147,29 @@ export class GeminiKeyPool {
     return candidate;
   }
 
-  markSuccess(keyRecord) {
+  markSuccess(keyRecord, tokenResult = null) {
     if (keyRecord && !keyRecord.isBYOK) {
       keyRecord.totalSuccess += 1;
+      keyRecord.concurrency += 1;
+
+      // Automatically decay concurrency when ephemeral token expires or after max 30 mins
+      let ttlMs = 30 * 60 * 1000;
+      if (tokenResult?.expireTime) {
+        const exp = new Date(tokenResult.expireTime).getTime();
+        if (!isNaN(exp) && exp > Date.now()) {
+          ttlMs = Math.min(exp - Date.now(), 60 * 60 * 1000);
+        }
+      }
+      setTimeout(() => {
+        this.decrementConcurrency(keyRecord.id);
+      }, ttlMs);
+    }
+  }
+
+  decrementConcurrency(keyId) {
+    const rec = this.keyRecords.find((k) => k.id === keyId);
+    if (rec && rec.concurrency > 0) {
+      rec.concurrency -= 1;
     }
   }
 
@@ -218,7 +240,7 @@ export class GeminiKeyPool {
           throw new Error('No token string returned in Gemini AuthTokens API response.');
         }
 
-        this.markSuccess(keyRecord);
+        this.markSuccess(keyRecord, tokenResult);
         const poolStatus = this.getPoolStatus();
 
         return {

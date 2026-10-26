@@ -197,45 +197,62 @@ export class ManimService {
    * If not, gracefully yields the high-fidelity 3Blue1Brown mathematical scene specification.
    */
   async renderScene({ code = '', topic = '', equation = '', sceneType = 'pythagoras' } = {}) {
-    const isAvailable = await this.checkManimAvailable();
+    const isNativeManimAllowed = process.env.ENABLE_NATIVE_MANIM === 'true';
+    const isAvailable = isNativeManimAllowed && (await this.checkManimAvailable());
 
     if (isAvailable && code && code.includes('Scene')) {
-      try {
-        console.log(`[ManimService] Compiling native Manim scene for "${topic}"...`);
-        const sceneId = `manim_${Date.now()}`;
-        const scriptPath = path.join(this.tempDir, `${sceneId}.py`);
-        await fs.promises.writeFile(scriptPath, code, 'utf-8');
+      // Strict security validation: Disallow dangerous python builtins and modules
+      const dangerousPatterns = [
+        /\bimport\s+(os|sys|subprocess|shutil|socket|urllib|requests|pty|fcntl|posix|builtin|ctypes|pip)\b/i,
+        /\bfrom\s+(os|sys|subprocess|shutil|socket|urllib|requests|pty|fcntl|posix|builtin|ctypes|pip)\b/i,
+        /\b(open|eval|exec|compile|__import__|getattr|setattr|globals|locals|system|popen|spawn)\s*\(/i,
+        /__[a-zA-Z0-9_]+__/i, // Dunder methods e.g. __class__, __subclasses__
+      ];
 
-        // Extract class name
-        const match = code.match(/class\s+([A-Za-z0-9_]+)\s*\(\s*Scene\s*\)/);
-        const className = match ? match[1] : 'MathScene';
+      const isDangerous = dangerousPatterns.some((pattern) => pattern.test(code));
+      if (!isDangerous) {
+        try {
+          console.log(`[ManimService] Compiling native Manim scene for "${topic}"...`);
+          const sceneId = `manim_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const scriptPath = path.join(this.tempDir, `${sceneId}.py`);
+          await fs.promises.writeFile(scriptPath, code, 'utf-8');
 
-        // Run Manim low quality (480p 15fps) for ultra-fast compilation
-        const cmd = `manim -ql --media_dir "${this.tempDir}" "${scriptPath}" ${className}`;
-        const { stdout } = await execAsync(cmd, { timeout: 25000 });
-        console.log('[ManimService] Compilation stdout:', stdout.slice(0, 200));
+          // Extract and sanitize class name (alphanumeric only)
+          const match = code.match(/class\s+([A-Za-z0-9_]{1,64})\s*\(\s*Scene\s*\)/);
+          const className = match ? match[1] : 'MathScene';
 
-        // Locate generated MP4
-        const videoDir = path.join(this.tempDir, 'videos', `${sceneId}`, '480p15');
-        const files = fs.existsSync(videoDir) ? await fs.promises.readdir(videoDir) : [];
-        const mp4File = files.find((f) => f.endsWith('.mp4'));
+          // Run Manim low quality (480p 15fps) for ultra-fast compilation
+          const cmd = `manim -ql --media_dir "${this.tempDir}" "${scriptPath}" ${className}`;
+          const { stdout } = await execAsync(cmd, { timeout: 25000 });
+          console.log('[ManimService] Compilation stdout:', stdout.slice(0, 200));
 
-        if (mp4File) {
-          const videoPath = path.join(videoDir, mp4File);
-          const videoBuffer = await fs.promises.readFile(videoPath);
-          const base64Video = `data:video/mp4;base64,${videoBuffer.toString('base64')}`;
+          // Locate generated MP4
+          const videoDir = path.join(this.tempDir, 'videos', `${sceneId}`, '480p15');
+          const files = fs.existsSync(videoDir) ? await fs.promises.readdir(videoDir) : [];
+          const mp4File = files.find((f) => f.endsWith('.mp4'));
 
-          return {
-            success: true,
-            engine: 'manim_native_cairo',
-            topic: topic || className,
-            equation: equation || '',
-            videoUrl: base64Video,
-            durationSec: 10,
-          };
+          if (mp4File) {
+            const videoPath = path.join(videoDir, mp4File);
+            const videoBuffer = await fs.promises.readFile(videoPath);
+            const base64Video = `data:video/mp4;base64,${videoBuffer.toString('base64')}`;
+
+            // Clean up temporary script
+            fs.promises.unlink(scriptPath).catch(() => {});
+
+            return {
+              success: true,
+              engine: 'manim_native_cairo',
+              topic: topic || className,
+              equation: equation || '',
+              videoUrl: base64Video,
+              durationSec: 10,
+            };
+          }
+        } catch (err) {
+          console.warn('[ManimService] Native compilation encountered error, falling back to 3Blue1Brown vector engine:', err.message);
         }
-      } catch (err) {
-        console.warn('[ManimService] Native compilation encountered error, falling back to 3Blue1Brown vector engine:', err.message);
+      } else {
+        console.warn('[ManimService] Blocked potentially unsafe custom Python code in Manim request. Using vector engine.');
       }
     }
 

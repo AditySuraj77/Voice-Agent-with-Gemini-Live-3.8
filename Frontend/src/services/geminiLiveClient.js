@@ -6,6 +6,7 @@
 export class GeminiLiveClient {
   constructor({
     backendUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_URL) || 'http://localhost:3001',
+    sessionId = null,
     onOpen,
     onClose,
     onError,
@@ -23,6 +24,7 @@ export class GeminiLiveClient {
     onBrowserFrame,
   }) {
     this.backendUrl = backendUrl;
+    this.sessionId = sessionId || (typeof window !== 'undefined' && sessionStorage.getItem('aristotle_browser_session_id')) || ('sess_' + Math.random().toString(36).slice(2, 8));
     this.onOpen = onOpen;
     this.onClose = onClose;
     this.onError = onError;
@@ -1561,8 +1563,11 @@ export class GeminiLiveClient {
         try {
           const res = await fetch(`${this.backendUrl}/api/browser/action`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(actionPayload),
+            headers: {
+              'Content-Type': 'application/json',
+              'x-session-id': this.sessionId,
+            },
+            body: JSON.stringify({ ...actionPayload, sessionId: this.sessionId }),
           });
 
           if (res.ok) {
@@ -1611,7 +1616,9 @@ export class GeminiLiveClient {
             if (call.name === 'browser_navigate' && this.backendUrl) {
               setTimeout(async () => {
                 try {
-                  const vpRes = await fetch(`${this.backendUrl}/api/browser/viewport`);
+                  const vpRes = await fetch(`${this.backendUrl}/api/browser/viewport?sessionId=${encodeURIComponent(this.sessionId)}`, {
+                    headers: { 'x-session-id': this.sessionId },
+                  });
                   if (vpRes.ok) {
                     const vpData = await vpRes.json();
                     if (vpData.screenshot && vpData.url === data.url) {

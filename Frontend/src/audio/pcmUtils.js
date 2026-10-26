@@ -13,7 +13,19 @@ export function downsampleBuffer(buffer, inputSampleRate, outputSampleRate = 160
     return buffer;
   }
   if (inputSampleRate < outputSampleRate) {
-    return buffer;
+    // Upsample via linear interpolation when input sample rate is lower than target
+    const upsampleRatio = inputSampleRate / outputSampleRate;
+    const newLength = Math.round(buffer.length / upsampleRatio);
+    const result = new Float32Array(newLength);
+    for (let i = 0; i < newLength; i++) {
+      const pos = i * upsampleRatio;
+      const index = Math.floor(pos);
+      const frac = pos - index;
+      const s0 = buffer[index] || 0;
+      const s1 = buffer[index + 1] !== undefined ? buffer[index + 1] : s0;
+      result[i] = s0 + frac * (s1 - s0);
+    }
+    return result;
   }
 
   const sampleRateRatio = inputSampleRate / outputSampleRate;

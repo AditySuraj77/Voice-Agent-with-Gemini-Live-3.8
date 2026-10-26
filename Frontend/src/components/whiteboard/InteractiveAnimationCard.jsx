@@ -351,8 +351,9 @@ export function InteractiveAnimationCard({ item = {}, onOpenInCodeLab }) {
         ADD_TAGS: ['style', 'animate', 'animateTransform', 'animateMotion', 'polygon', 'polyline', 'feGaussianBlur', 'feMerge', 'feMergeNode'],
         ADD_ATTR: ['keyTimes', 'values', 'dur', 'repeatCount', 'calcMode', 'from', 'to', 'filter', 'stdDeviation', 'result', 'in'],
       });
-    } catch {
-      return effectiveSvg;
+    } catch (err) {
+      console.warn('[InteractiveAnimationCard] DOMPurify sanitization failed:', err);
+      return '';
     }
   }, [item.svgCode, item.topic]);
 

@@ -447,6 +447,17 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   const audioPlayerRef = useRef(null);
   const liveClientRef = useRef(null);
 
+  // Unique isolated browser session ID for multi-tenant isolation
+  const browserSessionIdRef = useRef(
+    (typeof window !== 'undefined' && sessionStorage.getItem('aristotle_browser_session_id')) ||
+    ('user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8))
+  );
+  useEffect(() => {
+    if (typeof window !== 'undefined' && browserSessionIdRef.current) {
+      sessionStorage.setItem('aristotle_browser_session_id', browserSessionIdRef.current);
+    }
+  }, []);
+
   // Keep refs synchronized with active states and auto-save session history
   useEffect(() => {
     whiteboardItemsRef.current = whiteboardItems;
@@ -583,6 +594,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     let clientInstance;
     clientInstance = new GeminiLiveClient({
       backendUrl: BACKEND_URL,
+      sessionId: browserSessionIdRef.current,
       onOpen: () => {
         console.log(`[useGeminiLive] Live session connected & established (isRotation: ${isRotation}, hasPriorContext: ${hasPriorContext}).`);
         setSessionStatus('connected');
@@ -1375,8 +1387,11 @@ CRITICAL DIRECTIVES:
     try {
       const res = await fetch(`${BACKEND_URL}/api/browser/action`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(actionPayload),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': browserSessionIdRef.current,
+        },
+        body: JSON.stringify({ ...actionPayload, sessionId: browserSessionIdRef.current }),
       });
 
       if (res.ok) {

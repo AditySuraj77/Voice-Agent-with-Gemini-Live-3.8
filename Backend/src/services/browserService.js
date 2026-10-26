@@ -1,95 +1,159 @@
 import { chromium } from 'playwright';
 
 /**
- * High-Performance Autonomous Browser Service for Gemini Live
- * Features:
- * - Ultra-low CPU/RAM footprint with Chromium performance flags
- * - Ad/Media request interception (zero lag on 4K video / 3D sites)
- * - 960x540 adaptive lightweight streaming
- * - Set-of-Marks (SoM) Numbered Badging for 100% accurate clicks
- * - Automatic Chromium Sleep & RAM Release after 3 minutes idle
- * - Superpowers: Clip to Whiteboard, AI Laser Highlighter, Reader Mode, History
+ * BLOCKED_DOMAINS for ad, tracker, and heavy media aborting.
+ */
+const BLOCKED_DOMAINS = [
+  'google-analytics.com',
+  'doubleclick.net',
+  'googletagmanager.com',
+  'facebook.net',
+  'scorecardresearch.com',
+  'criteo.com',
+  'outbrain.com',
+  'taboola.com',
+  'adnxs.com',
+  'quantserve.com',
+];
+
+/**
+ * Isolated Per-User Browser Session
+ * Holds independent Playwright BrowserContext, Page, cookies, Set-of-Marks, and state.
+ */
+class UserBrowserSession {
+  constructor(sessionId, context, page) {
+    this.sessionId = sessionId;
+    this.context = context;
+    this.page = page;
+    this.activeUrl = 'about:blank';
+    this.pageTitle = 'Aristotle Live Browser';
+    this.lastScreenshot = null;
+    this.lastAction = null;
+    this.isReaderMode = false;
+    this.canGoBack = false;
+    this.canGoForward = false;
+    this.showSoMBadges = false;
+    this.somMap = new Map(); // elementId -> { id, x, y, width, height, tag, text }
+    this.lastActiveAt = Date.now();
+  }
+
+  touch() {
+    this.lastActiveAt = Date.now();
+  }
+
+  async close() {
+    try {
+      this.somMap.clear();
+      if (this.page && !this.page.isClosed()) {
+        await this.page.close().catch(() => {});
+      }
+      if (this.context) {
+        await this.context.close().catch(() => {});
+      }
+    } catch (_) {}
+  }
+}
+
+/**
+ * High-Performance Autonomous Multi-Tenant Browser Service
+ * Architecture:
+ * - Shared, ultra-optimized Chromium engine for minimal CPU/RAM footprint
+ * - True Zero-Bleed Multi-Tenancy: Each user receives an isolated BrowserContext (incognito profile)
+ * - Independent cookies, localStorage, session history, and viewport per user session
+ * - Per-user idle garbage collector (auto-destroys inactive user tabs after 2.5 minutes)
+ * - Global browser auto-sleep when 0 active user sessions remain for 3.5 minutes
+ * - Server protection capacity cap: Limits max concurrent user tabs to prevent OOM
  */
 class BrowserService {
   constructor() {
     this.browser = null;
-    this.context = null;
-    this.page = null;
-    this.activeUrl = 'about:blank';
-    this.pageTitle = 'Empty';
-    this.lastScreenshot = null;
-    this.lastAction = null;
-    this.isInitialized = false;
     this.initPromise = null;
-    this.isReaderMode = false;
-    this.canGoBack = false;
-    this.canGoForward = false;
-
-    // Milestone 1 additions: Set-of-Marks & Auto-Sleep
-    this.showSoMBadges = false;
-    this.somMap = new Map(); // elementId -> { id, x, y, width, height, tag, text }
-    this.idleTimer = null;
-    this.idleTimeoutMs = 3 * 60 * 1000; // 3 minutes idle
     this.isSleeping = false;
+
+    // Multi-tenant session store: sessionId -> UserBrowserSession
+    this.sessions = new Map();
+    this.maxConcurrentSessions = 25; // Capacity guard to protect cloud server RAM
+    this.sessionIdleTimeoutMs = 2.5 * 60 * 1000; // 2.5 minutes inactivity per user
+    this.browserSleepTimeoutMs = 3.5 * 60 * 1000; // 3.5 minutes idle with 0 users puts browser to sleep
+
+    this.sleepTimer = null;
+    this.janitorInterval = null;
+
+    this.startJanitor();
   }
 
   /**
-   * Resets the idle sleep timer. Called on every user/AI action.
+   * Periodic background garbage collector that frees inactive user tabs to release RAM.
    */
-  resetIdleTimer() {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
+  startJanitor() {
+    if (this.janitorInterval) return;
+    this.janitorInterval = setInterval(() => {
+      this.cleanupInactiveSessions();
+    }, 45000); // Check every 45 seconds
+  }
+
+  async cleanupInactiveSessions() {
+    const now = Date.now();
+    for (const [sid, session] of this.sessions.entries()) {
+      if (now - session.lastActiveAt > this.sessionIdleTimeoutMs) {
+        console.log(`[BrowserService] 💤 Inactive session "${sid}" timed out (2.5m idle). Releasing isolated user tab.`);
+        await session.close();
+        this.sessions.delete(sid);
+      }
     }
-    this.idleTimer = setTimeout(() => {
-      this.sleep();
-    }, this.idleTimeoutMs);
+
+    if (this.sessions.size === 0 && this.browser && !this.isSleeping && !this.sleepTimer) {
+      this.sleepTimer = setTimeout(() => {
+        if (this.sessions.size === 0) {
+          this.sleep();
+        }
+      }, this.browserSleepTimeoutMs);
+    }
   }
 
   /**
-   * Puts Chromium to sleep after 3 minutes of inactivity to completely release system RAM.
+   * Puts Chromium process to sleep when no active sessions remain.
    */
   async sleep() {
     if (!this.browser || this.isSleeping) return;
-    console.log('[BrowserService] 💤 3 minutes idle detected. Putting Chromium to sleep to release system RAM...');
+    console.log('[BrowserService] 💤 All sessions idle. Putting Chromium engine to sleep to release system RAM...');
     this.isSleeping = true;
     try {
-      if (this.context) {
-        await this.context.close().catch(() => {});
-        this.context = null;
+      for (const session of this.sessions.values()) {
+        await session.close();
       }
+      this.sessions.clear();
+
       if (this.browser) {
         await this.browser.close().catch(() => {});
         this.browser = null;
       }
-      this.page = null;
-      this.isInitialized = false;
       this.initPromise = null;
-      console.log('[BrowserService] ✅ Chromium RAM released. System sleeping quietly.');
+      console.log('[BrowserService] ✅ Chromium RAM completely released. System sleeping quietly.');
     } catch (e) {
       console.warn('[BrowserService] Error during auto-sleep:', e.message);
     }
   }
 
   /**
-   * Initializes Chromium instance with strict performance flags,
-   * 960x540 viewport, and ad/media request aborting.
+   * Ensures the shared Chromium engine is initialized with high-performance flags.
    */
-  async init() {
-    this.resetIdleTimer();
+  async initBrowser() {
+    if (this.sleepTimer) {
+      clearTimeout(this.sleepTimer);
+      this.sleepTimer = null;
+    }
 
-    if (this.isInitialized && this.page && !this.page.isClosed()) {
-      return this.page;
+    if (this.browser && this.browser.isConnected()) {
+      return this.browser;
     }
 
     if (this.initPromise) {
       return this.initPromise;
     }
 
-    const wasSleeping = this.isSleeping;
-    const previousUrl = this.activeUrl;
-
     this.initPromise = (async () => {
-      console.log(`[BrowserService] ${wasSleeping ? '⚡ Waking up Chromium from sleep...' : '🚀 Launching ultra-fast Chromium instance...'}`);
+      console.log('[BrowserService] 🚀 Launching high-performance shared Chromium engine...');
       try {
         this.browser = await chromium.launch({
           headless: true,
@@ -98,130 +162,24 @@ class BrowserService {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--disable-3d-apis',
-            '--disable-webgl',
-            '--disable-background-networking',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-breakpad',
-            '--disable-component-update',
-            '--disable-domain-reliability',
-            '--disable-extensions',
-            '--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process',
-            '--disable-ipc-flooding-protection',
-            '--disable-renderer-backgrounding',
-            '--mute-audio',
-            '--no-default-browser-check',
+            '--disable-accelerated-2d-canvas',
             '--no-first-run',
-            '--js-flags=--max-old-space-size=512',
+            '--no-zygote',
+            '--disable-gpu',
+            '--mute-audio',
+            '--blink-settings=imagesEnabled=true',
+            '--disable-extensions',
+            '--disable-background-networking',
+            '--disable-default-apps',
+            '--disable-sync',
           ],
         });
 
-        // 960x540 viewport: 44% fewer pixels than 720p, reducing CPU rasterization and encoding by ~60%
-        this.context = await this.browser.newContext({
-          viewport: { width: 960, height: 540 },
-          userAgent:
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-          deviceScaleFactor: 1,
-        });
-
-        // Request Interception: Block 4K videos, infinite streaming media, ads, and telemetry
-        const BLOCKED_DOMAINS = [
-          'google-analytics.com', 'googletagmanager.com', 'doubleclick.net',
-          'facebook.net', 'adnxs.com', 'adservice.google.com', 'amazon-adsystem.com',
-          'hotjar.com', 'criteo.com', 'adroll.com', 'clarity.ms', 'outbrain.com',
-          'taboola.com', 'scorecardresearch.com', 'quantserve.com',
-        ];
-
-        const BLOCKED_EXTENSIONS = ['.mp4', '.webm', '.m4v', '.m3u8', '.avi', '.mov', '.flv'];
-
-        await this.context.route('**/*', (route) => {
-          const req = route.request();
-          const resourceType = req.resourceType();
-          const url = req.url().toLowerCase();
-
-          // 1. Block heavy video and audio media streams to guarantee 0% background decoding and zero heating
-          if (resourceType === 'media' || BLOCKED_EXTENSIONS.some((ext) => url.includes(ext))) {
-            return route.abort();
-          }
-
-          // 2. Silently fulfill heavy ad networks and telemetry with empty 204 to prevent crashing modern SPAs
-          if (BLOCKED_DOMAINS.some((domain) => url.includes(domain))) {
-            return route.fulfill({ status: 204, body: '' });
-          }
-
-          return route.continue();
-        });
-
-        this.page = await this.context.newPage();
-
-        // Listen for navigation & title updates
-        this.page.on('framenavigated', (frame) => {
-          if (frame === this.page.mainFrame()) {
-            this.activeUrl = this.page.url();
-          }
-        });
-
-        this.page.on('load', async () => {
-          try {
-            this.pageTitle = await this.page.title();
-            this.activeUrl = this.page.url();
-          } catch (e) {}
-        });
-
-        // If waking from sleep on a real webpage, seamlessly re-open the page
-        if (wasSleeping && previousUrl && previousUrl !== 'about:blank') {
-          console.log(`[BrowserService] Restoring previous tab state: ${previousUrl}`);
-          await this.page.goto(previousUrl, { waitUntil: 'domcontentloaded', timeout: 7000 }).catch(() => {});
-        } else {
-          // Set blank initial page with clean placeholder
-          await this.page.setContent(`
-            <!DOCTYPE html>
-            <html>
-              <head>
-                <meta charset="utf-8">
-                <style>
-                  body {
-                    margin: 0;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    height: 100vh;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    background: #0a0f1d;
-                    color: #94a3b8;
-                  }
-                  .card {
-                    text-align: center;
-                    padding: 2rem 2.5rem;
-                    border: 1px solid #1e293b;
-                    border-radius: 16px;
-                    background: #111827;
-                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-                  }
-                  h1 { color: #f8fafc; font-size: 1.4rem; margin-bottom: 0.4rem; font-weight: 700; }
-                  p { font-size: 0.85rem; margin: 0; color: #64748b; }
-                </style>
-              </head>
-              <body>
-                <div class="card">
-                  <h1>🌐 Aristotle Live Browser</h1>
-                  <p>High-Performance Voice-Guided Autonomous Web Assistant</p>
-                </div>
-              </body>
-            </html>
-          `);
-        }
-
         this.isSleeping = false;
-        await this.captureScreenshot();
-        this.isInitialized = true;
-        console.log('[BrowserService] Ultra-fast Chromium initialized (960x540, ad-blocker enabled).');
-        return this.page;
+        console.log('[BrowserService] Shared Chromium engine initialized.');
+        return this.browser;
       } catch (err) {
-        console.error('[BrowserService] Failed to launch Chromium:', err);
+        console.error('[BrowserService] Failed to launch Chromium engine:', err);
         this.initPromise = null;
         throw err;
       }
@@ -231,16 +189,145 @@ class BrowserService {
   }
 
   /**
-   * Applies Set-of-Marks (SoM) Numbered Badges to all clickable elements.
-   * Maps badgeId -> { id, x, y, width, height, tag, text }.
+   * Retrieves or creates an isolated UserBrowserSession for the given sessionId.
+   * @param {string} sessionId
+   * @returns {Promise<UserBrowserSession>}
    */
-  async applySetOfMarks() {
-    if (!this.page || this.page.isClosed()) return [];
-    try {
-      const elements = await this.page.evaluate(() => {
-        // Remove existing badges
-        document.querySelectorAll('.aristotle-som-badge').forEach((el) => el.remove());
+  async getOrCreateSession(sessionId = 'default') {
+    const cleanId = (sessionId || 'default').toString().trim().slice(0, 64);
+    await this.initBrowser();
 
+    if (this.sleepTimer) {
+      clearTimeout(this.sleepTimer);
+      this.sleepTimer = null;
+    }
+
+    // Check if active user session already exists
+    const existing = this.sessions.get(cleanId);
+    if (existing && existing.page && !existing.page.isClosed()) {
+      existing.touch();
+      return existing;
+    }
+
+    // If existing session had a closed page, clean it up
+    if (existing) {
+      await existing.close();
+      this.sessions.delete(cleanId);
+    }
+
+    // Capacity guard: If max concurrent sessions reached, close oldest session
+    if (this.sessions.size >= this.maxConcurrentSessions) {
+      let oldestId = null;
+      let oldestTime = Infinity;
+      for (const [sid, sess] of this.sessions.entries()) {
+        if (sess.lastActiveAt < oldestTime) {
+          oldestTime = sess.lastActiveAt;
+          oldestId = sid;
+        }
+      }
+      if (oldestId) {
+        console.log(`[BrowserService] Capacity cap (${this.maxConcurrentSessions}) reached. Pruning oldest session "${oldestId}"...`);
+        const oldSess = this.sessions.get(oldestId);
+        await oldSess?.close();
+        this.sessions.delete(oldestId);
+      }
+    }
+
+    console.log(`[BrowserService] ⚡ Creating isolated multi-tenant BrowserContext for session "${cleanId}"...`);
+    const context = await this.browser.newContext({
+      viewport: { width: 960, height: 540 },
+      deviceScaleFactor: 1,
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 AristotleLive/1.0',
+    });
+
+    // Request interception for extreme speed: Block trackers, ads, heavy media streams
+    await context.route('**/*', (route) => {
+      const req = route.request();
+      const resourceType = req.resourceType();
+      const url = req.url();
+
+      if (['media', 'font', 'websocket'].includes(resourceType)) {
+        return route.abort();
+      }
+
+      if (BLOCKED_DOMAINS.some((domain) => url.includes(domain))) {
+        return route.fulfill({ status: 204, body: '' });
+      }
+
+      return route.continue();
+    });
+
+    const page = await context.newPage();
+
+    const userSession = new UserBrowserSession(cleanId, context, page);
+
+    // Track navigation events on user's page
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame()) {
+        userSession.activeUrl = page.url();
+      }
+    });
+
+    page.on('load', async () => {
+      try {
+        userSession.pageTitle = await page.title();
+        userSession.activeUrl = page.url();
+      } catch (_) {}
+    });
+
+    // Default clean placeholder page
+    await page.setContent(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              margin: 0;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: #0a0f1d;
+              color: #94a3b8;
+            }
+            .card {
+              text-align: center;
+              padding: 2rem 2.5rem;
+              border: 1px solid #1e293b;
+              border-radius: 16px;
+              background: #111827;
+              box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            }
+            h1 { color: #f8fafc; font-size: 1.4rem; margin-bottom: 0.4rem; font-weight: 700; }
+            p { font-size: 0.85rem; margin: 0; color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>🌐 Aristotle Live Browser</h1>
+            <p>Private & Isolated Voice-Guided Autonomous Web Session</p>
+          </div>
+        </body>
+      </html>
+    `);
+
+    await this.captureScreenshot(userSession);
+    this.sessions.set(cleanId, userSession);
+    return userSession;
+  }
+
+  /**
+   * Applies Set-of-Marks (SoM) Numbered Badges to user's page.
+   */
+  async applySetOfMarks(session) {
+    if (!session || !session.page || session.page.isClosed()) return [];
+    try {
+      const elements = await session.page.evaluate(() => {
+        document.querySelectorAll('.aristotle-som-badge').forEach((el) => el.remove());
         const candidates = Array.from(
           document.querySelectorAll('a, button, input, textarea, select, [role="button"], [onclick], [tabindex="0"]')
         );
@@ -249,7 +336,7 @@ class BrowserService {
         let idCounter = 1;
 
         for (const el of candidates) {
-          if (idCounter > 50) break; // Limit to 50 for clean reading
+          if (idCounter > 50) break;
           const rect = el.getBoundingClientRect();
           if (
             rect.width >= 10 &&
@@ -275,7 +362,7 @@ class BrowserService {
             badge.style.position = 'absolute';
             badge.style.left = `${Math.max(0, rect.left + window.scrollX)}px`;
             badge.style.top = `${Math.max(0, rect.top + window.scrollY)}px`;
-            badge.style.background = '#eab308'; // Amber-500
+            badge.style.background = '#eab308';
             badge.style.color = '#000000';
             badge.style.fontWeight = '900';
             badge.style.fontSize = '10px';
@@ -303,9 +390,9 @@ class BrowserService {
         return results;
       });
 
-      this.somMap.clear();
+      session.somMap.clear();
       for (const item of elements) {
-        this.somMap.set(item.id, item);
+        session.somMap.set(item.id, item);
       }
       return elements;
     } catch (e) {
@@ -314,75 +401,68 @@ class BrowserService {
     }
   }
 
-  /**
-   * Removes Set-of-Marks numbered badges from the page.
-   */
-  async removeSetOfMarks() {
-    if (!this.page || this.page.isClosed()) return;
+  async removeSetOfMarks(session) {
+    if (!session?.page || session.page.isClosed()) return;
     try {
-      await this.page.evaluate(() => {
+      await session.page.evaluate(() => {
         document.querySelectorAll('.aristotle-som-badge').forEach((el) => el.remove());
       });
-      this.somMap.clear();
-    } catch (e) {}
+      session.somMap.clear();
+    } catch (_) {}
   }
 
-  /**
-   * Toggles Set-of-Marks numbered badges on or off.
-   */
-  async toggleSoM(enabled) {
-    await this.init();
-    this.showSoMBadges = enabled !== undefined ? !!enabled : !this.showSoMBadges;
-    console.log(`[BrowserService] Set-of-Marks (SoM) Labels: ${this.showSoMBadges ? 'ENABLED' : 'DISABLED'}`);
+  async toggleSoM(enabled, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.showSoMBadges = enabled !== undefined ? !!enabled : !session.showSoMBadges;
 
-    if (this.showSoMBadges) {
-      await this.applySetOfMarks();
+    if (session.showSoMBadges) {
+      await this.applySetOfMarks(session);
     } else {
-      await this.removeSetOfMarks();
+      await this.removeSetOfMarks(session);
     }
 
-    const screenshot = await this.captureScreenshot();
+    const screenshot = await this.captureScreenshot(session);
     return {
       status: 'success',
       action: 'toggle_som',
-      showSoMBadges: this.showSoMBadges,
-      somCount: this.somMap.size,
-      url: this.activeUrl,
-      title: this.pageTitle,
+      showSoMBadges: session.showSoMBadges,
+      somCount: session.somMap.size,
+      url: session.activeUrl,
+      title: session.pageTitle,
       screenshot,
     };
   }
 
   /**
-   * Captures an ultra-lightweight JPEG screenshot (quality: 55%) returned as base64.
-   * Average size: ~15-25 KB, providing near-instant streaming to Gemini Live.
+   * Captures an ultra-lightweight JPEG screenshot for the given user session.
    */
-  async captureScreenshot() {
-    if (!this.page || this.page.isClosed()) return null;
+  async captureScreenshot(session) {
+    if (!session?.page || session.page.isClosed()) return null;
     try {
-      if (this.showSoMBadges) {
-        await this.applySetOfMarks();
+      if (session.showSoMBadges) {
+        await this.applySetOfMarks(session);
       }
-      const buffer = await this.page.screenshot({
+      const buffer = await session.page.screenshot({
         type: 'jpeg',
         quality: 55,
         fullPage: false,
         timeout: 3500,
       });
       const base64 = buffer.toString('base64');
-      this.lastScreenshot = base64;
+      session.lastScreenshot = base64;
       return base64;
     } catch (err) {
-      console.warn('[BrowserService] Screenshot capture failed:', err.message);
-      return this.lastScreenshot;
+      console.warn('[BrowserService] Screenshot capture warning:', err.message);
+      return session.lastScreenshot;
     }
   }
 
   /**
-   * Navigates to target URL with universal 'commit' signal, adaptive SPA hydration, and progressive 2-stage capture.
+   * Navigates the user's isolated browser context to target URL.
    */
-  async navigate(targetUrl) {
-    await this.init();
+  async navigate(targetUrl, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
 
     let cleanUrl = (targetUrl || '').trim();
     if (!cleanUrl) {
@@ -397,20 +477,25 @@ class BrowserService {
       }
     }
 
-    // SSRF Guard: Block internal network, localhost, and cloud metadata access
+    // SSRF Guard: Block internal network, localhost, cloud metadata, and arbitrary protocols
     try {
       const parsed = new URL(cleanUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error(`Navigation protocol "${parsed.protocol}" is blocked for security.`);
+      }
+
       const host = parsed.hostname.toLowerCase();
       const isInternal =
         host === 'localhost' ||
         host === '127.0.0.1' ||
+        host.startsWith('127.') ||
         host === '0.0.0.0' ||
         host === '::1' ||
+        host === '[::1]' ||
         host === '169.254.169.254' ||
         host.startsWith('10.') ||
         host.startsWith('192.168.') ||
-        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
-        parsed.protocol === 'file:';
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
 
       if (isInternal) {
         throw new Error(`Navigation to restricted internal address "${host}" is blocked for security.`);
@@ -419,19 +504,17 @@ class BrowserService {
       if (urlErr.message.includes('blocked for security')) throw urlErr;
     }
 
-    console.log(`[BrowserService] Navigating to: ${cleanUrl}`);
-    this.lastAction = { type: 'navigate', url: cleanUrl, timestamp: Date.now() };
+    console.log(`[BrowserService] Session "${session.sessionId}" navigating to: ${cleanUrl}`);
+    session.lastAction = { type: 'navigate', url: cleanUrl, timestamp: Date.now() };
 
     try {
-      // 1. Commit navigation immediately (works on all websites in ~300-500ms without timing out)
-      await this.page.goto(cleanUrl, {
+      await session.page.goto(cleanUrl, {
         waitUntil: 'commit',
         timeout: 15000,
       });
 
-      // 2. Allow modern dynamic frameworks (React, Vue, Next.js, Polymer, Svelte) to mount
       await Promise.race([
-        this.page.waitForLoadState('domcontentloaded', { timeout: 3500 }).catch(() => {}),
+        session.page.waitForLoadState('domcontentloaded', { timeout: 3500 }).catch(() => {}),
         new Promise((r) => setTimeout(r, 1200)),
       ]);
     } catch (err) {
@@ -439,209 +522,199 @@ class BrowserService {
     }
 
     await new Promise((r) => setTimeout(r, 350));
-
-    this.activeUrl = this.page.url();
+    session.activeUrl = session.page.url();
     try {
-      this.pageTitle = await this.page.title();
-    } catch (e) {
-      this.pageTitle = cleanUrl;
+      session.pageTitle = await session.page.title();
+    } catch (_) {
+      session.pageTitle = cleanUrl;
     }
 
-    const screenshot = await this.captureScreenshot();
+    const screenshot = await this.captureScreenshot(session);
 
-    // 3. Progressive 2-stage capture: Schedule a follow-up background capture at 1.4s
-    // so any late-rendering SPAs (e.g. YouTube feeds, GitHub markdown) update this.lastScreenshot automatically
+    // Follow-up progressive hydration frame
     setTimeout(async () => {
       try {
-        if (this.page && !this.page.isClosed() && this.activeUrl === cleanUrl) {
-          this.pageTitle = await this.page.title().catch(() => this.pageTitle);
-          await this.captureScreenshot();
-          console.log(`[BrowserService] Progressive hydrated frame updated for: ${this.activeUrl}`);
+        if (session.page && !session.page.isClosed() && session.activeUrl === cleanUrl) {
+          session.pageTitle = await session.page.title().catch(() => session.pageTitle);
+          await this.captureScreenshot(session);
         }
-      } catch (e) {}
+      } catch (_) {}
     }, 1400);
 
     return {
       status: 'success',
       action: 'navigate',
-      url: this.activeUrl,
-      title: this.pageTitle,
-      showSoMBadges: this.showSoMBadges,
-      somCount: this.somMap.size,
+      url: session.activeUrl,
+      title: session.pageTitle,
+      showSoMBadges: session.showSoMBadges,
+      somCount: session.somMap.size,
       screenshot,
     };
   }
 
   /**
-   * Clicks an element by elementId (SoM badge [1], [2]...), coordinates {x, y}, or selector.
+   * Clicks an element inside the user's isolated session.
    */
-  async click({ elementId, selector, x, y, description = '' }) {
-    await this.init();
+  async click({ elementId, selector, x, y, description = '' }, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
 
     let clickX = x;
     let clickY = y;
 
-    // 1. Resolve via Set-of-Marks Numbered Badge (100% precision)
     if (elementId != null) {
-      const target = this.somMap.get(Number(elementId));
+      const target = session.somMap.get(Number(elementId));
       if (target) {
         clickX = target.x;
         clickY = target.y;
         description = description || `Element [${elementId}] (${target.tag}: "${target.text}")`;
-        console.log(`[BrowserService] SoM Direct Click: Target [${elementId}] resolved to (${clickX}, ${clickY})`);
-      } else {
-        console.warn(`[BrowserService] SoM badge [${elementId}] not found in active map.`);
       }
     }
 
-    console.log(`[BrowserService] Click action: ${description || selector || `(${clickX}, ${clickY})`}`);
-    this.lastAction = { type: 'click', elementId, selector, x: clickX, y: clickY, description, timestamp: Date.now() };
+    session.lastAction = { type: 'click', elementId, selector, x: clickX, y: clickY, description, timestamp: Date.now() };
 
     try {
       if (typeof clickX === 'number' && typeof clickY === 'number') {
-        // Direct vision/SoM coordinate click
-        await this.page.mouse.click(clickX, clickY);
+        await session.page.mouse.click(clickX, clickY);
       } else if (selector) {
-        const elem = this.page.locator(selector).first();
+        const elem = session.page.locator(selector).first();
         if (await elem.isVisible({ timeout: 2000 })) {
           await elem.click();
         } else {
-          await this.page.getByText(selector, { exact: false }).first().click({ timeout: 2500 });
+          await session.page.getByText(selector, { exact: false }).first().click({ timeout: 2500 });
         }
       } else {
         throw new Error('Either elementId, coordinates (x, y), or selector is required to click.');
       }
     } catch (err) {
-      console.warn(`[BrowserService] Click warning:`, err.message);
+      console.warn('[BrowserService] Click warning:', err.message);
     }
 
     await new Promise((r) => setTimeout(r, 450));
-    this.activeUrl = this.page.url();
+    session.activeUrl = session.page.url();
     try {
-      this.pageTitle = await this.page.title();
-    } catch (e) {}
+      session.pageTitle = await session.page.title();
+    } catch (_) {}
 
-    const screenshot = await this.captureScreenshot();
+    const screenshot = await this.captureScreenshot(session);
 
     return {
       status: 'success',
       action: 'click',
-      url: this.activeUrl,
-      title: this.pageTitle,
+      url: session.activeUrl,
+      title: session.pageTitle,
       clickCoordinates: typeof clickX === 'number' && typeof clickY === 'number' ? { x: clickX, y: clickY } : null,
       elementId,
-      showSoMBadges: this.showSoMBadges,
-      somCount: this.somMap.size,
+      showSoMBadges: session.showSoMBadges,
+      somCount: session.somMap.size,
       screenshot,
     };
   }
 
   /**
-   * Types text into active element or specified input elementId/selector.
+   * Types text inside the user's isolated session.
    */
-  async type({ elementId, text = '', selector = '', pressEnter = false }) {
-    await this.init();
+  async type({ elementId, text = '', selector = '', pressEnter = false }, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
 
-    console.log(`[BrowserService] Type action: "${text}" on ${elementId ? `[Badge #${elementId}]` : selector || 'active'} (enter: ${pressEnter})`);
-    this.lastAction = { type: 'type', elementId, text, selector, pressEnter, timestamp: Date.now() };
+    session.lastAction = { type: 'type', elementId, text, selector, pressEnter, timestamp: Date.now() };
 
     try {
-      // 1. Focus input via SoM elementId
       if (elementId != null) {
-        const target = this.somMap.get(Number(elementId));
+        const target = session.somMap.get(Number(elementId));
         if (target) {
-          console.log(`[BrowserService] Focusing input [${elementId}] at (${target.x}, ${target.y})`);
-          await this.page.mouse.click(target.x, target.y);
+          await session.page.mouse.click(target.x, target.y);
           await new Promise((r) => setTimeout(r, 150));
         }
       }
 
       if (selector) {
-        const input = this.page.locator(selector).first();
+        const input = session.page.locator(selector).first();
         await input.fill(text, { timeout: 2500 });
       } else {
-        await this.page.keyboard.type(text, { delay: 20 });
+        await session.page.keyboard.type(text, { delay: 20 });
       }
 
       if (pressEnter) {
-        await this.page.keyboard.press('Enter');
+        await session.page.keyboard.press('Enter');
         await new Promise((r) => setTimeout(r, 600));
       }
     } catch (err) {
-      console.warn(`[BrowserService] Type warning:`, err.message);
+      console.warn('[BrowserService] Type warning:', err.message);
     }
 
     await new Promise((r) => setTimeout(r, 300));
-    this.activeUrl = this.page.url();
+    session.activeUrl = session.page.url();
     try {
-      this.pageTitle = await this.page.title();
-    } catch (e) {}
+      session.pageTitle = await session.page.title();
+    } catch (_) {}
 
-    const screenshot = await this.captureScreenshot();
+    const screenshot = await this.captureScreenshot(session);
 
     return {
       status: 'success',
       action: 'type',
-      url: this.activeUrl,
-      title: this.pageTitle,
-      showSoMBadges: this.showSoMBadges,
-      somCount: this.somMap.size,
+      url: session.activeUrl,
+      title: session.pageTitle,
+      showSoMBadges: session.showSoMBadges,
+      somCount: session.somMap.size,
       screenshot,
     };
   }
 
   /**
-   * Scrolls the page viewport up or down.
+   * Scrolls the viewport inside the user's isolated session.
    */
-  async scroll({ direction = 'down', amount = 450 }) {
-    await this.init();
+  async scroll({ direction = 'down', amount = 450 }, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
 
     const deltaY = direction === 'up' ? -Math.abs(amount) : Math.abs(amount);
-    console.log(`[BrowserService] Scroll action: ${direction} (${deltaY}px)`);
-    this.lastAction = { type: 'scroll', direction, amount, timestamp: Date.now() };
+    session.lastAction = { type: 'scroll', direction, amount, timestamp: Date.now() };
 
     try {
-      await this.page.mouse.wheel(0, deltaY);
+      await session.page.mouse.wheel(0, deltaY);
     } catch (err) {
-      console.warn(`[BrowserService] Scroll warning:`, err.message);
+      console.warn('[BrowserService] Scroll warning:', err.message);
     }
 
     await new Promise((r) => setTimeout(r, 300));
-    const screenshot = await this.captureScreenshot();
+    const screenshot = await this.captureScreenshot(session);
 
     return {
       status: 'success',
       action: 'scroll',
-      url: this.activeUrl,
-      title: this.pageTitle,
-      showSoMBadges: this.showSoMBadges,
-      somCount: this.somMap.size,
+      url: session.activeUrl,
+      title: session.pageTitle,
+      showSoMBadges: session.showSoMBadges,
+      somCount: session.somMap.size,
       screenshot,
     };
   }
 
   /**
-   * Superpower 1: Clips an element, diagram, or page section to paste onto Whiteboard.
+   * Clips a diagram or section to paste onto the user's whiteboard.
    */
-  async clipToWhiteboard({ selector = '', caption = 'Clipped Web Diagram' }) {
-    await this.init();
-    console.log(`[BrowserService] Clipping diagram to whiteboard: ${caption} (selector: ${selector})`);
+  async clipToWhiteboard({ selector = '', caption = 'Clipped Web Diagram' }, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
 
     let clipScreenshot = null;
     try {
       if (selector) {
-        const elem = this.page.locator(selector).first();
+        const elem = session.page.locator(selector).first();
         if (await elem.isVisible({ timeout: 2000 })) {
           const buffer = await elem.screenshot({ type: 'jpeg', quality: 75 });
           clipScreenshot = buffer.toString('base64');
         }
       }
     } catch (e) {
-      console.warn('[BrowserService] Element-specific clip fallback to viewport:', e.message);
+      console.warn('[BrowserService] Clip element fallback:', e.message);
     }
 
     if (!clipScreenshot) {
-      clipScreenshot = await this.captureScreenshot();
+      clipScreenshot = await this.captureScreenshot(session);
     }
 
     return {
@@ -649,34 +722,34 @@ class BrowserService {
       action: 'clip_whiteboard',
       caption,
       image: clipScreenshot,
-      url: this.activeUrl,
-      title: this.pageTitle,
+      url: session.activeUrl,
+      title: session.pageTitle,
     };
   }
 
   /**
-   * Superpower 2: Highlights an element with an AI visual laser box & badge.
+   * Highlights an element with an AI visual laser box.
    */
-  async highlight({ selector = '', text = '', label = 'Key Concept' }) {
-    await this.init();
-    console.log(`[BrowserService] Highlighting element: text="${text}", selector="${selector}"`);
+  async highlight({ selector = '', text = '', label = 'Key Concept' }, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
 
     let boundingBox = null;
     try {
       if (selector) {
-        const locator = this.page.locator(selector).first();
+        const locator = session.page.locator(selector).first();
         if (await locator.isVisible({ timeout: 2000 }).catch(() => false)) {
           boundingBox = await locator.boundingBox();
         }
       } else if (text) {
-        const locator = this.page.getByText(text, { exact: false }).first();
+        const locator = session.page.getByText(text, { exact: false }).first();
         if (await locator.isVisible({ timeout: 2000 }).catch(() => false)) {
           boundingBox = await locator.boundingBox();
         }
       }
 
       if (boundingBox) {
-        await this.page.evaluate(({ box, labelText }) => {
+        await session.page.evaluate(({ box, labelText }) => {
           const existing = document.getElementById('aristotle-ai-highlight');
           if (existing) existing.remove();
 
@@ -706,17 +779,14 @@ class BrowserService {
           badge.style.padding = '2px 8px';
           badge.style.borderRadius = '4px';
           badge.style.fontFamily = 'system-ui, sans-serif';
-          badge.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
           div.appendChild(badge);
 
           document.body.appendChild(div);
         }, { box: boundingBox, labelText: label });
       }
-    } catch (e) {
-      console.warn('[BrowserService] Highlight evaluation warning:', e.message);
-    }
+    } catch (_) {}
 
-    const screenshot = await this.captureScreenshot();
+    const screenshot = await this.captureScreenshot(session);
 
     return {
       status: 'success',
@@ -724,23 +794,22 @@ class BrowserService {
       boundingBox,
       label,
       screenshot,
-      url: this.activeUrl,
-      title: this.pageTitle,
+      url: session.activeUrl,
+      title: session.pageTitle,
     };
   }
 
   /**
-   * Superpower 3: Clean Reader View (Strips ads, sidebars, and popups for 0% lag).
+   * Toggles Clean Reader View on the user's isolated page.
    */
-  async toggleReaderMode(enabled) {
-    await this.init();
-    this.isReaderMode = !!enabled;
-
-    console.log(`[BrowserService] Reader Mode: ${this.isReaderMode ? 'Enabled' : 'Disabled'}`);
+  async toggleReaderMode(enabled, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
+    session.isReaderMode = !!enabled;
 
     try {
-      if (this.isReaderMode) {
-        await this.page.evaluate(() => {
+      if (session.isReaderMode) {
+        await session.page.evaluate(() => {
           const hideSelectors = [
             'header', 'footer', 'nav', 'aside', 'iframe',
             '.advertisement', '.ad', '.sidebar', '.social-share',
@@ -749,137 +818,128 @@ class BrowserService {
           hideSelectors.forEach((sel) => {
             document.querySelectorAll(sel).forEach((el) => (el.style.display = 'none'));
           });
-
           document.body.style.maxWidth = '780px';
           document.body.style.margin = '0 auto';
           document.body.style.padding = '24px';
           document.body.style.background = '#fbf8f3';
           document.body.style.color = '#1c1917';
           document.body.style.fontFamily = 'Georgia, serif';
-          document.body.style.fontSize = '18px';
-          document.body.style.lineHeight = '1.7';
         });
       } else {
-        await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
+        await session.page.reload({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
       }
-    } catch (e) {
-      console.warn('[BrowserService] Reader mode toggle warning:', e.message);
-    }
+    } catch (_) {}
 
     await new Promise((r) => setTimeout(r, 300));
-    const screenshot = await this.captureScreenshot();
+    const screenshot = await this.captureScreenshot(session);
 
     return {
       status: 'success',
       action: 'reader_mode',
-      isReaderMode: this.isReaderMode,
-      url: this.activeUrl,
-      title: this.pageTitle,
+      isReaderMode: session.isReaderMode,
+      url: session.activeUrl,
+      title: session.pageTitle,
       screenshot,
     };
   }
 
-  /**
-   * Superpower 4: Navigates back in browser history.
-   */
-  async goBack() {
-    await this.init();
+  async goBack(sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
     try {
-      await this.page.goBack({ waitUntil: 'domcontentloaded', timeout: 6000 });
-    } catch (e) {
-      console.warn('[BrowserService] goBack timeout/warning:', e.message);
-    }
-
+      await session.page.goBack({ waitUntil: 'domcontentloaded', timeout: 6000 });
+    } catch (_) {}
     await new Promise((r) => setTimeout(r, 400));
-    this.activeUrl = this.page.url();
-    try {
-      this.pageTitle = await this.page.title();
-    } catch (e) {}
-
-    const screenshot = await this.captureScreenshot();
-
+    session.activeUrl = session.page.url();
+    try { session.pageTitle = await session.page.title(); } catch (_) {}
+    const screenshot = await this.captureScreenshot(session);
     return {
       status: 'success',
       action: 'back',
-      url: this.activeUrl,
-      title: this.pageTitle,
+      url: session.activeUrl,
+      title: session.pageTitle,
       screenshot,
     };
   }
 
-  /**
-   * Superpower 4: Navigates forward in browser history.
-   */
-  async goForward() {
-    await this.init();
+  async goForward(sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
     try {
-      await this.page.goForward({ waitUntil: 'domcontentloaded', timeout: 6000 });
-    } catch (e) {
-      console.warn('[BrowserService] goForward timeout/warning:', e.message);
-    }
-
+      await session.page.goForward({ waitUntil: 'domcontentloaded', timeout: 6000 });
+    } catch (_) {}
     await new Promise((r) => setTimeout(r, 400));
-    this.activeUrl = this.page.url();
-    try {
-      this.pageTitle = await this.page.title();
-    } catch (e) {}
-
-    const screenshot = await this.captureScreenshot();
-
+    session.activeUrl = session.page.url();
+    try { session.pageTitle = await session.page.title(); } catch (_) {}
+    const screenshot = await this.captureScreenshot(session);
     return {
       status: 'success',
       action: 'forward',
-      url: this.activeUrl,
-      title: this.pageTitle,
+      url: session.activeUrl,
+      title: session.pageTitle,
       screenshot,
     };
   }
 
   /**
-   * Retrieves current viewport state and screenshot.
+   * Retrieves current viewport state and screenshot for a specific user session.
    */
-  async getViewportState(force = false) {
-    await this.init();
-    if (!this.lastScreenshot || force) {
-      await this.captureScreenshot();
+  async getViewportState(force = false, sessionId = 'default') {
+    const session = await this.getOrCreateSession(sessionId);
+    session.touch();
+    if (!session.lastScreenshot || force) {
+      await this.captureScreenshot(session);
     }
     return {
-      url: this.activeUrl,
-      title: this.pageTitle,
-      screenshot: this.lastScreenshot,
-      lastAction: this.lastAction,
-      isReaderMode: this.isReaderMode,
-      showSoMBadges: this.showSoMBadges,
-      somCount: this.somMap.size,
+      url: session.activeUrl,
+      title: session.pageTitle,
+      screenshot: session.lastScreenshot,
+      lastAction: session.lastAction,
+      isReaderMode: session.isReaderMode,
+      showSoMBadges: session.showSoMBadges,
+      somCount: session.somMap.size,
       isSleeping: this.isSleeping,
     };
   }
 
   /**
-   * Cleanly closes the browser instance.
+   * Closes a single user's isolated session.
+   */
+  async closeSession(sessionId = 'default') {
+    const cleanId = (sessionId || 'default').toString().trim().slice(0, 64);
+    const session = this.sessions.get(cleanId);
+    if (session) {
+      console.log(`[BrowserService] Explicitly closing isolated session "${cleanId}".`);
+      await session.close();
+      this.sessions.delete(cleanId);
+    }
+  }
+
+  /**
+   * Cleanly closes all sessions and tears down the browser engine.
    */
   async close() {
     try {
-      if (this.idleTimer) {
-        clearTimeout(this.idleTimer);
-        this.idleTimer = null;
+      if (this.janitorInterval) {
+        clearInterval(this.janitorInterval);
+        this.janitorInterval = null;
       }
-      if (this.context) {
-        await this.context.close().catch(() => {});
-        this.context = null;
+      if (this.sleepTimer) {
+        clearTimeout(this.sleepTimer);
+        this.sleepTimer = null;
       }
+      for (const session of this.sessions.values()) {
+        await session.close();
+      }
+      this.sessions.clear();
+
       if (this.browser) {
         await this.browser.close().catch(() => {});
         this.browser = null;
       }
-      this.page = null;
-      this.isInitialized = false;
       this.initPromise = null;
-      this.lastScreenshot = null;
-      this.isReaderMode = false;
       this.isSleeping = false;
-      this.somMap.clear();
-      console.log('[BrowserService] Browser session closed cleanly.');
+      console.log('[BrowserService] All browser sessions closed cleanly.');
     } catch (e) {
       console.error('[BrowserService] Error during browser teardown:', e);
     }

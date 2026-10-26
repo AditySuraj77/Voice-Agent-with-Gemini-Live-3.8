@@ -4,12 +4,25 @@ import { browserService } from '../services/browserService.js';
 const router = express.Router();
 
 /**
- * Executes a browser action requested by Gemini Live or user UI.
+ * Helper to safely extract and validate session ID from request.
+ */
+function extractSessionId(req) {
+  const raw =
+    req.headers['x-session-id'] ||
+    req.body?.sessionId ||
+    req.query?.sessionId ||
+    'default';
+  return String(raw).trim().slice(0, 64) || 'default';
+}
+
+/**
+ * Executes an isolated browser action for the user's specific session.
  * POST /api/browser/action
- * Body: { action: 'navigate'|'click'|'type'|'scroll'|'clip_whiteboard'|'highlight'|'reader_mode'|'back'|'forward'|'toggle_som', ...args }
+ * Body: { action: 'navigate'|'click'|'type'|'scroll'|'clip_whiteboard'|'highlight'|'reader_mode'|'back'|'forward'|'toggle_som', sessionId?: string, ...args }
  */
 router.post('/browser/action', async (req, res) => {
   try {
+    const sessionId = extractSessionId(req);
     const {
       action,
       url,
@@ -25,7 +38,7 @@ router.post('/browser/action', async (req, res) => {
       caption,
       label,
       enabled,
-    } = req.body;
+    } = req.body || {};
 
     if (!action) {
       return res.status(400).json({ error: 'Field "action" is required.' });
@@ -33,31 +46,32 @@ router.post('/browser/action', async (req, res) => {
 
     let result;
     if (action === 'navigate') {
-      result = await browserService.navigate(url);
+      result = await browserService.navigate(url, sessionId);
     } else if (action === 'click') {
-      result = await browserService.click({ elementId, selector, x, y, description });
+      result = await browserService.click({ elementId, selector, x, y, description }, sessionId);
     } else if (action === 'type') {
-      result = await browserService.type({ elementId, text, selector, pressEnter });
+      result = await browserService.type({ elementId, text, selector, pressEnter }, sessionId);
     } else if (action === 'scroll') {
-      result = await browserService.scroll({ direction, amount });
+      result = await browserService.scroll({ direction, amount }, sessionId);
     } else if (action === 'clip_whiteboard') {
-      result = await browserService.clipToWhiteboard({ selector, caption });
+      result = await browserService.clipToWhiteboard({ selector, caption }, sessionId);
     } else if (action === 'highlight') {
-      result = await browserService.highlight({ selector, text, label });
+      result = await browserService.highlight({ selector, text, label }, sessionId);
     } else if (action === 'reader_mode') {
-      result = await browserService.toggleReaderMode(enabled);
+      result = await browserService.toggleReaderMode(enabled, sessionId);
     } else if (action === 'back') {
-      result = await browserService.goBack();
+      result = await browserService.goBack(sessionId);
     } else if (action === 'forward') {
-      result = await browserService.goForward();
+      result = await browserService.goForward(sessionId);
     } else if (action === 'toggle_som') {
-      result = await browserService.toggleSoM(enabled);
+      result = await browserService.toggleSoM(enabled, sessionId);
     } else {
       return res.status(400).json({ error: `Unsupported browser action "${action}".` });
     }
 
     return res.json({
       success: true,
+      sessionId,
       ...result,
     });
   } catch (err) {
@@ -70,15 +84,17 @@ router.post('/browser/action', async (req, res) => {
 });
 
 /**
- * Returns the current viewport state and screenshot.
+ * Returns current viewport state and screenshot for user's specific session.
  * GET /api/browser/viewport
  */
 router.get('/browser/viewport', async (req, res) => {
   try {
+    const sessionId = extractSessionId(req);
     const force = req.query.force === 'true';
-    const state = await browserService.getViewportState(force);
+    const state = await browserService.getViewportState(force, sessionId);
     return res.json({
       success: true,
+      sessionId,
       ...state,
     });
   } catch (err) {
@@ -91,15 +107,17 @@ router.get('/browser/viewport', async (req, res) => {
 });
 
 /**
- * Resets the active browser session.
+ * Resets or closes the user's isolated browser session.
  * POST /api/browser/reset
  */
 router.post('/browser/reset', async (req, res) => {
   try {
-    await browserService.close();
+    const sessionId = extractSessionId(req);
+    await browserService.closeSession(sessionId);
     return res.json({
       success: true,
-      message: 'Browser session reset successfully.',
+      sessionId,
+      message: `Browser session "${sessionId}" closed successfully.`,
     });
   } catch (err) {
     console.error('[browserRoute] Reset error:', err);

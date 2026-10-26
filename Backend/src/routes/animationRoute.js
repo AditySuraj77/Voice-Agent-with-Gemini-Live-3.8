@@ -69,10 +69,16 @@ router.get('/tools/proxy-media', async (req, res) => {
     }
 
     const parsed = new URL(mediaUrl);
-    // Allow wikimedia and standard educational CDN domains
-    const isAllowed = parsed.hostname.endsWith('wikimedia.org') ||
-                      parsed.hostname.endsWith('wikipedia.org') ||
-                      parsed.hostname.endsWith('tavily.com');
+    // Enforce HTTPS protocol
+    if (parsed.protocol !== 'https:') {
+      return res.status(403).send('Only HTTPS URLs are allowed.');
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    // Allow wikimedia and standard educational CDN domains strictly (exact or subdomain)
+    const isAllowed = host === 'wikimedia.org' || host.endsWith('.wikimedia.org') ||
+                      host === 'wikipedia.org' || host.endsWith('.wikipedia.org') ||
+                      host === 'tavily.com' || host.endsWith('.tavily.com');
     if (!isAllowed) {
       return res.status(403).send('Restricted domain');
     }

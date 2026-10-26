@@ -100,7 +100,7 @@ export async function runCodeSnippet(code = '', language = 'JAVASCRIPT', onInput
   try {
     // 1. JavaScript & TypeScript (always runs natively in browser engine)
     if (lang === 'JAVASCRIPT' || lang === 'JS' || lang === 'TYPESCRIPT' || lang === 'TS') {
-      const res = runJavaScript(code, startTime);
+      const res = await runJavaScript(code, startTime);
       return {
         ...res,
         compilerName: 'Google V8 JS/TS Engine',
@@ -312,9 +312,121 @@ function runSqlEngine(sqlCode, startTime) {
 }
 
 /**
- * JavaScript / TypeScript Native Execution
+ * JavaScript / TypeScript Native Execution in an Isolated Web Worker with 3.5s Timeout Guard
  */
-function runJavaScript(code, startTime) {
+async function runJavaScript(code, startTime) {
+  let jsCode = code
+    .replace(/:\s*(string|number|boolean|any|void|object)(\[\])?/g, '')
+    .replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
+    .replace(/type\s+\w+\s*=[^;]+;/g, '');
+
+  // 1. Preferred Isolated Execution: Sandboxed Web Worker off the main UI thread
+  if (typeof Worker !== 'undefined' && typeof Blob !== 'undefined' && typeof URL !== 'undefined') {
+    let workerUrl = null;
+    let worker = null;
+    try {
+      const workerScript = `
+        self.onmessage = function(e) {
+          const codeToRun = e.data;
+          const capturedLogs = [];
+          const origLog = console.log;
+          const origWarn = console.warn;
+          const origError = console.error;
+
+          console.log = function(...args) {
+            capturedLogs.push(args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
+          };
+          console.warn = function(...args) {
+            capturedLogs.push('[warn] ' + args.map(String).join(' '));
+          };
+          console.error = function(...args) {
+            capturedLogs.push('[error] ' + args.map(String).join(' '));
+          };
+
+          try {
+            const runner = new Function(codeToRun);
+            const res = runner();
+            if (res !== undefined && capturedLogs.length === 0) {
+              capturedLogs.push(typeof res === 'object' ? JSON.stringify(res, null, 2) : String(res));
+            }
+            self.postMessage({ success: true, logs: capturedLogs });
+          } catch (err) {
+            self.postMessage({ success: false, error: err.message, logs: capturedLogs });
+          } finally {
+            console.log = origLog;
+            console.warn = origWarn;
+            console.error = origError;
+          }
+        };
+      `;
+
+      const blob = new Blob([workerScript], { type: 'application/javascript' });
+      workerUrl = URL.createObjectURL(blob);
+      worker = new Worker(workerUrl);
+
+      const timeoutLimitMs = 3500;
+      return await new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          try {
+            worker.terminate();
+            if (workerUrl) URL.revokeObjectURL(workerUrl);
+          } catch (e) {}
+          resolve({
+            output: 'Execution Timeout: Program took longer than 3.5 seconds to complete (possible infinite loop). Execution terminated.',
+            executionTimeMs: Math.round(performance.now() - startTime),
+            isError: true,
+          });
+        }, timeoutLimitMs);
+
+        worker.onmessage = (e) => {
+          clearTimeout(timer);
+          try {
+            worker.terminate();
+            if (workerUrl) URL.revokeObjectURL(workerUrl);
+          } catch (err) {}
+          const { success, logs, error } = e.data || {};
+          const duration = Math.round(performance.now() - startTime);
+
+          if (!success) {
+            const errOutput = logs && logs.length > 0 ? `${logs.join('\n')}\nJavaScript Error: ${error}` : `JavaScript Error: ${error}`;
+            resolve({
+              output: errOutput,
+              executionTimeMs: duration,
+              isError: true,
+            });
+          } else {
+            resolve({
+              output: logs && logs.length > 0 ? logs.join('\n') : '(Program executed successfully with no output)',
+              executionTimeMs: duration,
+              isError: false,
+            });
+          }
+        };
+
+        worker.onerror = (err) => {
+          clearTimeout(timer);
+          try {
+            worker.terminate();
+            if (workerUrl) URL.revokeObjectURL(workerUrl);
+          } catch (e) {}
+          resolve({
+            output: `JavaScript Error: ${err.message || 'Worker runtime execution error'}`,
+            executionTimeMs: Math.round(performance.now() - startTime),
+            isError: true,
+          });
+        };
+
+        worker.postMessage(jsCode);
+      });
+    } catch (workerInitErr) {
+      if (workerUrl) {
+        try { URL.revokeObjectURL(workerUrl); } catch (e) {}
+      }
+      console.warn('[codeRunner] Web Worker instantiation fallback:', workerInitErr.message);
+    }
+  }
+
+  // 2. Fallback to inline runner if Web Workers are restricted by CSP/environment
   const logs = [];
   const originalLog = console.log;
   const originalWarn = console.warn;
@@ -330,11 +442,6 @@ function runJavaScript(code, startTime) {
     console.error = (...args) => {
       logs.push('[error] ' + args.map(String).join(' '));
     };
-
-    let jsCode = code
-      .replace(/:\s*(string|number|boolean|any|void|object)(\[\])?/g, '')
-      .replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
-      .replace(/type\s+\w+\s*=[^;]+;/g, '');
 
     const runner = new Function(jsCode);
     const result = runner();

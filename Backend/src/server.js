@@ -31,7 +31,7 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Rate limiting for token endpoint to prevent spamming
 const tokenLimiter = rateLimit({
@@ -123,3 +123,11 @@ const shutdown = async () => {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+// Global safety crash guards
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Backend] ⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Backend] ⚠️ Uncaught Exception:', err);
+});
