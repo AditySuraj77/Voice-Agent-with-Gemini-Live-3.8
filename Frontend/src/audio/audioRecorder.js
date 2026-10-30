@@ -49,7 +49,9 @@ export class AudioRecorder {
   }
 
   /**
-   * Internal helper to process a slice of raw Float32 microphone samples
+   * Internal helper to process a slice of raw Float32 microphone samples.
+   * Continuously streams 16kHz linear PCM chunks to Gemini Live so its server-side acoustic VAD
+   * detects natural speech endpoints in <400ms without artificial silence gaps or timeout lag.
    */
   processAudioSlice(inputData) {
     if (!this.isRecording || this.isMuted) return;

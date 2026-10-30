@@ -76,11 +76,11 @@ export function pcm16ToFloat32(arrayBuffer) {
  * Converts an ArrayBuffer to a Base64 string.
  */
 export function arrayBufferToBase64(buffer) {
-  let binary = '';
   const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
   }
   return window.btoa(binary);
 }

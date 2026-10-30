@@ -127,7 +127,7 @@ export function StudentProfileModal({
             />
           </div>
 
-
+           {/*
           <div className="pt-2 border-t border-stone-100">
             <div className="flex items-center justify-between mb-1">
               <label className="block font-semibold text-stone-700">Custom Gemini API Key (Optional BYOK)</label>
@@ -144,6 +144,10 @@ export function StudentProfileModal({
               Khali chhodne par server ke 20+ keys pool se automatic rotation hoga. Apni key daalenge toh direct priority milegi.
             </p>
           </div>
+          */}
+
+
+          
 
           {/* Footer Save Button */}
           <div className="pt-2 flex items-center justify-end gap-2.5">

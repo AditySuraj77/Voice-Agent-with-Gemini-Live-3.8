@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { geminiTokenService } from '../services/geminiTokenService.js';
+import { geminiTokenService, DEFAULT_TEACHER_SYSTEM_INSTRUCTION } from '../services/geminiTokenService.js';
 import { geminiKeyPool } from '../services/geminiKeyPool.js';
 
 const router = Router();
@@ -39,7 +39,8 @@ async function handleTokenRequest(req, res) {
       expireTime: tokenData.expireTime,
       newSessionExpireTime: tokenData.newSessionExpireTime,
       model: tokenData.model,
-      keyInfo: tokenData.keyInfo
+      keyInfo: tokenData.keyInfo,
+      defaultSystemInstruction: DEFAULT_TEACHER_SYSTEM_INSTRUCTION
     });
   } catch (error) {
     console.error('[TokenRoute] Error provisioning ephemeral token:', error.message);

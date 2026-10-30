@@ -171,12 +171,18 @@ export class GeminiLiveClient {
         },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
+        contextWindowCompression: {
+          triggerTokens: '40000',
+          slidingWindow: {
+            targetTokens: '20000',
+          },
+        },
         tools: [
           {
             functionDeclarations: [
               {
                 name: 'write_on_whiteboard',
-                description: 'MANDATORY FOR TEACHER: Call this tool every time you explain or teach a concept, solve a problem, or ask a question. Write down the topic heading and clear, concise bullet points, definitions, formulas, or code on the student infinite whiteboard canvas in real time.',
+                description: 'TEACHER WHITEBOARD: Call this tool to write notes, formulas, step-by-step worked examples, challenge questions, or verified student answers on the student shared whiteboard in real time.',
                 parameters: {
                   type: 'OBJECT',
                   properties: {
@@ -217,11 +223,11 @@ export class GeminiLiveClient {
                     },
                     svgCode: {
                       type: 'STRING',
-                      description: 'MANDATORY FOR EVERY TOPIC EXPLAINED ACROSS ALL SUBJECTS: Complete valid standalone SVG diagram (viewBox="0 0 600 400" with shapes, text labels, colors) illustrating the core concept, geometry, anatomy, molecular structure, setup, or process alongside the notes. Do not omit!',
+                      description: 'Optional standalone SVG diagram (viewBox="0 0 600 400" with shapes, text labels, colors) for spatial/visual concepts (geometry, circuits, anatomy, physics setups, molecular bonds). Omit for pure math/arithmetic or text questions to keep updates fast and responsive.',
                     },
                     visualQuery: {
                       type: 'STRING',
-                      description: 'MANDATORY FOR ANY CONCEPT, MACHINE, ANATOMY, OR DOUBT: Search query to instantly fetch an authentic high-resolution labeled diagram or photograph from Google & educational archives (e.g. "transformer architecture diagram", "human heart anatomy labeled diagram", "electric generator parts diagram"). Pass this whenever explaining objects or when the student is confused!',
+                      description: 'Optional search query to fetch an authentic labeled diagram or photo from archives (e.g. "transformer architecture diagram", "human heart anatomy labeled diagram") when illustrating physical objects, anatomy, or setups.',
                     },
                     imagePrompt: {
                       type: 'STRING',
@@ -232,7 +238,7 @@ export class GeminiLiveClient {
                       description: 'Educational caption for the attached visual illustration',
                     },
                   },
-                  required: ['topic', 'notes', 'svgCode'],
+                  required: ['topic'],
                 },
               },
               {
@@ -821,6 +827,7 @@ export class GeminiLiveClient {
    * Handles incoming WebSocket messages from Gemini Live server.
    */
   handleServerMessage(message) {
+    console.log(`[GeminiLiveClient #${this.clientId}] Incoming:`, Object.keys(message), JSON.stringify(message).slice(0, 300));
     if (message.setupComplete) {
       console.log(`[GeminiLiveClient #${this.clientId}] Server setupComplete received. Ready for audio/text exchange.`);
       return;
@@ -967,7 +974,10 @@ export class GeminiLiveClient {
           id: call.id,
           name: call.name,
           response: {
-            result: { status: 'success', message: 'Whiteboard notes updated successfully.' },
+            result: {
+              status: 'success',
+              message: 'Whiteboard notes updated on screen. Now verbally explain what you wrote in 1-2 conversational sentences and check in with the user.',
+            },
           },
         });
 
@@ -1225,7 +1235,7 @@ export class GeminiLiveClient {
           response: {
             result: {
               status: 'success',
-              message: `Visual ${mode} "${topic}" successfully displayed on student whiteboard canvas.`,
+              message: `Visual ${mode} "${topic}" successfully displayed on student whiteboard canvas. Now verbally explain this visual to the user in 1-2 conversational sentences.`,
             },
           },
         });
@@ -1297,7 +1307,10 @@ export class GeminiLiveClient {
           id: call.id,
           name: call.name,
           response: {
-            result: { status: 'success', message: `Interactive simulation lab "${topic}" mounted on whiteboard.` },
+            result: {
+              status: 'success',
+              message: `Interactive simulation lab "${topic}" mounted on whiteboard. Now verbally invite the user to interact with the simulation in 1-2 conversational sentences.`,
+            },
           },
         });
       } else if (call.name === 'clear_whiteboard') {
@@ -1311,7 +1324,7 @@ export class GeminiLiveClient {
           id: call.id,
           name: call.name,
           response: {
-            result: { status: 'success', message: 'Whiteboard erased successfully.' },
+            result: { status: 'success', message: 'Whiteboard erased. Acknowledge this verbally to the user in 1 short sentence.' },
           },
         });
       } else if (call.name === 'highlight_whiteboard_card') {
@@ -1367,7 +1380,7 @@ export class GeminiLiveClient {
           id: call.id,
           name: call.name,
           response: {
-            result: searchResult,
+            result: `[LIVE WEB SEARCH COMPLETED]:\n${searchResult}\n\n[VOICE INSTRUCTION]: Now immediately speak aloud to the user in 1-2 conversational sentences summarizing the direct answer clearly. Do not remain silent.`,
           },
         });
       } else if (call.name === 'youtube_channel_search') {
@@ -1430,7 +1443,7 @@ export class GeminiLiveClient {
           id: call.id,
           name: call.name,
           response: {
-            result: resultPayload,
+            result: `[YOUTUBE CHANNEL DATA]:\n${resultPayload}\n\n[VOICE INSTRUCTION]: The summary is already pinned on the whiteboard. Now immediately speak aloud to the user in 1-2 friendly sentences explaining what you found on this YouTube channel.`,
           },
         });
       } else if (call.name === 'youtube_fetch_transcript') {
@@ -1488,7 +1501,7 @@ export class GeminiLiveClient {
           id: call.id,
           name: call.name,
           response: {
-            result: resultPayload,
+            result: `[YOUTUBE VIDEO DATA RETRIEVED]:\n${resultPayload}\n\n[VOICE INSTRUCTION]: The interactive video timeline card is already pinned on the student's whiteboard. Now immediately speak aloud to the user in 1-2 conversational sentences summarizing the core idea of this video.`,
           },
         });
       } else if (

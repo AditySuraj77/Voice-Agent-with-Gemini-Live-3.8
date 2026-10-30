@@ -5,7 +5,7 @@ export const DEFAULT_PROFILE = {
   name: 'Adi',
   grade: 'Class 8-10 / Middle School',
   interests: 'Cricket, Science experiments, Video games',
-  preferredLanguage: 'Hinglish (Hindi + English mix)',
+  preferredLanguage: 'Adaptive (Auto-detect & match student)',
   learningGoal: 'Conceptual clarity and step-by-step problem solving',
 };
 

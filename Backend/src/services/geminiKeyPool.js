@@ -218,6 +218,12 @@ export class GeminiKeyPool {
           inputAudioTranscription: {},
           outputAudioTranscription: {},
           tools: GEMINI_TOOLS,
+          contextWindowCompression: {
+            triggerTokens: '40000',
+            slidingWindow: {
+              targetTokens: '20000',
+            },
+          },
         },
       },
     };

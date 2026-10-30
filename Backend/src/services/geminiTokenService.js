@@ -8,7 +8,7 @@ export const GEMINI_TOOLS = [
     functionDeclarations: [
       {
         name: 'write_on_whiteboard',
-        description: 'MANDATORY FOR TEACHER: Call this tool every time you explain or teach a concept, solve a problem, or ask a question. Write down the topic heading and clear, concise bullet points, definitions, formulas, or code on the student infinite whiteboard canvas in real time.',
+        description: 'TEACHER WHITEBOARD: Call this tool to write notes, formulas, step-by-step worked examples, challenge questions, or verified student answers on the student shared whiteboard in real time.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -49,11 +49,11 @@ export const GEMINI_TOOLS = [
             },
             svgCode: {
               type: 'STRING',
-              description: 'MANDATORY FOR EVERY TOPIC EXPLAINED ACROSS ALL SUBJECTS: Complete valid standalone SVG diagram (viewBox="0 0 600 400" with shapes, text labels, colors) illustrating the core concept, anatomy, geometry, molecular structure, setup, or process alongside the notes. Do not omit!',
+              description: 'Optional standalone SVG diagram (viewBox="0 0 600 400" with shapes, text labels, colors) for spatial/visual concepts (geometry, circuits, anatomy, physics setups, molecular bonds). Omit for pure math/arithmetic or text questions to keep updates fast and responsive.',
             },
             visualQuery: {
               type: 'STRING',
-              description: 'MANDATORY FOR ANY CONCEPT, MACHINE, ANATOMY, OR DOUBT: Search query to instantly fetch an authentic high-resolution labeled diagram or photograph from Google & educational archives (e.g. "transformer architecture diagram", "human heart anatomy labeled diagram", "electric generator parts diagram"). Pass this whenever explaining objects or when the student is confused!',
+              description: 'Optional search query to fetch an authentic labeled diagram or photo from archives (e.g. "transformer architecture diagram", "human heart anatomy labeled diagram") when illustrating physical objects, anatomy, or setups.',
             },
             imagePrompt: {
               type: 'STRING',
@@ -64,7 +64,7 @@ export const GEMINI_TOOLS = [
               description: 'Educational caption for the attached visual illustration',
             },
           },
-          required: ['topic', 'notes', 'svgCode'],
+                  required: ['topic'],
         },
       },
       {
@@ -495,6 +495,19 @@ export const GEMINI_TOOLS = [
     ],
   },
 ];
+
+/**
+ * Universal Helpful Assistant System Instruction
+ */
+export const DEFAULT_TEACHER_SYSTEM_INSTRUCTION = `You are a warm, highly capable, and helpful AI assistant paired with an interactive live whiteboard.
+
+CORE BEHAVIOR:
+1. HELPFUL & DIRECT: Answer questions clearly, accurately, and simply. Explain concepts in an easy-to-understand way with relatable everyday examples.
+2. NATURAL VOICE PACING: Speak conversationally, warmly, and concisely (2–3 natural sentences per turn). Avoid robotic monologues or dry textbook lectures.
+3. DYNAMIC LANGUAGE: Mirror whatever language the user speaks (English, Hindi, Hinglish, or any other language) naturally and conversationally.
+4. WHITEBOARD & VISUALS: Whenever helpful, use write_on_whiteboard to jot down key points, steps, or formulas on the screen, and use render_visual or other tools when visual diagrams or motion make things clearer.
+5. ENGAGING & FRIENDLY: Keep the tone supportive and conversational, naturally checking in to see if the user needs more details or wants to move to the next topic.
+6. VERBAL BRIDGING (NO DEAD AIR): When you need to call search_web, youtube_channel_search, youtube_fetch_transcript, or browser tools, ALWAYS first speak a quick, natural 1-sentence bridging phrase in the user's language (e.g. "Ek second, main iski latest details check karke batata hoon..." or "Let me check that on YouTube for you...") BEFORE or while triggering the tool so the user is never left waiting in dead silence.`;
 
 /**
  * Service to generate short-lived ephemeral tokens for Gemini Live WebSockets.
