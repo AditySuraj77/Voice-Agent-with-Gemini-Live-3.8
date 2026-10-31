@@ -671,7 +671,8 @@ CRITICAL DIRECTIVES:
             ? generateUniversalTopicSvg(topic, notes, args.formula, args.subject)
             : null
         );
-        const resolvedVisualType = args.visualType || (args.animationType ? 'animation' : resolvedSvgCode ? 'svg' : args.imageUrl ? 'photo' : null);
+        const resolvedDiagram = args.diagram || null;
+        const resolvedVisualType = args.visualType || (resolvedDiagram ? 'diagram' : args.animationType ? 'animation' : resolvedSvgCode ? 'svg' : args.imageUrl ? 'photo' : null);
 
         const newItem = {
           id: args.id || ('wb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
@@ -699,6 +700,7 @@ CRITICAL DIRECTIVES:
           videoUrl: args.videoUrl || null,
           isRendering: Boolean(args.isRendering),
           parameters: args.parameters || null,
+          diagram: resolvedDiagram,
           svgCode: resolvedSvgCode,
           imageUrl: args.imageUrl || null,
           imageTitle: args.imageTitle || null,
@@ -1014,6 +1016,16 @@ CRITICAL DIRECTIVES:
         audioRecorderRef.current = new AudioRecorder({
           onAudioChunk: (chunk) => {
             if (liveClientRef.current && liveClientRef.current.isConnected) {
+              // Acoustic echo suppression gate:
+              // If AI assistant is actively speaking, drop mic audio if it's below intentional speech threshold.
+              // This prevents laptop speaker bleed from triggering Gemini's server-side VAD barge-in/interruption.
+              // Strong Acoustic Echo & Background Noise Gate:
+              // While AI assistant audio is playing, only transmit mic if student is speaking firmly (volume > 0.28).
+              // This stops laptop speaker playback bleed from triggering false server-side barge-in cuts.
+              if (audioPlayerRef.current?.isPlaying && inputVolumeRef.current < 0.28) {
+                return;
+              }
+
               chunkCount++;
               if (chunkCount <= 3 || chunkCount % 50 === 0) {
                 console.log(`[useGeminiLive] Transmitted chunk #${chunkCount} to Gemini Live.`);

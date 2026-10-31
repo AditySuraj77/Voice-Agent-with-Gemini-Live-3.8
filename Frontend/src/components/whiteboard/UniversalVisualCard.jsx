@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Download, Maximize2, Image as ImageIcon, Sparkles, AlertCircle, Compass, Check, X, Wand2 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { InteractiveAnimationCard } from './InteractiveAnimationCard.jsx';
+import { AristotleWhiteboardRenderer } from './AristotleWhiteboardRenderer.jsx';
 
 /**
  * UniversalVisualCard
@@ -13,6 +14,16 @@ import { InteractiveAnimationCard } from './InteractiveAnimationCard.jsx';
  * 4. FLUX AI Conceptual Illustrations
  */
 export function UniversalVisualCard({ item, onOpenInCodeLab }) {
+  if (item?.diagram || item?.visualType === 'diagram') {
+    return (
+      <AristotleWhiteboardRenderer
+        diagram={item.diagram || { kind: 'grouped_boxes' }}
+        title={item.topic || item.title}
+        caption={item.caption}
+        formula={item.formula}
+      />
+    );
+  }
   if (
     item?.visualType === 'animation' ||
     item?.visualType === 'simulation' ||

@@ -221,6 +221,19 @@ export class GeminiLiveClient {
                       type: 'STRING',
                       description: 'Programming language if code is provided: "c", "rust", "python", "javascript", "html", etc.',
                     },
+                    diagram: {
+              type: 'OBJECT',
+              description: 'Aristotle-style declarative whiteboard diagram. Specify kind ("vectors_2d", "grouped_boxes", "flow_chain", "comparison") and components.',
+              properties: {
+                kind: { type: 'STRING', description: 'Diagram kind: "vectors_2d", "grouped_boxes", "flow_chain", or "comparison"' },
+                groupCount: { type: 'INTEGER', description: 'For grouped_boxes: number of groups (e.g. 3)' },
+                itemsPerGroup: { type: 'INTEGER', description: 'For grouped_boxes: items per group (e.g. 4)' },
+                groupLabel: { type: 'STRING', description: 'Label for grouping (e.g. "3 groups")' },
+                formula: { type: 'STRING', description: 'Highlighted equation for the diagram, e.g. "3 x 4 = 12" or "q · k1 = 2.5"' },
+                caption: { type: 'STRING', description: 'Educational takeaway caption' },
+                dataJson: { type: 'STRING', description: 'Optional JSON string for custom vectors or steps (e.g. [{"label":"q","x":120,"y":-70}])' }
+              }
+            },
                     svgCode: {
                       type: 'STRING',
                       description: 'Optional standalone SVG diagram (viewBox="0 0 600 400" with shapes, text labels, colors) for spatial/visual concepts (geometry, circuits, anatomy, physics setups, molecular bonds). Omit for pure math/arithmetic or text questions to keep updates fast and responsive.',
@@ -242,141 +255,39 @@ export class GeminiLiveClient {
                 },
               },
               {
-                name: 'generate_ai_image',
-                description: 'DEDICATED AI ARTISTIC IMAGE GENERATOR: Call this ONLY when the student specifically asks to generate an AI image ("AI se banao", "AI image tool use karo") or asks for futuristic fantasy concepts (e.g. futuristic cyberpunk city, Mars colony). For scientific diagrams, machines, organs, or biology, use render_visual(mode="photo_search") instead.',
-                parameters: {
-                  type: 'OBJECT',
-                  properties: {
-                    prompt: {
-                      type: 'STRING',
-                      description: 'Detailed visual prompt for FLUX.1. Always enclose the primary title or label in single quotes for crisp typography (e.g. "Photorealistic 3D cross-section of Mitochondria with glowing title \'MITOCHONDRIA\', studio lighting, 8k, scientific illustration").',
-                    },
-                    topic: {
-                      type: 'STRING',
-                      description: 'Topic title for the visual card (e.g. "Quantum Computer Processor", "Mars Human Colony", "Mitochondria 3D")',
-                    },
-                    caption: {
-                      type: 'STRING',
-                      description: 'Short 1-2 sentence educational explanation of what this AI visual illustrates',
-                    },
-                    subject: {
-                      type: 'STRING',
-                      description: 'Academic subject (e.g. "Computer Science", "Physics", "Biology", "Astronomy")',
-                    },
-                  },
-                  required: ['prompt', 'topic'],
-                },
-              },
-              {
-                name: 'render_visual',
-                description: 'STAGE 2 DYNAMIC ANIMATION & SIMULATION SUITE: Call this when student needs animated motion/working mechanism after introductory explanation, OR when student expresses confusion ("samajh nahi aaya", "kaise kaam karta hai"), OR when student explicitly requests animation. For Stage 1 initial topic introduction, use write_on_whiteboard with notes and a static labeled diagram. Supports 4 specialized animation modes across all subjects: "animated_svg" (instant zero-latency vector loops), "interactive_sim" (hands-on playable HTML5 canvas experiments with sliders), "manim_video" (3Blue1Brown mathematical and calculus animations), "archive_animation" (authentic scientific/biological animation loops from Wikimedia). Never overwrite initial textbook notes; animations append below.',
-                parameters: {
-                  type: 'OBJECT',
-                  properties: {
-                    topic: {
-                      type: 'STRING',
-                      description: 'Clear title of the visual or animation (e.g. "Refraction through Prism", "Projectile Motion Simulator", "Pythagoras Theorem Proof", "Cardiac Cycle Animation")',
-                    },
-                    mode: {
-                      type: 'STRING',
-                      description: 'Visual creation mode: "animated_svg" for real-time CSS vector loops, "interactive_sim" for hands-on playable simulation, "manim_video" for 3Blue1Brown mathematical scenes, "archive_animation" for scientific/biological archive animation loops (.gif/.webm), "photo_search" for static archive photographs, "svg_sketch" for static vector drawings, or "ai_image" for futuristic 3D scenes.',
-                    },
-                    svgCode: {
-                      type: 'STRING',
-                      description: 'When mode="animated_svg" or "svg_sketch": Full valid standalone SVG string with compact viewBox="0 0 500 300". For "animated_svg", include <style> @keyframes ... </style> for smooth perpetual motion loops (e.g. pulsating waves, moving electrons, rotating rays).',
-                    },
-                    simType: {
-                      type: 'STRING',
-                      description: 'When mode="interactive_sim": Simulation preset: "projectile", "pendulum", "wave", "sorting", "orbit", "trig_circle", "spring", or "custom".',
-                    },
-                    simulationCode: {
-                      type: 'STRING',
-                      description: 'When mode="interactive_sim": Optional JavaScript canvas simulation code if custom simulation is needed.',
-                    },
-                    equation: {
-                      type: 'STRING',
-                      description: 'When mode="manim_video": Mathematical equation or theorem formula (e.g. "a^2 + b^2 = c^2", "f\'(x) = lim(h->0) [f(x+h)-f(x)]/h", "e^(i*pi) + 1 = 0").',
-                    },
-                    manimCode: {
-                      type: 'STRING',
-                      description: 'When mode="manim_video": Optional Python Manim script definition for the mathematical scene.',
-                    },
-                    searchQuery: {
-                      type: 'STRING',
-                      description: 'When mode="photo_search" or "archive_animation": Precise search query for educational archive (e.g. "Cardiac cycle animation", "Four-stroke engine animation", "DNA replication animation", "James Webb Space Telescope")',
-                    },
-                    imagePrompt: {
-                      type: 'STRING',
-                      description: 'When mode="ai_image": Detailed visual description for the FLUX AI image generator.',
-                    },
-                    caption: {
-                      type: 'STRING',
-                      description: 'Short 1-2 sentence educational explanation of what this visual or animation demonstrates',
-                    },
-                    subject: {
-                      type: 'STRING',
-                      description: 'Academic subject: "physics", "biology", "chemistry", "math", "geography", "history", "astronomy", "engineering", etc.',
-                    },
-                  },
-                  required: ['topic', 'mode'],
-                },
-              },
-              {
-                name: 'render_manim_animation',
-                description: 'DEDICATED 3BLUE1BROWN MATHEMATICAL ANIMATION ENGINE: Call this whenever explaining calculus, geometry proofs, linear algebra, vector fields, or complex mathematical transformations. Renders a cinematic mathematical visualization with dark theme and smooth geometric morphing.',
-                parameters: {
-                  type: 'OBJECT',
-                  properties: {
-                    topic: {
-                      type: 'STRING',
-                      description: 'Title of the mathematical concept (e.g. "Pythagorean Theorem Geometric Proof", "Derivative as Tangent Slope", "Fourier Series Epicycles", "Eigenvector Transformation")',
-                    },
-                    equation: {
-                      type: 'STRING',
-                      description: 'The primary mathematical equation or formula being animated (e.g. "a² + b² = c²", "f\'(x) = 2x", "T(v) = λv")',
-                    },
-                    sceneType: {
-                      type: 'STRING',
-                      description: 'Type of mathematical scene: "pythagoras", "derivative", "fourier", "vector", or "custom"',
-                    },
-                    manimCode: {
-                      type: 'STRING',
-                      description: 'Optional Python Manim Scene code if customized.',
-                    },
-                    caption: {
-                      type: 'STRING',
-                      description: 'Brief educational explanation of what the mathematical animation proves.',
-                    },
-                  },
-                  required: ['topic', 'equation'],
-                },
-              },
-              {
-                name: 'render_simulation',
-                description: 'DEDICATED PLAYABLE INTERACTIVE EXPERIMENT LAB: Call this whenever the student should interact with variables, drag sliders, or test physical laws (e.g. changing projectile velocity, altering pendulum gravity, adjusting sound wave frequency, stepping through sorting algorithms).',
-                parameters: {
-                  type: 'OBJECT',
-                  properties: {
-                    topic: {
-                      type: 'STRING',
-                      description: 'Title of the simulation (e.g. "Projectile Motion Simulator", "Simple Harmonic Pendulum", "Trigonometric Unit Circle", "Bubble Sort Visualizer")',
-                    },
-                    simType: {
-                      type: 'STRING',
-                      description: 'Simulation preset type: "projectile", "pendulum", "wave", "sorting", "orbit", "trig_circle", "spring", or "custom"',
-                    },
-                    caption: {
-                      type: 'STRING',
-                      description: 'Short explanation instructing the student what parameters to test or adjust.',
-                    },
-                    parameters: {
-                      type: 'OBJECT',
-                      description: 'Optional default parameters (e.g. { gravity: 9.8, velocity: 25, angle: 45 }).',
-                    },
-                  },
-                  required: ['topic', 'simType'],
-                },
-              },
+        name: 'render_visual',
+        description: 'EDUCATIONAL VISUAL & ANIMATION SUITE: Call this when student requests a visual diagram, animation loop, or real photograph. Supports: "animated_svg" (instant zero-latency vector loops with CSS keyframes), "archive_animation" (authentic scientific/biological animation loops from Wikimedia), "photo_search" (high-resolution authentic archive photos), or "svg_sketch" (standalone vector drawings).',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            topic: {
+              type: 'STRING',
+              description: 'Clear title of the visual or animation (e.g. "Refraction through Prism", "Pythagoras Theorem Proof", "Cardiac Cycle Animation")',
+            },
+            mode: {
+              type: 'STRING',
+              description: 'Visual creation mode: "animated_svg" for real-time CSS vector loops, "archive_animation" for scientific/biological archive animation loops (.gif/.webm), "photo_search" for static archive photographs, or "svg_sketch" for static vector drawings.',
+            },
+            svgCode: {
+              type: 'STRING',
+              description: 'When mode="animated_svg" or "svg_sketch": Full valid standalone SVG string with compact viewBox="0 0 500 300". For "animated_svg", include <style> @keyframes ... </style> for smooth perpetual motion loops (e.g. pulsating waves, moving electrons, rotating rays).',
+            },
+            searchQuery: {
+              type: 'STRING',
+              description: 'When mode="photo_search" or "archive_animation": Precise search query for educational archive (e.g. "Cardiac cycle animation", "Four-stroke engine animation", "DNA replication animation", "James Webb Space Telescope")',
+            },
+            caption: {
+              type: 'STRING',
+              description: 'Short 1-2 sentence educational explanation of what this visual or animation demonstrates',
+            },
+            subject: {
+              type: 'STRING',
+              description: 'Academic subject: "physics", "biology", "chemistry", "math", "geography", "history", "astronomy", "engineering", etc.',
+            },
+          },
+          required: ['topic', 'mode'],
+        },
+      },
               {
                 name: 'clear_whiteboard',
                 description: 'Erase or clear all notes from the student whiteboard canvas to start fresh.',
@@ -827,7 +738,6 @@ export class GeminiLiveClient {
    * Handles incoming WebSocket messages from Gemini Live server.
    */
   handleServerMessage(message) {
-    console.log(`[GeminiLiveClient #${this.clientId}] Incoming:`, Object.keys(message), JSON.stringify(message).slice(0, 300));
     if (message.setupComplete) {
       console.log(`[GeminiLiveClient #${this.clientId}] Server setupComplete received. Ready for audio/text exchange.`);
       return;
@@ -976,7 +886,7 @@ export class GeminiLiveClient {
           response: {
             result: {
               status: 'success',
-              message: 'Whiteboard notes updated on screen. Now verbally explain what you wrote in 1-2 conversational sentences and check in with the user.',
+              message: 'Whiteboard updated. IMPORTANT: Do NOT go silent. Explain the concept warmly and conversationally to the student, and ask an engaging follow-up question.',
             },
           },
         });
@@ -1031,61 +941,6 @@ export class GeminiLiveClient {
             })
             .catch((e) => console.warn('[GeminiLiveClient] Background visual query search skipped:', e.message));
         }
-      } else if (call.name === 'generate_ai_image') {
-        console.log(`[GeminiLiveClient #${this.clientId}] Executing generate_ai_image call:`, call.args);
-        const { prompt, topic, caption, subject } = call.args || {};
-        const cleanTopic = topic || 'AI Conceptual Visual';
-        const cleanPrompt = prompt || cleanTopic;
-
-        // Immediate 0ms acknowledgment so Gemini Live voice streaming never stutters
-        responses.push({
-          id: call.id,
-          name: call.name,
-          response: {
-            result: {
-              status: 'success',
-              message: `AI image "${cleanTopic}" generated and displayed on student whiteboard canvas.`,
-            },
-          },
-        });
-
-        const visualPayload = {
-          topic: cleanTopic,
-          caption: caption || '',
-          subject: subject || 'General',
-          cardType: 'visual',
-          visualType: 'ai_image',
-          imagePrompt: cleanPrompt,
-          imageUrl: null,
-          aiImageUrl: null,
-          source: 'Cloudflare FLUX.1 Schnell',
-          attribution: 'Generated via FLUX.1 Schnell on Cloudflare Workers AI',
-          notes: caption ? [caption] : [],
-        };
-
-        if (this.onWhiteboardCall) {
-          this.onWhiteboardCall(visualPayload);
-        }
-
-        // Call backend Cloudflare Workers AI endpoint to generate high-res illustration
-        fetch(`${this.backendUrl}/api/tools/generate-image`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: cleanPrompt, topic: cleanTopic, subject }),
-        })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (data?.success && data.imageUrl && this.onWhiteboardCall) {
-              this.onWhiteboardCall({
-                ...visualPayload,
-                imageUrl: data.imageUrl,
-                aiImageUrl: data.imageUrl,
-                source: data.source || 'Cloudflare FLUX.1 Schnell',
-                attribution: data.attribution || 'Generated via FLUX.1 Schnell on Cloudflare Workers AI',
-              });
-            }
-          })
-          .catch((err) => console.warn('[GeminiLiveClient] Backend generate-image error:', err.message));
       } else if (call.name === 'render_visual') {
         console.log(`[GeminiLiveClient #${this.clientId}] Executing render_visual call:`, call.args);
         const { topic, mode, svgCode, simType, simulationCode, equation, manimCode, searchQuery, imagePrompt, caption, subject } = call.args || {};
@@ -1103,43 +958,7 @@ export class GeminiLiveClient {
           // Mode A: Animated Vector Loop with CSS keyframes
           visualPayload.visualType = 'animation';
           visualPayload.animationType = 'animated_svg';
-          visualPayload.svgCode = svgCode || '';
-        } else if (mode === 'interactive_sim') {
-          // Mode B: Interactive Canvas Simulation Lab
-          visualPayload.visualType = 'animation';
-          visualPayload.animationType = 'simulation';
-          visualPayload.simType = (simType || 'projectile').toLowerCase();
-          visualPayload.simulationCode = simulationCode || null;
-        } else if (mode === 'manim_video') {
-          // Mode C: 3Blue1Brown Mathematical Scene
-          visualPayload.visualType = 'animation';
-          visualPayload.animationType = 'manim_video';
-          visualPayload.equation = equation || '';
-          visualPayload.isRendering = true;
-
-          // Asynchronously trigger backend Manim compilation and update whiteboard card in-place
-          fetch(`${this.backendUrl}/api/tools/render-manim`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: manimCode, topic, equation, sceneType: simType || 'pythagoras' }),
-          })
-            .then((res) => res.json())
-            .then((manimData) => {
-              if (manimData.success) {
-                console.log('[GeminiLiveClient] Manim scene compiled successfully:', manimData.engine);
-                if (this.onWhiteboardCall) {
-                  this.onWhiteboardCall({
-                    ...visualPayload,
-                    isRendering: false,
-                    videoUrl: manimData.videoUrl || null,
-                    sceneCode: manimData.sceneCode || null,
-                    engine: manimData.engine,
-                  });
-                }
-              }
-            })
-            .catch((err) => console.warn('[GeminiLiveClient] Manim render request error:', err.message));
-        } else if (mode === 'archive_animation') {
+          visualPayload.svgCode = svgCode || ''; } else if (mode === 'archive_animation') {
           // Mode D: Authentic Educational Animation Loop from Archives (.gif, .webm, .mp4)
           visualPayload.visualType = 'animation';
           visualPayload.animationType = 'archive_animation';
@@ -1195,31 +1014,7 @@ export class GeminiLiveClient {
             console.error('[GeminiLiveClient] Visual photo search failed:', fetchErr);
             visualPayload.visualType = 'photo_fallback';
             visualPayload.message = `Photo search could not connect to server: ${fetchErr.message}`;
-          }
-        } else if (mode === 'ai_image') {
-          const prompt = imagePrompt || topic || 'Scientific concept';
-          console.log(`[GeminiLiveClient] Generating AI illustration via Cloudflare Workers AI for prompt: "${prompt}"`);
-          visualPayload.visualType = 'ai_image';
-          visualPayload.imagePrompt = prompt;
-          try {
-            const res = await fetch(`${this.backendUrl}/api/tools/generate-image`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt, topic, subject }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data.success && data.imageUrl) {
-                visualPayload.imageUrl = data.imageUrl;
-                visualPayload.aiImageUrl = data.imageUrl;
-                visualPayload.source = data.source || 'Cloudflare FLUX.1 Schnell';
-                visualPayload.attribution = data.attribution || 'Generated via FLUX.1 Schnell on Cloudflare Workers AI';
-              }
-            }
-          } catch (genErr) {
-            console.error('[GeminiLiveClient] Visual AI image generation error:', genErr);
-          }
-        } else {
+          } } else {
           // Default: svg_sketch (Autonomous vector diagram)
           visualPayload.visualType = 'svg';
           visualPayload.svgCode = svgCode || '';
@@ -1235,81 +1030,7 @@ export class GeminiLiveClient {
           response: {
             result: {
               status: 'success',
-              message: `Visual ${mode} "${topic}" successfully displayed on student whiteboard canvas. Now verbally explain this visual to the user in 1-2 conversational sentences.`,
-            },
-          },
-        });
-      } else if (call.name === 'render_manim_animation') {
-        console.log(`[GeminiLiveClient #${this.clientId}] Executing render_manim_animation call:`, call.args);
-        const { topic, equation, sceneType, manimCode, caption } = call.args || {};
-        const animPayload = {
-          id: 'manim-' + Date.now(),
-          topic: topic || 'Mathematical Animation',
-          equation: equation || '',
-          caption: caption || '',
-          visualType: 'animation',
-          animationType: 'manim_video',
-          isRendering: true,
-          cardType: 'visual',
-          notes: caption ? [caption] : [],
-        };
-
-        if (this.onWhiteboardCall) {
-          this.onWhiteboardCall(animPayload);
-        }
-
-        fetch(`${this.backendUrl}/api/tools/render-manim`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: manimCode, topic, equation, sceneType: sceneType || 'pythagoras' }),
-        })
-          .then((res) => res.json())
-          .then((manimData) => {
-            if (manimData.success && this.onWhiteboardCall) {
-              this.onWhiteboardCall({
-                ...animPayload,
-                isRendering: false,
-                videoUrl: manimData.videoUrl || null,
-                sceneCode: manimData.sceneCode || null,
-                engine: manimData.engine,
-              });
-            }
-          })
-          .catch((err) => console.warn('[GeminiLiveClient] Manim error:', err.message));
-
-        responses.push({
-          id: call.id,
-          name: call.name,
-          response: {
-            result: { status: 'success', message: `3Blue1Brown Mathematical scene for "${topic}" is rendering.` },
-          },
-        });
-      } else if (call.name === 'render_simulation') {
-        console.log(`[GeminiLiveClient #${this.clientId}] Executing render_simulation call:`, call.args);
-        const { topic, simType, caption, parameters } = call.args || {};
-        const simPayload = {
-          id: 'sim-' + Date.now(),
-          topic: topic || 'Physics Experiment Lab',
-          simType: (simType || 'projectile').toLowerCase(),
-          caption: caption || '',
-          parameters: parameters || null,
-          visualType: 'animation',
-          animationType: 'simulation',
-          cardType: 'visual',
-          notes: caption ? [caption] : [],
-        };
-
-        if (this.onWhiteboardCall) {
-          this.onWhiteboardCall(simPayload);
-        }
-
-        responses.push({
-          id: call.id,
-          name: call.name,
-          response: {
-            result: {
-              status: 'success',
-              message: `Interactive simulation lab "${topic}" mounted on whiteboard. Now verbally invite the user to interact with the simulation in 1-2 conversational sentences.`,
+              message: `Visual ${mode} "${topic}" displayed. IMPORTANT: Do NOT go silent. Explain this visual in 2-3 natural sentences and ask the student what they notice or if they have questions.`,
             },
           },
         });

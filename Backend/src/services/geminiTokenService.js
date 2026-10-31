@@ -47,6 +47,19 @@ export const GEMINI_TOOLS = [
               type: 'STRING',
               description: 'Programming language if code is provided: "c", "rust", "python", "javascript", "html", etc.',
             },
+            diagram: {
+              type: 'OBJECT',
+              description: 'Aristotle-style declarative whiteboard diagram. Specify kind ("vectors_2d", "grouped_boxes", "flow_chain", "comparison") and components.',
+              properties: {
+                kind: { type: 'STRING', description: 'Diagram kind: "vectors_2d", "grouped_boxes", "flow_chain", or "comparison"' },
+                groupCount: { type: 'INTEGER', description: 'For grouped_boxes: number of groups (e.g. 3)' },
+                itemsPerGroup: { type: 'INTEGER', description: 'For grouped_boxes: items per group (e.g. 4)' },
+                groupLabel: { type: 'STRING', description: 'Label for grouping (e.g. "3 groups")' },
+                formula: { type: 'STRING', description: 'Highlighted equation for the diagram, e.g. "3 x 4 = 12" or "q · k1 = 2.5"' },
+                caption: { type: 'STRING', description: 'Educational takeaway caption' },
+                dataJson: { type: 'STRING', description: 'Optional JSON string for custom vectors or steps (e.g. [{"label":"q","x":120,"y":-70}])' }
+              }
+            },
             svgCode: {
               type: 'STRING',
               description: 'Optional standalone SVG diagram (viewBox="0 0 600 400" with shapes, text labels, colors) for spatial/visual concepts (geometry, circuits, anatomy, physics setups, molecular bonds). Omit for pure math/arithmetic or text questions to keep updates fast and responsive.',
@@ -68,72 +81,26 @@ export const GEMINI_TOOLS = [
         },
       },
       {
-        name: 'generate_ai_image',
-        description: 'DEDICATED FLUX.1 AI IMAGE GENERATION TOOL: Call this whenever the student asks to generate an AI image, asks about AI image tools, or requests a realistic conceptual 3D render, futuristic scene, quantum processor chip, or illustration with clear text labels. Uses the FLUX.1 model for high-fidelity graphics and accurate typography.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            prompt: {
-              type: 'STRING',
-              description: 'Detailed visual prompt for FLUX.1. Always enclose the primary title or label in single quotes for crisp typography (e.g. "Photorealistic 3D cross-section of Mitochondria with glowing title \'MITOCHONDRIA\', studio lighting, 8k, scientific illustration").',
-            },
-            topic: {
-              type: 'STRING',
-              description: 'Topic title for the visual card (e.g. "Quantum Computer Processor", "Mars Human Colony", "Mitochondria 3D")',
-            },
-            caption: {
-              type: 'STRING',
-              description: 'Short 1-2 sentence educational explanation of what this AI visual illustrates',
-            },
-            subject: {
-              type: 'STRING',
-              description: 'Academic subject (e.g. "Computer Science", "Physics", "Biology", "Astronomy")',
-            },
-          },
-          required: ['prompt', 'topic'],
-        },
-      },
-      {
         name: 'render_visual',
-        description: 'STAGE 2 DYNAMIC ANIMATION & SIMULATION SUITE: Call this when student needs animated motion/working mechanism after introductory explanation, OR when student expresses confusion ("samajh nahi aaya", "kaise kaam karta hai"), OR when student explicitly requests animation. For Stage 1 initial topic introduction, use write_on_whiteboard with notes and a static labeled diagram. Supports 4 specialized animation modes across all subjects: "animated_svg" (instant zero-latency vector loops), "interactive_sim" (hands-on playable HTML5 canvas experiments with sliders), "manim_video" (3Blue1Brown mathematical and calculus animations), "archive_animation" (authentic scientific/biological animation loops from Wikimedia). Never overwrite initial textbook notes; animations append below.',
+        description: 'EDUCATIONAL VISUAL & ANIMATION SUITE: Call this when student requests a visual diagram, animation loop, or real photograph. Supports: "animated_svg" (instant zero-latency vector loops with CSS keyframes), "archive_animation" (authentic scientific/biological animation loops from Wikimedia), "photo_search" (high-resolution authentic archive photos), or "svg_sketch" (standalone vector drawings).',
         parameters: {
           type: 'OBJECT',
           properties: {
             topic: {
               type: 'STRING',
-              description: 'Clear title of the visual or animation (e.g. "Refraction through Prism", "Projectile Motion Simulator", "Pythagoras Theorem Proof", "Cardiac Cycle Animation")',
+              description: 'Clear title of the visual or animation (e.g. "Refraction through Prism", "Pythagoras Theorem Proof", "Cardiac Cycle Animation")',
             },
             mode: {
               type: 'STRING',
-              description: 'Visual creation mode: "animated_svg" for real-time CSS vector loops, "interactive_sim" for hands-on playable simulation, "manim_video" for 3Blue1Brown mathematical scenes, "archive_animation" for scientific/biological archive animation loops (.gif/.webm), "photo_search" for static archive photographs, "svg_sketch" for static vector drawings, or "ai_image" for futuristic 3D scenes.',
+              description: 'Visual creation mode: "animated_svg" for real-time CSS vector loops, "archive_animation" for scientific/biological archive animation loops (.gif/.webm), "photo_search" for static archive photographs, or "svg_sketch" for static vector drawings.',
             },
             svgCode: {
               type: 'STRING',
               description: 'When mode="animated_svg" or "svg_sketch": Full valid standalone SVG string with compact viewBox="0 0 500 300". For "animated_svg", include <style> @keyframes ... </style> for smooth perpetual motion loops (e.g. pulsating waves, moving electrons, rotating rays).',
             },
-            simType: {
-              type: 'STRING',
-              description: 'When mode="interactive_sim": Simulation preset: "projectile", "pendulum", "wave", "sorting", "orbit", "trig_circle", "spring", or "custom".',
-            },
-            simulationCode: {
-              type: 'STRING',
-              description: 'When mode="interactive_sim": Optional JavaScript canvas simulation code if custom simulation is needed.',
-            },
-            equation: {
-              type: 'STRING',
-              description: 'When mode="manim_video": Mathematical equation or theorem formula (e.g. "a^2 + b^2 = c^2", "f\'(x) = lim(h->0) [f(x+h)-f(x)]/h", "e^(i*pi) + 1 = 0").',
-            },
-            manimCode: {
-              type: 'STRING',
-              description: 'When mode="manim_video": Optional Python Manim script definition for the mathematical scene.',
-            },
             searchQuery: {
               type: 'STRING',
               description: 'When mode="photo_search" or "archive_animation": Precise search query for educational archive (e.g. "Cardiac cycle animation", "Four-stroke engine animation", "DNA replication animation", "James Webb Space Telescope")',
-            },
-            imagePrompt: {
-              type: 'STRING',
-              description: 'When mode="ai_image": Detailed visual description for the FLUX AI image generator.',
             },
             caption: {
               type: 'STRING',
@@ -145,62 +112,6 @@ export const GEMINI_TOOLS = [
             },
           },
           required: ['topic', 'mode'],
-        },
-      },
-      {
-        name: 'render_manim_animation',
-        description: 'DEDICATED 3BLUE1BROWN MATHEMATICAL ANIMATION ENGINE: Call this whenever explaining calculus, geometry proofs, linear algebra, vector fields, or complex mathematical transformations. Renders a cinematic mathematical visualization with dark theme and smooth geometric morphing.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            topic: {
-              type: 'STRING',
-              description: 'Title of the mathematical concept (e.g. "Pythagorean Theorem Geometric Proof", "Derivative as Tangent Slope", "Fourier Series Epicycles", "Eigenvector Transformation")',
-            },
-            equation: {
-              type: 'STRING',
-              description: 'The primary mathematical equation or formula being animated (e.g. "a² + b² = c²", "f\'(x) = 2x", "T(v) = λv")',
-            },
-            sceneType: {
-              type: 'STRING',
-              description: 'Type of mathematical scene: "pythagoras", "derivative", "fourier", "vector", or "custom"',
-            },
-            manimCode: {
-              type: 'STRING',
-              description: 'Optional Python Manim Scene code if customized.',
-            },
-            caption: {
-              type: 'STRING',
-              description: 'Brief educational explanation of what the mathematical animation proves.',
-            },
-          },
-          required: ['topic', 'equation'],
-        },
-      },
-      {
-        name: 'render_simulation',
-        description: 'DEDICATED PLAYABLE INTERACTIVE EXPERIMENT LAB: Call this whenever the student should interact with variables, drag sliders, or test physical laws (e.g. changing projectile velocity, altering pendulum gravity, adjusting sound wave frequency, stepping through sorting algorithms).',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            topic: {
-              type: 'STRING',
-              description: 'Title of the simulation (e.g. "Projectile Motion Simulator", "Simple Harmonic Pendulum", "Trigonometric Unit Circle", "Bubble Sort Visualizer")',
-            },
-            simType: {
-              type: 'STRING',
-              description: 'Simulation preset type: "projectile", "pendulum", "wave", "sorting", "orbit", "trig_circle", "spring", or "custom"',
-            },
-            caption: {
-              type: 'STRING',
-              description: 'Short explanation instructing the student what parameters to test or adjust.',
-            },
-            parameters: {
-              type: 'OBJECT',
-              description: 'Optional default parameters (e.g. { gravity: 9.8, velocity: 25, angle: 45 }).',
-            },
-          },
-          required: ['topic', 'simType'],
         },
       },
       {
@@ -505,8 +416,12 @@ CORE BEHAVIOR:
 1. HELPFUL & DIRECT: Answer questions clearly, accurately, and simply. Explain concepts in an easy-to-understand way with relatable everyday examples.
 2. NATURAL VOICE PACING: Speak conversationally, warmly, and concisely (2–3 natural sentences per turn). Avoid robotic monologues or dry textbook lectures.
 3. DYNAMIC LANGUAGE: Mirror whatever language the user speaks (English, Hindi, Hinglish, or any other language) naturally and conversationally.
-4. WHITEBOARD & VISUALS: Whenever helpful, use write_on_whiteboard to jot down key points, steps, or formulas on the screen, and use render_visual or other tools when visual diagrams or motion make things clearer.
-5. ENGAGING & FRIENDLY: Keep the tone supportive and conversational, naturally checking in to see if the user needs more details or wants to move to the next topic.
+4. WHITEBOARD & VISUALS:
+   - When introducing or explaining a concept, use write_on_whiteboard with concise bullet notes, key formulas, or a clean SVG/declarative diagram.
+   - For educational diagrams, always prefer clean animated SVG or declarative diagrams over AI image generation.
+5. NEVER ABRUPTLY STOP SPEAKING (CRITICAL):
+   - When you write on the whiteboard or display a visual, ALWAYS verbally explain what you wrote/drew in 2-3 warm, conversational sentences.
+   - Do NOT just say the topic title and then go silent. Elaborate on the concept, explain how it works, and naturally ask the student an engaging follow-up question (e.g. "Kya aapko ye example samajh aaya, ya hum ek aur example leke dekhein?").
 6. VERBAL BRIDGING (NO DEAD AIR): When you need to call search_web, youtube_channel_search, youtube_fetch_transcript, or browser tools, ALWAYS first speak a quick, natural 1-sentence bridging phrase in the user's language (e.g. "Ek second, main iski latest details check karke batata hoon..." or "Let me check that on YouTube for you...") BEFORE or while triggering the tool so the user is never left waiting in dead silence.`;
 
 /**

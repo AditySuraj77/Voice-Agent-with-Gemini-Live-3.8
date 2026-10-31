@@ -4,7 +4,9 @@ const AUDIO_WORKLET_CODE = `
 class PcmCaptureProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 4096;
+    // 4800 samples at 48kHz is exactly 100ms and downsamples cleanly to 1600 samples at 16kHz (3:1 ratio),
+    // eliminating fractional sample drift / jitter at buffer boundaries.
+    this.bufferSize = 4800;
     this.buffer = new Float32Array(this.bufferSize);
     this.bufferIndex = 0;
   }
