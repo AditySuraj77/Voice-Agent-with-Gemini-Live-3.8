@@ -1014,21 +1014,71 @@ CRITICAL DIRECTIVES:
       // Initialize and start microphone recorder if not already active
       if (!audioRecorderRef.current) {
         let chunkCount = 0;
+        let silenceChunksCount = 0;
+        let isStreamPaused = false;
+        const preBuffer = [];
+        const IDLE_SILENCE_CHUNKS = 30; // 3.0s of genuine quiet before entering idle solving mode
+        const SPEECH_RESUME_THRESHOLD = 0.02; // Ultra-sensitive threshold to wake stream on soft whispers
+
         audioRecorderRef.current = new AudioRecorder({
-          onAudioChunk: (chunk) => {
-            if (liveClientRef.current && liveClientRef.current.isConnected) {
-              // Lightweight Acoustic Echo Bleed Gate:
-              // While the AI assistant is playing audio out loud, suppress minor speaker bleed (volume < 0.12).
-              // When assistant is NOT speaking, ALWAYS stream 100% of microphone audio without dropping packets.
-              if (audioPlayerRef.current?.isPlaying && inputVolumeRef.current < 0.12) {
-                return;
+          onAudioChunk: (chunk, vol = 0) => {
+            if (!liveClientRef.current || !liveClientRef.current.isConnected) return;
+
+            const isAssistantSpeaking = Boolean(audioPlayerRef.current?.isPlaying);
+
+            if (isAssistantSpeaking) {
+              // 1. Assistant is speaking: Suppress minor speaker echo bleed (vol < 0.12)
+              // If user speaks loud (vol >= 0.12), immediate barge-in interruption!
+              if (vol >= 0.12) {
+                liveClientRef.current.sendAudioChunk(chunk);
+              }
+              silenceChunksCount = 0;
+              isStreamPaused = false;
+              preBuffer.length = 0;
+              return;
+            }
+
+            // 2. Assistant is NOT speaking:
+            if (isStreamPaused) {
+              // User has been in Idle Solving Mode (> 3.0s silence, audioStreamEnd already signaled)
+              // Keep last 3 chunks (~300ms) in rolling pre-buffer
+              preBuffer.push(chunk);
+              if (preBuffer.length > 3) {
+                preBuffer.shift();
               }
 
-              chunkCount++;
-              if (chunkCount <= 3 || chunkCount % 50 === 0) {
-                console.log(`[useGeminiLive] Transmitted chunk #${chunkCount} to Gemini Live.`);
+              // Check if user has started speaking again to wake the stream
+              if (vol > SPEECH_RESUME_THRESHOLD) {
+                isStreamPaused = false;
+                silenceChunksCount = 0;
+
+                // Instantly flush rolling pre-buffer (300ms) so not even the first consonant is clipped
+                while (preBuffer.length > 0) {
+                  liveClientRef.current.sendAudioChunk(preBuffer.shift());
+                }
+
+                chunkCount++;
+                liveClientRef.current.sendAudioChunk(chunk);
               }
+              // While in idle solving mode and vol <= threshold, do NOT stream empty room hiss
+            } else {
+              // Normal Active Conversation Mode: Stream 100% CONTINUOUSLY for natural human-like flow
+              chunkCount++;
               liveClientRef.current.sendAudioChunk(chunk);
+
+              // Monitor for prolonged idle silence (> 3.0s)
+              if (vol < 0.025) {
+                silenceChunksCount++;
+                if (silenceChunksCount >= IDLE_SILENCE_CHUNKS) {
+                  // User has been genuinely silent for > 3.0s (e.g. solving question on paper)
+                  isStreamPaused = true;
+                  console.log('[useGeminiLive] 3s Idle silence detected: Sending audioStreamEnd to finalize turn & protect context.');
+                  liveClientRef.current.sendAudioStreamEnd();
+                  preBuffer.length = 0;
+                }
+              } else {
+                silenceChunksCount = 0;
+              }
             }
           },
           onVolumeChange: (vol) => {

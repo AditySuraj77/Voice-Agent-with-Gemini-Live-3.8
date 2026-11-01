@@ -171,6 +171,12 @@ export class GeminiLiveClient {
         },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            disabled: false,
+            silenceDurationMs: 600,
+          },
+        },
         contextWindowCompression: {
           triggerTokens: '40000',
           slidingWindow: {
@@ -621,6 +627,20 @@ export class GeminiLiveClient {
     };
 
     this.sendJson(payload);
+  }
+
+  /**
+   * Signals the official Gemini Live audioStreamEnd to flush cached audio
+   * and finalize user turn cleanly when transitioning into idle silence.
+   */
+  sendAudioStreamEnd() {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    console.log('[GeminiLiveClient] Emitting official audioStreamEnd signal to server.');
+    this.sendJson({
+      realtimeInput: {
+        audioStreamEnd: true,
+      },
+    });
   }
 
   /**

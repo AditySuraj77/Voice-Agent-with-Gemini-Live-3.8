@@ -217,6 +217,12 @@ export class GeminiKeyPool {
           responseModalities: ['AUDIO'],
           inputAudioTranscription: {},
           outputAudioTranscription: {},
+          realtimeInputConfig: {
+            automaticActivityDetection: {
+              disabled: false,
+              silenceDurationMs: 600,
+            },
+          },
           tools: GEMINI_TOOLS,
           contextWindowCompression: {
             triggerTokens: '40000',

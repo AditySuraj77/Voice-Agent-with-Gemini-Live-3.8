@@ -58,17 +58,19 @@ export class AudioRecorder {
   processAudioSlice(inputData) {
     if (!this.isRecording || this.isMuted) return;
 
+    let sumSquares = 0;
+    for (let i = 0; i < inputData.length; i++) {
+      sumSquares += inputData[i] * inputData[i];
+    }
+    const rms = Math.sqrt(sumSquares / inputData.length);
+    const scaledVolume = Math.min(1, rms * 5);
+
     // Throttled volume estimation for UI activity indicator (max ~5/sec instead of flooding 12+/sec)
     if (this.onVolumeChange) {
       const now = performance.now();
       if (now - this._lastVolTime > 200) {
         this._lastVolTime = now;
-        let sumSquares = 0;
-        for (let i = 0; i < inputData.length; i++) {
-          sumSquares += inputData[i] * inputData[i];
-        }
-        const rms = Math.sqrt(sumSquares / inputData.length);
-        this.onVolumeChange(Math.min(1, rms * 5)); // Scaled volume level (0 to 1)
+        this.onVolumeChange(scaledVolume);
       }
     }
 
@@ -78,7 +80,7 @@ export class AudioRecorder {
     const base64Chunk = arrayBufferToBase64(pcm16);
 
     if (this.onAudioChunk && base64Chunk) {
-      this.onAudioChunk(base64Chunk);
+      this.onAudioChunk(base64Chunk, scaledVolume);
     }
   }
 
