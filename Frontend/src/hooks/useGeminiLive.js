@@ -393,11 +393,12 @@ CRITICAL DIRECTIVES:
 3. DO NOT repeat greetings or ask what ${sName} wants to learn. Continue directly from where you paused.`;
 
               console.log('[useGeminiLive] Sending continuation handshake to clientInstance:', continuationPayload.slice(0, 150));
-              clientInstance.sendContextNotification(continuationPayload);
+              clientInstance.sendContextNotification(continuationPayload, { turnComplete: true });
             } else {
               console.log('[useGeminiLive] Sending fresh student profile handshake to clientInstance.');
               clientInstance.sendContextNotification(
-                `[STUDENT PROFILE HANDSHAKE]: The student's name is "${sName}". Greet them warmly and helpfully in 1 short sentence matching their language, and ask how you can help them today. Speak at most 1-2 sentences!`
+                `[STUDENT PROFILE HANDSHAKE]: The student's name is "${sName}". Greet them warmly and helpfully in 1 short sentence matching their language, and ask how you can help them today. Speak at most 1-2 sentences!`,
+                { turnComplete: true }
               );
             }
           }
@@ -1016,13 +1017,10 @@ CRITICAL DIRECTIVES:
         audioRecorderRef.current = new AudioRecorder({
           onAudioChunk: (chunk) => {
             if (liveClientRef.current && liveClientRef.current.isConnected) {
-              // Acoustic echo suppression gate:
-              // If AI assistant is actively speaking, drop mic audio if it's below intentional speech threshold.
-              // This prevents laptop speaker bleed from triggering Gemini's server-side VAD barge-in/interruption.
-              // Strong Acoustic Echo & Background Noise Gate:
-              // While AI assistant audio is playing, only transmit mic if student is speaking firmly (volume > 0.28).
-              // This stops laptop speaker playback bleed from triggering false server-side barge-in cuts.
-              if (audioPlayerRef.current?.isPlaying && inputVolumeRef.current < 0.28) {
+              // Lightweight Acoustic Echo Bleed Gate:
+              // While the AI assistant is playing audio out loud, suppress minor speaker bleed (volume < 0.12).
+              // When assistant is NOT speaking, ALWAYS stream 100% of microphone audio without dropping packets.
+              if (audioPlayerRef.current?.isPlaying && inputVolumeRef.current < 0.12) {
                 return;
               }
 
