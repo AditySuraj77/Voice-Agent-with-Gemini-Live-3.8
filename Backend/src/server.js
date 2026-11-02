@@ -17,6 +17,7 @@ import searchRouter from './routes/searchRoute.js';
 import browserRouter from './routes/browserRoute.js';
 import youtubeRouter from './routes/youtubeRoute.js';
 import animationRouter from './routes/animationRoute.js';
+import insightRouter from './routes/insightRoute.js';
 import { browserService } from './services/browserService.js';
 
 const app = express();
@@ -95,6 +96,7 @@ app.use('/api', browserLimiter, browserRouter);
 
 // Educational animations & Manim mathematical scene endpoints
 app.use('/api', animationRouter);
+app.use('/api', insightRouter);
 
 // Start server
 const server = app.listen(PORT, () => {

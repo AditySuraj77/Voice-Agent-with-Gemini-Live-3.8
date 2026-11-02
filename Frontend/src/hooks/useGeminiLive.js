@@ -1240,16 +1240,25 @@ Greet "${sName}" warmly by name in 1-2 spoken sentences. Mention that you rememb
     setSearchQuery('');
     inputVolumeRef.current = 0;
 
-    // Asynchronously sync whiteboard lesson progress to Supabase Cloud Memory (off live voice path)
-    if (userRef.current?.id && whiteboardItemsRef.current.length > 0) {
-      const activeTopic = whiteboardItemsRef.current.find((item) => item.topic)?.topic || 'Study Session';
-      const subtopics = whiteboardItemsRef.current.map((item) => item.topic).filter(Boolean);
-      const summary = formatWhiteboardSummary(whiteboardItemsRef.current);
-      cloudMemoryService.recordLessonProgress(userRef.current.id, {
-        topic: activeTopic,
-        subtopics: subtopics.slice(-5),
-        whiteboardSummary: summary,
-      });
+    // Asynchronously sync whiteboard lesson progress & extract insights into Supabase (off live voice path)
+    if (userRef.current?.id) {
+      if (whiteboardItemsRef.current.length > 0) {
+        const activeTopic = whiteboardItemsRef.current.find((item) => item.topic)?.topic || 'Study Session';
+        const subtopics = whiteboardItemsRef.current.map((item) => item.topic).filter(Boolean);
+        const summary = formatWhiteboardSummary(whiteboardItemsRef.current);
+        cloudMemoryService.recordLessonProgress(userRef.current.id, {
+          topic: activeTopic,
+          subtopics: subtopics.slice(-5),
+          whiteboardSummary: summary,
+        });
+      }
+
+      // Extract cognitive insights from dialogue transcript using ultra-light gemini-3.5-flash-lite
+      const dialogueSummary = formatDialogueHistory(messagesRef.current);
+      if (dialogueSummary && dialogueSummary.length > 30) {
+        const sName = studentProfileRef.current?.name || 'Student';
+        cloudMemoryService.extractAndSaveInsights(userRef.current.id, dialogueSummary, sName).catch(() => {});
+      }
     }
   }, []);
 

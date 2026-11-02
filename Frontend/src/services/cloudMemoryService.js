@@ -63,27 +63,55 @@ export const cloudMemoryService = {
   },
 
   /**
-   * Saves or updates structured facts about the current lesson
+   * Saves or updates structured facts about the current lesson.
+   * If the student worked on the same topic today, updates the existing row instead of duplicating!
    */
   async recordLessonProgress(userId, { topic, subtopics = [], problemsAttempted = 0, problemsSolved = 0, lastFormula = null, whiteboardSummary = null }) {
     if (!supabase || !userId) return;
 
     try {
-      const { error } = await supabase.from('lesson_progress').insert({
-        user_id: userId,
-        topic: topic || 'General Mathematics',
-        subtopics: subtopics,
-        problems_attempted: problemsAttempted,
-        problems_solved: problemsSolved,
-        last_formula: lastFormula,
-        whiteboard_summary: whiteboardSummary,
-        updated_at: new Date().toISOString(),
-      });
+      const activeTopic = topic || 'General Mathematics';
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
 
-      if (error) {
-        console.warn('[CloudMemory] Could not record lesson progress:', error.message);
+      const { data: existing } = await supabase
+        .from('lesson_progress')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('topic', activeTopic)
+        .gte('created_at', todayStart.toISOString())
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        await supabase
+          .from('lesson_progress')
+          .update({
+            subtopics: subtopics,
+            problems_attempted: problemsAttempted,
+            problems_solved: problemsSolved,
+            last_formula: lastFormula,
+            whiteboard_summary: whiteboardSummary,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing[0].id);
+        console.log('[CloudMemory] Updated existing lesson progress row for:', activeTopic);
       } else {
-        console.log('[CloudMemory] Recorded lesson progress to Supabase for user:', userId);
+        const { error } = await supabase.from('lesson_progress').insert({
+          user_id: userId,
+          topic: activeTopic,
+          subtopics: subtopics,
+          problems_attempted: problemsAttempted,
+          problems_solved: problemsSolved,
+          last_formula: lastFormula,
+          whiteboard_summary: whiteboardSummary,
+          updated_at: new Date().toISOString(),
+        });
+
+        if (error) {
+          console.warn('[CloudMemory] Could not record lesson progress:', error.message);
+        } else {
+          console.log('[CloudMemory] Recorded lesson progress to Supabase for user:', userId);
+        }
       }
     } catch (err) {
       console.warn('[CloudMemory] Error recording progress:', err?.message || err);
@@ -109,6 +137,31 @@ export const cloudMemoryService = {
       }
     } catch (err) {
       console.warn('[CloudMemory] Error recording insight:', err?.message || err);
+    }
+  },
+
+  /**
+   * Calls the backend to extract 1-2 cognitive insights using ultra-light gemini-3.5-flash-lite,
+   * then saves them to Supabase public.student_insights.
+   */
+  async extractAndSaveInsights(userId, transcript, studentName = 'Student') {
+    if (!supabase || !userId || !transcript || transcript.length < 25) return;
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      const res = await fetch(`${backendUrl}/api/extract-insights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, studentName }),
+      });
+      const data = await res.json();
+      if (data?.insights && Array.isArray(data.insights) && data.insights.length > 0) {
+        for (const insightText of data.insights) {
+          await this.recordStudentInsight(userId, insightText);
+        }
+        console.log(`[CloudMemory] 🧠 Extracted & saved ${data.insights.length} student insights into Supabase!`);
+      }
+    } catch (err) {
+      console.warn('[CloudMemory] Insight extraction background warning:', err?.message || err);
     }
   },
 
