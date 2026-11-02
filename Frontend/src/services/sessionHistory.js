@@ -16,6 +16,7 @@ import {
   idbClearAll,
   idbBulkInsert,
 } from './indexedDbStorage.js';
+import { cloudMemoryService } from './cloudMemoryService.js';
 
 const STORAGE_KEY = 'aristotle_session_history_v1';
 const CURRENT_SESSION_ID_KEY = 'aristotle_active_session_id';
@@ -24,6 +25,43 @@ const SESSIONS_UPDATED_EVENT = 'aristotle:sessions-updated';
 // In-memory cache for synchronous, zero-lag UI reads
 let memorySessions = null;
 let isInitialized = false;
+let activeUserId = null;
+
+/**
+ * Sets the active user ID and triggers cloud session sync (ChatGPT-style cross-device restore).
+ */
+export async function setSessionHistoryUser(userId) {
+  activeUserId = userId || null;
+  if (activeUserId) {
+    await syncCloudSessions(activeUserId);
+  }
+}
+
+async function syncCloudSessions(userId) {
+  if (!userId) return;
+  try {
+    const cloudSessions = await cloudMemoryService.fetchUserSessions(userId);
+    if (!cloudSessions || cloudSessions.length === 0) return;
+
+    const current = getAllSessions();
+    const existingIds = new Set(current.map((s) => s.id));
+    const merged = [...current];
+
+    for (const cs of cloudSessions) {
+      if (!existingIds.has(cs.id)) {
+        merged.push(cs);
+        idbSaveSession(cs).catch(() => {});
+      }
+    }
+
+    merged.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    memorySessions = merged;
+    notifySubscribers(memorySessions);
+    console.log(`[SessionHistory] ☁️ Synced ${cloudSessions.length} study sessions from Supabase.`);
+  } catch (err) {
+    console.warn('[SessionHistory] Cloud sessions sync error:', err?.message || err);
+  }
+}
 
 /**
  * Loads sessions from LocalStorage as immediate synchronous bootstrap.
@@ -218,6 +256,11 @@ export function saveActiveSession(items = [], studentProfile = {}, options = {})
     notifySubscribers(memorySessions);
 
     // 1. Primary Asynchronous Persistence: High-capacity IndexedDB
+    // 1b. Asynchronous Cloud Sync (Supabase - cross-device restoration)
+    if (activeUserId) {
+      cloudMemoryService.saveCloudSession(activeUserId, sessionEntry).catch(() => {});
+    }
+
     idbSaveSession(sessionEntry).catch((err) => {
       console.warn('[SessionHistory] Background IndexedDB save warning:', err.message);
     });
@@ -275,6 +318,9 @@ export function deleteSession(id) {
 
     // Delete from IndexedDB asynchronously
     idbDeleteSession(id).catch((e) => console.warn('[SessionHistory] IndexedDB delete error:', e.message));
+    if (activeUserId) {
+      cloudMemoryService.deleteCloudSession(activeUserId, id).catch(() => {});
+    }
 
     // Update LocalStorage backup
     try {
@@ -296,6 +342,9 @@ export function clearAllHistory() {
   notifySubscribers([]);
 
   idbClearAll().catch((e) => console.warn('[SessionHistory] IndexedDB clear error:', e.message));
+  if (activeUserId) {
+    cloudMemoryService.clearAllCloudSessions(activeUserId).catch(() => {});
+  }
 
   try {
     localStorage.removeItem(STORAGE_KEY);

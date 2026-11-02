@@ -5,6 +5,7 @@ import { supabase } from './supabaseClient.js';
  * Implements the 3-tier memory model:
  * 1. Structured Facts: lesson_progress (topics, problems solved, exact timestamps)
  * 2. Semantic Understanding: student_insights (learning style, cognitive patterns)
+ * 3. Full Whiteboard Session Sync: study_sessions (ChatGPT-like cross-device session restore)
  */
 
 export const cloudMemoryService = {
@@ -108,6 +109,105 @@ export const cloudMemoryService = {
       }
     } catch (err) {
       console.warn('[CloudMemory] Error recording insight:', err?.message || err);
+    }
+  },
+
+  /**
+   * Saves a full study session to Supabase cloud (ChatGPT-style cross-device restore)
+   */
+  async saveCloudSession(userId, sessionEntry) {
+    if (!supabase || !userId || !sessionEntry?.id) return;
+    try {
+      const { error } = await supabase.from('study_sessions').upsert({
+        id: sessionEntry.id,
+        user_id: userId,
+        title: sessionEntry.title || 'Study Session',
+        items: sessionEntry.items || [],
+        canvas_snapshot: sessionEntry.canvasSnapshot || null,
+        created_at: sessionEntry.createdAt || new Date().toISOString(),
+        updated_at: sessionEntry.updatedAt || new Date().toISOString(),
+      });
+
+      if (error) {
+        console.warn('[CloudMemory] Warning saving session to Supabase:', error.message);
+      } else {
+        console.log('[CloudMemory] ☁️ Synced whiteboard session to Supabase cloud:', sessionEntry.id);
+      }
+    } catch (e) {
+      console.warn('[CloudMemory] Save session error:', e?.message || e);
+    }
+  },
+
+  /**
+   * Fetches all cloud study sessions for user
+   */
+  async fetchUserSessions(userId) {
+    if (!supabase || !userId) return [];
+    try {
+      const { data, error } = await supabase
+        .from('study_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        if (error.code !== '42P01') { // table does not exist yet
+          console.warn('[CloudMemory] Warning fetching cloud sessions:', error.message);
+        }
+        return [];
+      }
+
+      return (data || []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        items: row.items || [],
+        itemsCount: (row.items || []).length,
+        canvasSnapshot: row.canvas_snapshot || null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        dateStr: new Date(row.updated_at).toLocaleDateString([], {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }),
+        timeStr: new Date(row.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }));
+    } catch (e) {
+      console.warn('[CloudMemory] Fetch cloud sessions error:', e?.message || e);
+      return [];
+    }
+  },
+
+  /**
+   * Deletes a study session from Supabase cloud
+   */
+  async deleteCloudSession(userId, sessionId) {
+    if (!supabase || !userId || !sessionId) return;
+    try {
+      const { error } = await supabase
+        .from('study_sessions')
+        .delete()
+        .eq('id', sessionId)
+        .eq('user_id', userId);
+      if (error) console.warn('[CloudMemory] Error deleting cloud session:', error.message);
+    } catch (e) {
+      console.warn('[CloudMemory] Delete cloud session error:', e?.message || e);
+    }
+  },
+
+  /**
+   * Clears all study sessions for a user from Supabase cloud
+   */
+  async clearAllCloudSessions(userId) {
+    if (!supabase || !userId) return;
+    try {
+      const { error } = await supabase
+        .from('study_sessions')
+        .delete()
+        .eq('user_id', userId);
+      if (error) console.warn('[CloudMemory] Error clearing cloud sessions:', error.message);
+    } catch (e) {
+      console.warn('[CloudMemory] Clear cloud sessions error:', e?.message || e);
     }
   },
 };

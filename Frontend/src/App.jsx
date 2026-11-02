@@ -7,6 +7,7 @@ import { ControlsBar } from './components/ControlsBar.jsx';
 import { StudentProfileModal } from './components/profile/StudentProfileModal.jsx';
 import { SessionHistoryModal } from './components/history/SessionHistoryModal.jsx';
 import { getStudentProfile, saveStudentProfile } from './services/studentProfile.js';
+import { setSessionHistoryUser } from './services/sessionHistory.js';
 import { useAuth } from './context/AuthContext.jsx';
 import { AlertCircle, X, GripVertical, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 
@@ -35,6 +36,11 @@ export default function App() {
       });
     }
   }, [authProfile?.fullName, authProfile?.gradeLevel]);
+
+  // Auto-sync cross-device whiteboard session history when Google user logs in/out
+  useEffect(() => {
+    setSessionHistoryUser(user?.id || null);
+  }, [user?.id]);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
