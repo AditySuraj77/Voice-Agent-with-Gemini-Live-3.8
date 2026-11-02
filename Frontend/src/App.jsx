@@ -49,6 +49,7 @@ export default function App() {
     setWhiteboardItems,
     clearWhiteboard,
     restoreSessionContext,
+    startFreshSession,
     aiHighlightedTopic,
     aiLaserPoint,
     inspectWhiteboardSnapshot,
@@ -149,7 +150,11 @@ export default function App() {
             <DirectWhiteboard
               items={whiteboardItems}
               onClearBoard={() => {
-                clearWhiteboard();
+                if (sessionStatus === 'disconnected') {
+                  startFreshSession();
+                } else {
+                  clearWhiteboard();
+                }
                 setRestoredCanvasSnapshot({ snapshot: null, clear: true, id: Date.now() });
               }}
               studentProfile={studentProfile}
@@ -353,7 +358,7 @@ export default function App() {
           setRestoredCanvasSnapshot({ snapshot: canvasSnapshot, id: Date.now() });
         }}
         onStartFreshSession={() => {
-          clearWhiteboard();
+          startFreshSession();
           setRestoredCanvasSnapshot({ snapshot: null, clear: true, id: Date.now() });
         }}
       />

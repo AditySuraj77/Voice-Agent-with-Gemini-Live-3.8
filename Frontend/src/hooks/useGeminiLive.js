@@ -273,12 +273,54 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   /**
    * Manually clears the whiteboard and alerts Gemini Live.
    */
-  const clearWhiteboard = useCallback(() => {
+  const clearWhiteboard = useCallback(({ clearHistory = false } = {}) => {
     setWhiteboardItems([]);
     whiteboardItemsRef.current = [];
+    if (clearHistory) {
+      setMessages([]);
+      messagesRef.current = [];
+      lastUserQueryRef.current = '';
+      conversationHistoryRef.current = [];
+    }
     if (liveClientRef.current && liveClientRef.current.isConnected) {
       liveClientRef.current.sendContextNotification(
-        `[WHITEBOARD CLEARED]: The student has erased the whiteboard to start a fresh topic.`
+        clearHistory
+          ? `[STUDENT STARTED BRAND NEW FRESH STUDY SESSION]: All previous notes, formulas, equations, and topics have been cleared. Forget prior discussions. Greet warmly in 1 short sentence and ask what new topic the student would like to learn today!`
+          : `[WHITEBOARD CLEARED]: The student has erased the whiteboard to start a fresh topic.`
+      );
+    }
+  }, []);
+
+  /**
+   * Resets both whiteboard and conversational transcript history to start 100% fresh,
+   * without needing a browser reload / F5.
+   */
+  const startFreshSession = useCallback(() => {
+    // 1. Clear whiteboard notes
+    setWhiteboardItems([]);
+    whiteboardItemsRef.current = [];
+
+    // 2. Clear conversation messages & transcript history
+    setMessages([]);
+    messagesRef.current = [];
+    lastUserQueryRef.current = '';
+    conversationHistoryRef.current = [];
+    hasTurnWhiteboardUpdateRef.current = false;
+    currentTurnAssistantTextRef.current = '';
+    setIsSearching(false);
+    setSearchQuery('');
+
+    // 3. Clear active session pointer in sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('aristotle_active_session_id');
+    }
+
+    // 4. If connection is already open, notify model immediately of the fresh reset
+    if (liveClientRef.current && liveClientRef.current.isConnected) {
+      const sName = studentProfileRef.current?.name || 'Adi';
+      liveClientRef.current.sendContextNotification(
+        `[STUDENT STARTED BRAND NEW FRESH STUDY SESSION]: ${sName} has started a completely new, clean study session. All previous notes, formulas, equations, and topics have been cleared. Forget prior discussions. Greet ${sName} warmly in 1 short sentence and ask what new topic they would like to learn today!`,
+        { turnComplete: true }
       );
     }
   }, []);
@@ -1302,6 +1344,7 @@ CRITICAL DIRECTIVES:
     setWhiteboardItems,
     clearWhiteboard,
     restoreSessionContext,
+    startFreshSession,
     aiHighlightedTopic,
     aiLaserPoint,
     inspectWhiteboardSnapshot,
