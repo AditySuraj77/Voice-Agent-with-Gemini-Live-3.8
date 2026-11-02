@@ -1,5 +1,5 @@
 import express from 'express';
-import { searchTavily } from '../services/tavilySearchService.js';
+import { searchUnified } from '../services/duckduckgoSearchService.js';
 import { searchUniversalVisual } from '../services/visualSearchService.js';
 
 const router = express.Router();
@@ -21,7 +21,7 @@ router.post('/tools/search', async (req, res) => {
       return res.status(400).json({ error: 'Search query exceeds maximum allowed length of 300 characters.' });
     }
 
-    const searchResult = await searchTavily(cleanQuery, { maxResults: maxResults || 3 });
+    const searchResult = await searchUnified(cleanQuery, { maxResults: maxResults || 3 });
     return res.json(searchResult);
   } catch (err) {
     console.error('[searchRoute] Error during search execution:', err);

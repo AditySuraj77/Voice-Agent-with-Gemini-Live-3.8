@@ -76,7 +76,8 @@ app.get('/api/health', (req, res) => {
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY),
-    tavilyConfigured: Boolean(process.env.TAVILY_API_KEY)
+    tavilyConfigured: Boolean(process.env.TAVILY_API_KEY),
+    searchProvider: (process.env.SEARCH_PROVIDER || 'duckduckgo').toLowerCase()
   });
 });
 
