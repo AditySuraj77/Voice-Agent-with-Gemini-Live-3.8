@@ -22,6 +22,8 @@ export class GeminiLiveClient {
     onHighlightWhiteboard,
     onMasteryCall,
     onBrowserFrame,
+    onResumptionUpdate,
+    onGoAway,
   }) {
     this.backendUrl = backendUrl;
     this.sessionId = sessionId || (typeof window !== 'undefined' && sessionStorage.getItem('aristotle_browser_session_id')) || ('sess_' + Math.random().toString(36).slice(2, 8));
@@ -40,6 +42,10 @@ export class GeminiLiveClient {
     this.onHighlightWhiteboard = onHighlightWhiteboard;
     this.onMasteryCall = onMasteryCall;
     this.onBrowserFrame = onBrowserFrame;
+    this.onResumptionUpdate = onResumptionUpdate;
+    this.onGoAway = onGoAway;
+    this.latestResumptionHandle = null;
+    this.isResumable = true;
 
     this.clientId = Math.random().toString(36).slice(2, 6);
     this.msgCounter = 0;
@@ -61,7 +67,7 @@ export class GeminiLiveClient {
    * @param {string} [options.systemInstruction]
    * @param {string} [options.voiceName='Aoede']
    */
-  async connect(ephemeralToken, { model = 'gemini-3.8-live', systemInstruction = '', voiceName = 'Aoede' } = {}) {
+  async connect(ephemeralToken, { model = 'gemini-3.8-live', systemInstruction = '', voiceName = 'Aoede', resumptionHandle = null } = {}) {
     if (this.isConnected) {
       this.disconnect();
     }
@@ -95,6 +101,7 @@ export class GeminiLiveClient {
             model: normalizedModel,
             systemInstruction,
             voiceName,
+            resumptionHandle,
           });
 
           if (this.onOpen) this.onOpen();
@@ -153,7 +160,7 @@ export class GeminiLiveClient {
   /**
    * Sends the session setup configuration frame, including Tavily search tool declaration.
    */
-  sendSetup({ model, systemInstruction, voiceName = 'Aoede' }) {
+  sendSetup({ model, systemInstruction, voiceName = 'Aoede', resumptionHandle = null }) {
     const isExtendedThinking = model.includes('extended-thinking');
 
     const setupPayload = {
@@ -177,6 +184,7 @@ export class GeminiLiveClient {
             silenceDurationMs: 600,
           },
         },
+        sessionResumption: resumptionHandle ? { handle: resumptionHandle } : {},
         contextWindowCompression: {
           triggerTokens: '40000',
           slidingWindow: {
@@ -761,6 +769,30 @@ export class GeminiLiveClient {
     if (message.setupComplete) {
       console.log(`[GeminiLiveClient #${this.clientId}] Server setupComplete received. Ready for audio/text exchange.`);
       return;
+    }
+
+    // 0. Session Resumption Update
+    const resumptionUpdate = message.sessionResumptionUpdate || message.serverContent?.sessionResumptionUpdate;
+    if (resumptionUpdate) {
+      const newHandle = resumptionUpdate.newHandle || resumptionUpdate.handle;
+      const resumable = resumptionUpdate.resumable !== false;
+      if (newHandle) {
+        this.latestResumptionHandle = newHandle;
+        this.isResumable = resumable;
+        console.log(`[GeminiLiveClient #${this.clientId}] Session resumption handle received (resumable: ${resumable}).`);
+        if (this.onResumptionUpdate) {
+          this.onResumptionUpdate(newHandle, resumable);
+        }
+      }
+    }
+
+    // Server GoAway notice (~10 minute WebSocket warning)
+    const goAwayNotice = message.goAway || message.serverContent?.goAway;
+    if (goAwayNotice) {
+      console.warn(`[GeminiLiveClient #${this.clientId}] ⚠️ Server GoAway signal received. Proactive reconnection triggered.`);
+      if (this.onGoAway) {
+        this.onGoAway(goAwayNotice);
+      }
     }
 
     const serverContent = message.serverContent;

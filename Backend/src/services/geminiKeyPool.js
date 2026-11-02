@@ -224,6 +224,7 @@ export class GeminiKeyPool {
             },
           },
           tools: GEMINI_TOOLS,
+          sessionResumption: {},
           contextWindowCompression: {
             triggerTokens: '40000',
             slidingWindow: {

@@ -7,6 +7,9 @@ import { generateUniversalTopicSvg } from '../utils/universalSvgGenerator.js';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
+// Toggle for Google Session Resumption (can be set to false anytime for instant rollback)
+export const ENABLE_SESSION_RESUMPTION = true;
+
 /**
  * Normalizes and extracts key topic root words to detect when the teacher is elaborating on the same concept
  * (e.g. "Python Variables" vs "Variables in Python" vs "Storing Text in a Variable").
@@ -189,6 +192,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
   const reconnectAttemptsRef = useRef(0);
   const rotationTimerRef = useRef(null);
   const isRotatingRef = useRef(false);
+  const latestResumptionHandleRef = useRef(null);
+  const isResumedSessionRef = useRef(false);
   const whiteboardItemsRef = useRef([]);
   const studentProfileRef = useRef(studentProfile);
   const currentModelRef = useRef(currentModel);
@@ -281,6 +286,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
       messagesRef.current = [];
       lastUserQueryRef.current = '';
       conversationHistoryRef.current = [];
+      latestResumptionHandleRef.current = null;
+      isResumedSessionRef.current = false;
     }
     if (liveClientRef.current && liveClientRef.current.isConnected) {
       liveClientRef.current.sendContextNotification(
@@ -309,6 +316,8 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
     currentTurnAssistantTextRef.current = '';
     setIsSearching(false);
     setSearchQuery('');
+    latestResumptionHandleRef.current = null;
+    isResumedSessionRef.current = false;
 
     // 3. Clear active session pointer in sessionStorage
     if (typeof window !== 'undefined') {
@@ -368,11 +377,17 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
       }
     }
 
+    const activeResumptionHandle = (ENABLE_SESSION_RESUMPTION && isRotation)
+      ? latestResumptionHandleRef.current
+      : null;
+    isResumedSessionRef.current = Boolean(activeResumptionHandle);
+
     const hasPriorContext = Boolean(dialogueHistorySummary || whiteboardSummary || isRotation);
 
     console.log('[useGeminiLive] Establishing session:', {
       isRotation,
       hasPriorContext,
+      hasResumptionHandle: Boolean(activeResumptionHandle),
       dialogueTurnsCount: messagesRef.current.length,
       recentTopics: recentTopics || 'none',
     });
@@ -419,7 +434,10 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
 
         setTimeout(() => {
           if (clientInstance && clientInstance.isConnected) {
-            if (hasPriorContext) {
+            if (isResumedSessionRef.current) {
+              console.log('[useGeminiLive] ⚡ Session resumed seamlessly via Google Session Resumption Handle! Context preserved on server without duplicate prompt injection.');
+              isResumedSessionRef.current = false;
+            } else if (hasPriorContext) {
               const continuationPayload = `[STUDENT ONGOING LESSON CONTINUATION CONTEXT]:
 The student's name is "${sName}", Grade: "${sGrade}", Language: "${sLang}".
 You are in the middle of an active live voice conversation with ${sName}.
@@ -901,6 +919,16 @@ CRITICAL DIRECTIVES:
           }
         });
       },
+      onResumptionUpdate: (newHandle) => {
+        if (newHandle) {
+          latestResumptionHandleRef.current = newHandle;
+          console.log('[useGeminiLive] 🔄 Cached fresh sessionResumption handle from server.');
+        }
+      },
+      onGoAway: () => {
+        console.warn('[useGeminiLive] ⚠️ Server sent GoAway notice. Proactively rotating connection before cutoff...');
+        handleAutoReconnect(true);
+      },
     });
 
     // Connect WebSocket
@@ -915,6 +943,7 @@ CRITICAL DIRECTIVES:
           model: targetModel,
           voiceName: selectedVoiceRef.current,
           systemInstruction: teacherSystemInstruction,
+          resumptionHandle: activeResumptionHandle,
         });
         connectedSuccessfully = true;
       } catch (connErr) {
@@ -1170,6 +1199,8 @@ CRITICAL DIRECTIVES:
       liveClientRef.current.disconnect();
       liveClientRef.current = null;
     }
+    latestResumptionHandleRef.current = null;
+    isResumedSessionRef.current = false;
     setSessionStatus('disconnected');
     setConversationState('idle');
     setIsSearching(false);
