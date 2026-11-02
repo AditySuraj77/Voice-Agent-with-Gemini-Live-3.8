@@ -13,6 +13,7 @@ import { VideoTimelineCard } from './VideoTimelineCard.jsx';
 import { exportWhiteboardToMarkdown, exportWhiteboardToInteractiveHtml, printWhiteboard } from '../../utils/exportNotes.js';
 import { captureElementWithOverlay } from '../../utils/whiteboardSnapshot.js';
 import { saveActiveSession } from '../../services/sessionHistory.js';
+import { AuthButton } from '../AuthButton.jsx';
 
 /**
  * Direct Whiteboard Canvas
@@ -1060,6 +1061,11 @@ export function DirectWhiteboard({
                 <span className="hidden sm:inline">Erase Board</span>
               </button>
             )}
+
+            {/* Google Cloud Auth & Memory Button */}
+            <div className="ml-1 sm:ml-2">
+              <AuthButton />
+            </div>
           </div>
         </div>
 

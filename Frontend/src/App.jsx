@@ -7,6 +7,7 @@ import { ControlsBar } from './components/ControlsBar.jsx';
 import { StudentProfileModal } from './components/profile/StudentProfileModal.jsx';
 import { SessionHistoryModal } from './components/history/SessionHistoryModal.jsx';
 import { getStudentProfile, saveStudentProfile } from './services/studentProfile.js';
+import { useAuth } from './context/AuthContext.jsx';
 import { AlertCircle, X, GripVertical, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 
 // Code-split CodeLab so Monaco Editor & compilers are loaded on demand
@@ -17,7 +18,23 @@ const CodeLab = lazy(() =>
 );
 
 export default function App() {
+  const { user, profile: authProfile } = useAuth();
   const [studentProfile, setStudentProfile] = useState(() => getStudentProfile());
+
+  // Auto-sync student profile when Google user logs in
+  useEffect(() => {
+    if (authProfile?.fullName) {
+      setStudentProfile((prev) => {
+        const updated = {
+          ...prev,
+          name: authProfile.fullName,
+          grade: authProfile.gradeLevel || prev.grade,
+        };
+        saveStudentProfile(updated);
+        return updated;
+      });
+    }
+  }, [authProfile?.fullName, authProfile?.gradeLevel]);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
@@ -63,6 +80,7 @@ export default function App() {
     executeBrowserAction,
   } = useGeminiLive({
     studentProfile,
+    user,
     onCodeGenerated: (code, language) => {
       // Auto-load teacher's newly generated code into Code Lab without disturbing whiteboard
       setCodeLabSnippet({ code, language: language || 'python' });

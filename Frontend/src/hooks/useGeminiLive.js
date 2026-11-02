@@ -4,6 +4,7 @@ import { AudioPlayer } from '../audio/audioPlayer.js';
 import { GeminiLiveClient } from '../services/geminiLiveClient.js';
 import { saveActiveSession } from '../services/sessionHistory.js';
 import { generateUniversalTopicSvg } from '../utils/universalSvgGenerator.js';
+import { cloudMemoryService } from '../services/cloudMemoryService.js';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -122,7 +123,12 @@ ${recentTopicsSummary ? `\nRECENT TOPICS: ${recentTopicsSummary}` : ''}
 ${dialogueHistorySummary ? `\nRECENT CONTEXT: ${dialogueHistorySummary}` : ''}`;
 }
 
-export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
+export function useGeminiLive({ studentProfile, onCodeGenerated, user } = {}) {
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   const [sessionStatus, setSessionStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'error'
   const [conversationState, setConversationState] = useState('idle'); // 'idle' | 'listening' | 'thinking' | 'speaking'
   const [currentModel, setCurrentModel] = useState('gemini-3.8-live');
@@ -384,6 +390,18 @@ export function useGeminiLive({ studentProfile, onCodeGenerated } = {}) {
 
     const hasPriorContext = Boolean(dialogueHistorySummary || whiteboardSummary || isRotation);
 
+    let cloudMemory = null;
+    if (!isRotation && !hasPriorContext && userRef.current?.id) {
+      try {
+        cloudMemory = await cloudMemoryService.getStudentContext(userRef.current.id);
+        if (cloudMemory?.latestLesson) {
+          console.log('[useGeminiLive] ☁️ Loaded returning student cloud memory from Supabase:', cloudMemory.latestLesson.topic);
+        }
+      } catch (e) {
+        console.warn('[useGeminiLive] Cloud memory retrieval warning:', e?.message || e);
+      }
+    }
+
     console.log('[useGeminiLive] Establishing session:', {
       isRotation,
       hasPriorContext,
@@ -454,6 +472,21 @@ CRITICAL DIRECTIVES:
 
               console.log('[useGeminiLive] Sending continuation handshake to clientInstance:', continuationPayload.slice(0, 150));
               clientInstance.sendContextNotification(continuationPayload, { turnComplete: true });
+            } else if (cloudMemory && cloudMemory.latestLesson) {
+              const lastTopic = cloudMemory.latestLesson.topic || 'the previous lesson';
+              const solvedCount = cloudMemory.latestLesson.problemsSolved || 0;
+              const insightsStr = cloudMemory.insights?.length ? `Student learning style notes: ${cloudMemory.insights.join('; ')}` : '';
+
+              console.log('[useGeminiLive] ☁️ Sending returning student Cloud Memory handshake to clientInstance.');
+              clientInstance.sendContextNotification(
+                `[STUDENT RETURNING CLOUD MEMORY HANDSHAKE]: The student's name is "${sName}".
+This is a returning student whose progress is saved in Supabase Cloud Memory!
+- Last studied topic: "${lastTopic}".
+- Problems previously solved: ${solvedCount}.
+${insightsStr ? `- ${insightsStr}\n` : ''}
+Greet "${sName}" warmly by name in 1-2 spoken sentences. Mention that you remember studying "${lastTopic}" with them last time, and ask if they'd like to continue with it or explore something new today!`,
+                { turnComplete: true }
+              );
             } else {
               console.log('[useGeminiLive] Sending fresh student profile handshake to clientInstance.');
               clientInstance.sendContextNotification(
@@ -1206,6 +1239,18 @@ CRITICAL DIRECTIVES:
     setIsSearching(false);
     setSearchQuery('');
     inputVolumeRef.current = 0;
+
+    // Asynchronously sync whiteboard lesson progress to Supabase Cloud Memory (off live voice path)
+    if (userRef.current?.id && whiteboardItemsRef.current.length > 0) {
+      const activeTopic = whiteboardItemsRef.current.find((item) => item.topic)?.topic || 'Study Session';
+      const subtopics = whiteboardItemsRef.current.map((item) => item.topic).filter(Boolean);
+      const summary = formatWhiteboardSummary(whiteboardItemsRef.current);
+      cloudMemoryService.recordLessonProgress(userRef.current.id, {
+        topic: activeTopic,
+        subtopics: subtopics.slice(-5),
+        whiteboardSummary: summary,
+      });
+    }
   }, []);
 
   /**
