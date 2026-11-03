@@ -11,6 +11,9 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 // Toggle for Google Session Resumption (can be set to false anytime for instant rollback)
 export const ENABLE_SESSION_RESUMPTION = true;
 
+// Toggle for Resumption Whiteboard Sync (Instant Rollback: set to false anytime)
+export const ENABLE_RESUMPTION_WHITEBOARD_SYNC = true;
+
 /**
  * Normalizes and extracts key topic root words to detect when the teacher is elaborating on the same concept
  * (e.g. "Python Variables" vs "Variables in Python" vs "Storing Text in a Variable").
@@ -372,12 +375,11 @@ export function useGeminiLive({ studentProfile, onCodeGenerated, user } = {}) {
     // 2. Gather conversation transcript history
     const dialogueHistorySummary = formatDialogueHistory(messagesRef.current);
 
-    // 3. Determine recent topics (from whiteboard items OR from last student questions)
-    let recentTopics = whiteboardItemsRef.current
-      .map((item) => item.topic)
-      .filter(Boolean)
-      .slice(-6)
-      .join(', ');
+    // 3. Determine complete topic journey (never drop earlier chapters like Sets)
+    const allUniqueTopics = Array.from(
+      new Set(whiteboardItemsRef.current.map((item) => item.topic).filter(Boolean))
+    );
+    let recentTopics = allUniqueTopics.join(', ');
 
     if (!recentTopics && messagesRef.current.length > 0) {
       const userMsgs = messagesRef.current.filter((m) => m.sender === 'user' && m.text);
@@ -457,8 +459,27 @@ export function useGeminiLive({ studentProfile, onCodeGenerated, user } = {}) {
         setTimeout(() => {
           if (clientInstance && clientInstance.isConnected) {
             if (isResumedSessionRef.current) {
-              console.log('[useGeminiLive] ⚡ Session resumed seamlessly via Google Session Resumption Handle! Context preserved on server without duplicate prompt injection.');
               isResumedSessionRef.current = false;
+
+              // Silently sync complete active whiteboard state on session resumption (zero speech lag)
+              if (ENABLE_RESUMPTION_WHITEBOARD_SYNC && whiteboardItemsRef.current.length > 0) {
+                console.log(`[useGeminiLive] ⚡ Session resumed via Google Handle: Silently anchoring full active whiteboard memory (${whiteboardItemsRef.current.length} cards, zero speech lag).`);
+                const resumptionWhiteboardPayload = `[WHITEBOARD ACTIVE STATE ON SESSION RESUMPTION]:
+The student (${sName}) currently has these active study notes and formulas on their whiteboard:
+${whiteboardSummary}
+
+Topics covered in this session: ${recentTopics}
+
+CRITICAL DIRECTIVES:
+1. You are resuming an active lecture. All notes above are actively visible to ${sName} on their screen right now.
+2. When ${sName} speaks (e.g. asks "ye samajh nahi aa raha" or asks about a step/formula), IMMEDIATELY refer to the active topic and formulas on the board (e.g. Matrix Multiplication, not basic arithmetic).
+3. When ${sName} asks "humne kya kya padha hai", list all topics from this whiteboard (including ${allUniqueTopics[0] || 'all previous chapters'}).
+4. DO NOT speak unprompted or repeat greetings. Remain in silent listening mode until ${sName} speaks!`;
+
+                clientInstance.sendContextNotification(resumptionWhiteboardPayload, { turnComplete: false });
+              } else {
+                console.log('[useGeminiLive] ⚡ Session resumed via Google Handle with clean slate (no previous whiteboard items).');
+              }
             } else if (hasPriorContext) {
               const continuationPayload = `[STUDENT ONGOING LESSON CONTINUATION CONTEXT]:
 The student's name is "${sName}", Grade: "${sGrade}", Language: "${sLang}".
@@ -515,8 +536,14 @@ Greet "${sName}" warmly by name in 1-2 spoken sentences. Mention that you rememb
           return;
         }
 
-        // Involuntary disconnect detected (e.g. 10-minute timeout code 1011/1000 or network drop 1006)
-        console.warn('[useGeminiLive] Involuntary session close detected. Triggering auto-reconnect...');
+        // Guard against retired background clients during hot-handoff rotation
+        if (clientInstance !== liveClientRef.current) {
+          console.log(`[useGeminiLive] Retired background client #${clientInstance?.clientId || ''} closed cleanly. Active session continues.`);
+          return;
+        }
+
+        // Involuntary disconnect detected on active client (e.g. 10-minute timeout code 1011/1000 or network drop 1006)
+        console.warn('[useGeminiLive] Involuntary session close detected on active client. Triggering auto-reconnect...');
         handleAutoReconnect(false);
       },
       onError: (err) => {
