@@ -25,15 +25,15 @@ export function ControlsBar({
   };
 
   return (
-    <footer data-testid="controls-bar" className="fixed bottom-4 left-0 right-0 z-30 px-4 flex justify-center pointer-events-none print:hidden">
-      <div className="w-full max-w-2xl h-14 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-300/90 shadow-2xl px-3 flex items-center gap-3 pointer-events-auto font-sans">
+    <footer data-testid="controls-bar" className="fixed bottom-2.5 sm:bottom-4 left-0 right-0 z-30 px-2 sm:px-4 flex justify-center pointer-events-none print:hidden pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="w-full max-w-2xl h-13 sm:h-14 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-300/90 shadow-2xl px-2 sm:px-3 flex items-center gap-1.5 sm:gap-3 pointer-events-auto font-sans">
         {/* Text Input to Teacher */}
         <form onSubmit={handleSend} className="flex-1 min-w-0 flex items-center gap-2">
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="अपने टीचर से पूछें या टाइप करें (Type a question or message)..."
+            placeholder="Ask your teacher or type a message..."
             className="flex-1 min-w-0 bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-xs md:text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition-all font-sans"
           />
           <button
@@ -113,7 +113,7 @@ export function ControlsBar({
             <button
               onClick={onStartSession}
               disabled={isConnecting}
-              className="flex items-center gap-2 px-4 h-9 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-medium text-xs md:text-sm transition-all shadow-md shadow-amber-600/20 disabled:opacity-50 cursor-pointer shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 h-9 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-medium text-xs md:text-sm transition-all shadow-md shadow-amber-600/20 disabled:opacity-50 cursor-pointer shrink-0 whitespace-nowrap"
             >
               <PhoneCall className="w-4 h-4 shrink-0" />
               <span>{isConnecting ? 'Connecting...' : 'Start Voice'}</span>

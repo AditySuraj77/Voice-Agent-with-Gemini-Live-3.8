@@ -549,7 +549,7 @@ export function CodeLab({
       <div
         className={`px-3 py-1.5 ${
           theme === 'vs-dark' ? 'bg-[#212124] border-stone-700/80' : 'bg-[#e7e3da] border-stone-300'
-        } border-b flex items-center justify-between font-sans shrink-0 gap-2 flex-wrap`}
+        } border-b flex items-center justify-between font-sans shrink-0 gap-2 overflow-x-auto no-scrollbar`}
       >
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
@@ -584,7 +584,7 @@ export function CodeLab({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           {/* Theme Toggle (Dark / Light) */}
           <button
             onClick={() => setTheme(theme === 'vs-dark' ? 'light' : 'vs-dark')}

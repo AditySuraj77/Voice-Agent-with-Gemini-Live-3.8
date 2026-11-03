@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trash2, BookOpen, Check, Download, Printer, ArrowDown, History,
   Pen, Highlighter, Eraser, Eye, Sparkles, CheckCircle2, XCircle,
-  Undo2, Redo2, MousePointer, ChevronDown, Globe, FileText
+  Undo2, Redo2, MousePointer, ChevronDown, Globe, FileText, MoreVertical
 } from 'lucide-react';
 import { TypewriterText } from './TypewriterText.jsx';
 import { InteractiveCodeBlock } from './InteractiveCodeBlock.jsx';
@@ -55,6 +55,8 @@ export function DirectWhiteboard({
   const [eraserSize, setEraserSize] = useState(26); // 12 (fine), 26 (medium), 48 (large)
   const [showEraserMenu, setShowEraserMenu] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [isMobileDrawOpen, setIsMobileDrawOpen] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [isInspecting, setIsInspecting] = useState(false);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 1200, height: 1200 });
@@ -687,7 +689,7 @@ export function DirectWhiteboard({
 
       {/* Fixed Left Floating Toolbar Dock (Always accessible regardless of scroll) */}
       <aside
-        className="fixed left-2 sm:left-4 top-24 sm:top-28 z-30 flex flex-col items-center gap-1 p-1 sm:p-1.5 bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-2xl shadow-xl transition-all print:hidden"
+        className="hidden sm:flex fixed left-4 top-24 sm:top-28 z-30 flex-col items-center gap-1 p-1.5 bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-2xl shadow-xl transition-all print:hidden"
         data-testid="drawing-toolbar"
         aria-label="Whiteboard Drawing Tools"
       >
@@ -907,32 +909,205 @@ export function DirectWhiteboard({
         )}
       </aside>
 
-      <div ref={contentWrapperRef} className="max-w-3xl lg:max-w-5xl mx-auto space-y-8 relative px-4 pl-14 sm:pl-16 md:pl-20">
+      {/* Mobile Floating Pencil FAB (Visible only on < sm when draw bar is closed) */}
+      {!isMobileDrawOpen && (
+        <button
+          type="button"
+          onClick={() => {
+            setIsMobileDrawOpen(true);
+            if (activeDrawTool === 'none') {
+              setActiveDrawTool('pen');
+            }
+          }}
+          className="sm:hidden fixed right-4 bottom-20 z-30 w-12 h-12 rounded-full bg-stone-900 hover:bg-stone-950 text-white shadow-2xl flex items-center justify-center border border-stone-700/80 active:scale-95 transition-all cursor-pointer group"
+          title="Open Drawing & Pen Tools"
+          data-testid="mobile-draw-fab"
+        >
+          <Pen className="w-5 h-5 text-amber-400 group-hover:rotate-12 transition-transform" />
+          {hasDrawn && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white" />
+          )}
+        </button>
+      )}
+
+      {/* Mobile Horizontal Drawing Toolbar (Visible only on < sm when opened) */}
+      {isMobileDrawOpen && (
+        <div
+          className="sm:hidden fixed bottom-20 left-2 right-2 z-40 bg-white/95 backdrop-blur-md border border-stone-300/90 rounded-2xl shadow-2xl p-2 flex flex-col gap-1.5 animate-slideUp font-sans"
+          data-testid="mobile-drawing-toolbar"
+        >
+          {/* Top Row: Title & Done button */}
+          <div className="flex items-center justify-between border-b border-stone-100 pb-1.5 px-0.5">
+            <span className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
+              <Pen className="w-3.5 h-3.5 text-amber-600" />
+              <span>Drawing Mode</span>
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              {hasDrawn && (
+                <button
+                  type="button"
+                  onClick={handleClearAnnotations}
+                  className="px-2 py-0.5 rounded-md text-[10px] font-semibold text-rose-600 bg-rose-50 cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileDrawOpen(false);
+                  setActiveDrawTool('none');
+                }}
+                className="px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-stone-900 hover:bg-stone-950 text-white shadow-xs cursor-pointer"
+              >
+                Done ✓
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Row: Quick horizontal icon bar */}
+          <div className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar py-0.5">
+            {/* Pointer */}
+            <button
+              type="button"
+              onClick={() => setActiveDrawTool('none')}
+              className={`p-1.5 rounded-xl text-xs flex flex-col items-center gap-0.5 shrink-0 cursor-pointer ${
+                activeDrawTool === 'none' ? 'bg-stone-900 text-white font-semibold' : 'text-stone-600 hover:bg-stone-100'
+              }`}
+              title="Select / Pointer"
+            >
+              <MousePointer className="w-3.5 h-3.5" />
+              <span className="text-[8px] leading-none">Select</span>
+            </button>
+
+            {/* Pen */}
+            <button
+              type="button"
+              onClick={() => setActiveDrawTool('pen')}
+              className={`p-1.5 rounded-xl text-xs flex flex-col items-center gap-0.5 shrink-0 cursor-pointer ${
+                activeDrawTool === 'pen' ? 'bg-stone-900 text-white font-semibold' : 'text-stone-600 hover:bg-stone-100'
+              }`}
+              title="Pen"
+            >
+              <Pen className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-[8px] leading-none">Pen</span>
+            </button>
+
+            {/* Highlighter */}
+            <button
+              type="button"
+              onClick={() => setActiveDrawTool('highlighter')}
+              className={`p-1.5 rounded-xl text-xs flex flex-col items-center gap-0.5 shrink-0 cursor-pointer ${
+                activeDrawTool === 'highlighter' ? 'bg-amber-400 text-stone-950 font-bold' : 'text-stone-600 hover:bg-amber-50'
+              }`}
+              title="Highlighter"
+            >
+              <Highlighter className="w-3.5 h-3.5" />
+              <span className="text-[8px] leading-none">Highlight</span>
+            </button>
+
+            {/* Tick */}
+            <button
+              type="button"
+              onClick={() => setActiveDrawTool('tick')}
+              className={`p-1.5 rounded-xl text-xs flex flex-col items-center gap-0.5 shrink-0 cursor-pointer ${
+                activeDrawTool === 'tick' ? 'bg-emerald-600 text-white font-semibold' : 'text-stone-600 hover:bg-emerald-50'
+              }`}
+              title="Tick"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span className="text-[8px] leading-none">Tick</span>
+            </button>
+
+            {/* Cross */}
+            <button
+              type="button"
+              onClick={() => setActiveDrawTool('cross')}
+              className={`p-1.5 rounded-xl text-xs flex flex-col items-center gap-0.5 shrink-0 cursor-pointer ${
+                activeDrawTool === 'cross' ? 'bg-rose-600 text-white font-semibold' : 'text-stone-600 hover:bg-rose-50'
+              }`}
+              title="Cross"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span className="text-[8px] leading-none">Cross</span>
+            </button>
+
+            {/* Eraser */}
+            <button
+              type="button"
+              onClick={() => setActiveDrawTool('eraser')}
+              className={`p-1.5 rounded-xl text-xs flex flex-col items-center gap-0.5 shrink-0 cursor-pointer ${
+                activeDrawTool === 'eraser' ? 'bg-stone-900 text-white font-semibold' : 'text-stone-600 hover:bg-stone-100'
+              }`}
+              title="Eraser"
+            >
+              <Eraser className="w-3.5 h-3.5" />
+              <span className="text-[8px] leading-none">Eraser</span>
+            </button>
+
+            {/* Undo */}
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={!canUndo}
+              className={`p-1.5 rounded-xl text-xs flex flex-col items-center gap-0.5 shrink-0 ${
+                canUndo ? 'text-stone-800 hover:bg-stone-100 cursor-pointer' : 'text-stone-300 opacity-40 cursor-not-allowed'
+              }`}
+              title="Undo"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+              <span className="text-[8px] leading-none">Undo</span>
+            </button>
+
+            {/* Check with AI */}
+            {onInspectAnnotations && (
+              <button
+                type="button"
+                onClick={handleInspect}
+                disabled={isInspecting}
+                className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white flex items-center gap-1 shrink-0 text-xs font-bold shadow-xs active:scale-95 transition-transform cursor-pointer"
+                title="Check with Aristotle AI"
+              >
+                <Sparkles className="w-3 h-3 text-amber-200" />
+                <span className="text-[9px] whitespace-nowrap">{isInspecting ? 'Reviewing...' : 'Check AI'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div ref={contentWrapperRef} className="max-w-3xl lg:max-w-5xl mx-auto space-y-8 relative px-4 sm:px-6 sm:pl-18 md:pl-20">
         {/* Top Board Action Bar (Always clickable above drawing canvas) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-2.5 print:hidden relative z-20">
-          <div className="text-xs font-sans text-stone-400">
-            <span>Today's Board Notes</span>
+        <div className="flex items-center justify-between gap-1.5 sm:gap-2 border-b border-stone-200/60 pb-2.5 print:hidden relative z-20">
+          <div className="text-xs font-sans text-stone-400 truncate max-w-[120px] sm:max-w-none">
+            <span className="hidden sm:inline">Today's Board Notes</span>
+            <span className="sm:hidden font-medium text-stone-500">Board</span>
             {studentProfile?.name && (
               <span className="text-stone-600 font-medium ml-1.5">• {studentProfile.name}</span>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex items-center gap-1 sm:gap-1.5">
             {/* Toggle Code Lab */}
             {onToggleCodeLab && (
               <button
                 type="button"
                 onClick={onToggleCodeLab}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
+                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-sans transition-colors cursor-pointer ${
                   isCodeLabOpen
                     ? 'bg-amber-100 text-amber-800 font-semibold'
                     : 'text-stone-600 hover:text-amber-700 hover:bg-amber-50'
                 }`}
                 title="Toggle Split Code Lab & Live UI Sandbox"
               >
-                <span>💻 Code Lab</span>
+                <span>💻</span>
+                <span className="hidden sm:inline">Code Lab</span>
               </button>
             )}
+
+            {/* Desktop Only Inline Action Strip */}
+            <div className="hidden sm:flex items-center gap-1.5">
 
             {/* Toggle Live Browser */}
             {onToggleBrowser && (
@@ -1062,9 +1237,104 @@ export function DirectWhiteboard({
               </button>
             )}
 
+            </div>
+
             {/* Google Cloud Auth & Memory Button */}
-            <div className="ml-1 sm:ml-2">
+            <div className="shrink-0">
               <AuthButton />
+            </div>
+
+            {/* Mobile "More" Menu Dropdown (Visible on < sm) */}
+            <div className="relative sm:hidden">
+              <button
+                type="button"
+                onClick={() => setShowMobileMenu((prev) => !prev)}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-stone-600 hover:bg-stone-200/60 transition-colors"
+                title="More Options"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+
+              {showMobileMenu && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowMobileMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 w-56 bg-white border border-stone-200 rounded-2xl shadow-xl p-1.5 z-40 font-sans text-xs animate-fadeIn space-y-0.5">
+                    {onToggleBrowser && (
+                      <button
+                        onClick={() => {
+                          onToggleBrowser();
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-stone-700 hover:bg-cyan-50 hover:text-cyan-800 text-left font-medium"
+                      >
+                        <Globe className="w-4 h-4 text-cyan-600" />
+                        <span>Live Voice Browser</span>
+                      </button>
+                    )}
+
+                    {items.length > 0 && (
+                      <>
+                        <button
+                          onClick={() => {
+                            exportWhiteboardToInteractiveHtml(items, studentProfile);
+                            setShowMobileMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-stone-700 hover:bg-amber-50 hover:text-amber-800 text-left font-medium"
+                        >
+                          <Download className="w-4 h-4 text-amber-600" />
+                          <span>Export HTML Notes</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            exportWhiteboardToMarkdown(items, studentProfile);
+                            setShowMobileMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-stone-700 hover:bg-stone-100 text-left font-medium"
+                        >
+                          <FileText className="w-4 h-4 text-stone-600" />
+                          <span>Export Markdown</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            printWhiteboard();
+                            setShowMobileMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-stone-700 hover:bg-stone-100 text-left font-medium"
+                        >
+                          <Printer className="w-4 h-4 text-stone-600" />
+                          <span>Print / Save PDF</span>
+                        </button>
+                      </>
+                    )}
+
+                    {onOpenHistory && (
+                      <button
+                        onClick={() => {
+                          onOpenHistory();
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-stone-700 hover:bg-stone-100 text-left font-medium"
+                      >
+                        <History className="w-4 h-4 text-amber-600" />
+                        <span>Study History</span>
+                      </button>
+                    )}
+
+                    {(items.length > 0 || hasDrawn) && onClearBoard && (
+                      <button
+                        onClick={() => {
+                          onClearBoard();
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-left font-medium border-t border-stone-100 mt-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Erase Board</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

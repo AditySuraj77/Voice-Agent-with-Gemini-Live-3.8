@@ -56,6 +56,13 @@ export default function App() {
   const [codeLabSnippet, setCodeLabSnippet] = useState({ code: '', language: 'javascript' });
   const [splitRatio, setSplitRatio] = useState(50); // 50% by default
   const isDraggingRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleOpenInCodeLab = (code, language) => {
     setCodeLabSnippet({ code, language });
@@ -166,10 +173,10 @@ export default function App() {
       {/* Main Clean Workspace: Split View with Draggable Divider */}
       <main className="flex-1 flex overflow-hidden relative">
         {/* Left Side: Infinite Paper Canvas Whiteboard */}
-        {(!isRightPanelOpen || !isRightPanelMaximized) && (
+        {(!isRightPanelOpen || (!isMobile && !isRightPanelMaximized)) && (
           <div
-            style={{ width: isRightPanelOpen ? `${splitRatio}%` : '100%' }}
-            className="flex flex-col h-full transition-all duration-75 overflow-hidden"
+            style={{ width: isMobile ? '100%' : (isRightPanelOpen ? `${splitRatio}%` : '100%') }}
+            className={`flex flex-col h-full transition-all duration-75 overflow-hidden ${isMobile && isRightPanelOpen ? 'hidden' : 'w-full'}`}
           >
             <DirectWhiteboard
               items={whiteboardItems}
@@ -235,12 +242,24 @@ export default function App() {
         {/* Right Side: Split Multi-tool Panel (Code Lab & Live Autonomous Browser) */}
         {isRightPanelOpen && (
           <div
-            style={{ width: isRightPanelMaximized ? '100%' : `${100 - splitRatio}%` }}
-            className="flex flex-col h-full animate-fadeIn transition-all duration-75 overflow-hidden border-l border-stone-800 bg-[#121316]"
+            style={{ width: isMobile ? '100%' : (isRightPanelMaximized ? '100%' : `${100 - splitRatio}%`) }}
+            className={`flex flex-col h-full animate-fadeIn transition-all duration-75 overflow-hidden border-l border-stone-800 bg-[#121316] ${isMobile ? 'fixed inset-0 z-40 w-full' : ''}`}
           >
             {/* Top Workspace Tab Switcher Strip */}
             <div className="bg-[#18181b] border-b border-stone-800 px-3 py-1.5 flex items-center justify-between text-xs font-sans shrink-0">
               <div className="flex items-center gap-1.5">
+                {isMobile && (
+                  <button
+                    onClick={() => {
+                      setIsRightPanelOpen(false);
+                      setIsRightPanelMaximized(false);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-400 font-semibold text-xs border border-stone-700 transition-colors cursor-pointer mr-1"
+                    title="Return to Whiteboard"
+                  >
+                    ← Board
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveRightTab('codelab')}
                   className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${

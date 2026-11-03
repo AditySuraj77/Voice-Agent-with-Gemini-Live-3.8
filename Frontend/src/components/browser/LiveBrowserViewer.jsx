@@ -135,7 +135,7 @@ export function LiveBrowserViewer({
         </div>
 
         {/* Address Bar */}
-        <form onSubmit={handleAddressSubmit} className="flex-1 min-w-[200px] max-w-xl flex items-center gap-1 bg-[#0b101e] border border-stone-700/80 rounded-xl px-2.5 py-1 text-xs">
+        <form onSubmit={handleAddressSubmit} className="flex-1 min-w-0 max-w-xl flex items-center gap-1 bg-[#0b101e] border border-stone-700/80 rounded-xl px-2.5 py-1 text-xs">
           <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
           <input
             type="text"
