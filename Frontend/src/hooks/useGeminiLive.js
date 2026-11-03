@@ -393,7 +393,7 @@ export function useGeminiLive({ studentProfile, onCodeGenerated, user } = {}) {
     let cloudMemory = null;
     if (!isRotation && !hasPriorContext && userRef.current?.id) {
       try {
-        cloudMemory = await cloudMemoryService.getStudentContext(userRef.current.id);
+        cloudMemory = await cloudMemoryService.getStudentContext(userRef.current.id, recentTopics || null);
         if (cloudMemory?.latestLesson) {
           console.log('[useGeminiLive] ☁️ Loaded returning student cloud memory from Supabase:', cloudMemory.latestLesson.topic);
         }

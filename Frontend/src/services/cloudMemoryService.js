@@ -2,17 +2,18 @@ import { supabase } from './supabaseClient.js';
 
 /**
  * Cloud Memory Service
- * Implements the 3-tier memory model:
- * 1. Structured Facts: lesson_progress (topics, problems solved, exact timestamps)
- * 2. Semantic Understanding: student_insights (learning style, cognitive patterns)
+ * Implements Google's 3-tier memory model:
+ * 1. Structured Facts: lesson_progress (topics, problems solved, smart deduplication)
+ * 2. Semantic Understanding: student_insights with 768-dim pgvector embeddings and Cosine Similarity search
  * 3. Full Whiteboard Session Sync: study_sessions (ChatGPT-like cross-device session restore)
  */
 
 export const cloudMemoryService = {
   /**
-   * Fetches latest lesson facts & semantic insights for the student
+   * Fetches latest lesson facts & semantic insights for the student.
+   * If currentTopic is provided, runs Cosine Similarity vector search on 768-dim embeddings!
    */
-  async getStudentContext(userId) {
+  async getStudentContext(userId, currentTopic = null) {
     if (!supabase || !userId) return null;
 
     try {
@@ -30,16 +31,48 @@ export const cloudMemoryService = {
 
       const latestLesson = progressList && progressList.length > 0 ? progressList[0] : null;
 
-      // 2. Fetch student insights (Semantic / Habits)
-      const { data: insights, error: insightsError } = await supabase
-        .from('student_insights')
-        .select('insight_text, category')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(5);
+      // 2. Fetch student insights: Try Vector Semantic Search if topic is provided, else fallback to latest
+      let retrievedInsights = [];
 
-      if (insightsError && insightsError.code !== 'PGRST116') {
-        console.warn('[CloudMemory] Warning reading student_insights:', insightsError.message);
+      const searchTopic = currentTopic || latestLesson?.topic || null;
+      if (searchTopic && typeof searchTopic === 'string' && searchTopic.trim().length > 2) {
+        try {
+          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+          const embedRes = await fetch(`${backendUrl}/api/embed-query`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: searchTopic.trim() }),
+          });
+          const embedData = await embedRes.json();
+
+          if (embedData?.embedding && Array.isArray(embedData.embedding) && embedData.embedding.length === 768) {
+            const { data: matched, error: matchError } = await supabase.rpc('match_student_insights', {
+              query_embedding: embedData.embedding,
+              match_threshold: 0.3,
+              match_count: 3,
+              filter_user_id: userId,
+            });
+
+            if (!matchError && matched && matched.length > 0) {
+              retrievedInsights = matched.map((m) => m.insight_text);
+              console.log(`[CloudMemory] 🎯 Vector semantic search matched ${matched.length} insight(s) for topic "${searchTopic}"`);
+            }
+          }
+        } catch (vecErr) {
+          console.warn('[CloudMemory] Vector search fallback to latest:', vecErr.message);
+        }
+      }
+
+      // Fallback: If no vector matches found (or no topic specified), fetch latest 5
+      if (retrievedInsights.length === 0) {
+        const { data: insights } = await supabase
+          .from('student_insights')
+          .select('insight_text, category')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        retrievedInsights = (insights || []).map((i) => i.insight_text);
       }
 
       return {
@@ -54,7 +87,7 @@ export const cloudMemoryService = {
               updatedAt: latestLesson.updated_at,
             }
           : null,
-        insights: (insights || []).map((i) => i.insight_text),
+        insights: retrievedInsights,
       };
     } catch (err) {
       console.warn('[CloudMemory] Note: Database tables might not be created yet, proceeding gracefully:', err?.message || err);
@@ -119,21 +152,29 @@ export const cloudMemoryService = {
   },
 
   /**
-   * Saves a qualitative insight or learning pattern (Semantic Understanding)
+   * Saves a qualitative insight with optional 768-dim vector embedding into public.student_insights
    */
-  async recordStudentInsight(userId, insightText, category = 'learning_style') {
+  async recordStudentInsight(userId, insightText, embedding = null, category = 'learning_style') {
     if (!supabase || !userId || !insightText) return;
 
     try {
-      const { error } = await supabase.from('student_insights').insert({
+      const row = {
         user_id: userId,
         insight_text: insightText,
         category: category,
         created_at: new Date().toISOString(),
-      });
+      };
+
+      if (Array.isArray(embedding) && embedding.length === 768) {
+        row.embedding = embedding;
+      }
+
+      const { error } = await supabase.from('student_insights').insert(row);
 
       if (error) {
         console.warn('[CloudMemory] Could not record insight:', error.message);
+      } else {
+        console.log('[CloudMemory] 🧠 Stored insight' + (row.embedding ? ' with 768-dim vector embedding' : '') + ' into Supabase');
       }
     } catch (err) {
       console.warn('[CloudMemory] Error recording insight:', err?.message || err);
@@ -141,8 +182,8 @@ export const cloudMemoryService = {
   },
 
   /**
-   * Calls the backend to extract 1-2 cognitive insights using ultra-light gemini-3.5-flash-lite,
-   * then saves them to Supabase public.student_insights.
+   * Calls the backend to extract 1-2 cognitive insights using gemini-3.5-flash-lite,
+   * generates 768-dim vector embeddings with gemini-embedding-001, and stores both in Supabase!
    */
   async extractAndSaveInsights(userId, transcript, studentName = 'Student') {
     if (!supabase || !userId || !transcript || transcript.length < 25) return;
@@ -155,10 +196,12 @@ export const cloudMemoryService = {
       });
       const data = await res.json();
       if (data?.insights && Array.isArray(data.insights) && data.insights.length > 0) {
-        for (const insightText of data.insights) {
-          await this.recordStudentInsight(userId, insightText);
+        for (const item of data.insights) {
+          const text = typeof item === 'string' ? item : item.text;
+          const embedding = item?.embedding || null;
+          await this.recordStudentInsight(userId, text, embedding);
         }
-        console.log(`[CloudMemory] 🧠 Extracted & saved ${data.insights.length} student insights into Supabase!`);
+        console.log(`[CloudMemory] 🧠 Extracted & saved ${data.insights.length} student insights with vector embeddings into Supabase!`);
       }
     } catch (err) {
       console.warn('[CloudMemory] Insight extraction background warning:', err?.message || err);
@@ -204,7 +247,7 @@ export const cloudMemoryService = {
         .order('updated_at', { ascending: false });
 
       if (error) {
-        if (error.code !== '42P01') { // table does not exist yet
+        if (error.code !== '42P01') {
           console.warn('[CloudMemory] Warning fetching cloud sessions:', error.message);
         }
         return [];
