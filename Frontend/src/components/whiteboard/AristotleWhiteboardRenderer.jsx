@@ -1,5 +1,6 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
+import { MathFormula } from './MathFormula.jsx';
 
 /**
  * AristotleWhiteboardRenderer
@@ -51,8 +52,8 @@ export function AristotleWhiteboardRenderer({ diagram, title, caption, formula }
       {/* Highlighted Mathematical Equation / Formula */}
       {effectiveFormula && (
         <div className="mt-3 pt-2.5 border-t border-stone-700/60 text-center">
-          <div className="inline-block bg-[#161a20] border border-amber-400/40 text-amber-300 px-4 py-1.5 rounded-xl font-mono text-sm md:text-base font-bold shadow-inner tracking-wide">
-            {effectiveFormula}
+          <div className="inline-block bg-[#161a20] border border-amber-400/40 text-amber-300 px-4 py-1.5 rounded-xl text-sm md:text-base font-bold shadow-inner tracking-wide max-w-full overflow-x-auto">
+            <MathFormula formula={effectiveFormula} displayMode={true} />
           </div>
         </div>
       )}

@@ -209,7 +209,7 @@ export class GeminiLiveClient {
                       items: {
                         type: 'STRING',
                       },
-                      description: 'List of concise bullet points, definitions, or steps to display on the whiteboard',
+                      description: 'List of concise bullet points, definitions, or steps to display on the whiteboard. For math, physics, or chemistry symbols/equations, wrap them in $...$ (e.g. "$x^2 + y^2 = r^2$", "$\\ce{H2O}$")',
                     },
                     cardType: {
                       type: 'STRING',
@@ -217,7 +217,7 @@ export class GeminiLiveClient {
                     },
                     formula: {
                       type: 'STRING',
-                      description: 'Mathematical or scientific equation (e.g., "F = m * a", "342 = 300 + 40 + 2")',
+                      description: 'Mathematical, physical, chemical, or quantitative equation in standard LaTeX (e.g., "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}", "F = m \\cdot a", "\\ce{2H2 + O2 -> 2H2O}", "\\int_0^\\infty e^{-x} dx = 1")',
                     },
                     code: {
                       type: 'STRING',
@@ -243,7 +243,7 @@ export class GeminiLiveClient {
                 groupCount: { type: 'INTEGER', description: 'For grouped_boxes: number of groups (e.g. 3)' },
                 itemsPerGroup: { type: 'INTEGER', description: 'For grouped_boxes: items per group (e.g. 4)' },
                 groupLabel: { type: 'STRING', description: 'Label for grouping (e.g. "3 groups")' },
-                formula: { type: 'STRING', description: 'Highlighted equation for the diagram, e.g. "3 x 4 = 12" or "q · k1 = 2.5"' },
+                formula: { type: 'STRING', description: 'Highlighted equation for the diagram in LaTeX, e.g. "3 \\times 4 = 12" or "\\vec{q} \\cdot \\vec{k}_1 = 2.5"' },
                 caption: { type: 'STRING', description: 'Educational takeaway caption' },
                 dataJson: { type: 'STRING', description: 'Optional JSON string for custom vectors or steps (e.g. [{"label":"q","x":120,"y":-70}])' }
               }

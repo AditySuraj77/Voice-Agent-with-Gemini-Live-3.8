@@ -118,6 +118,10 @@ CORE BEHAVIOR:
 4. WHITEBOARD & VISUALS: Whenever helpful, use write_on_whiteboard to jot down key points, steps, or formulas on the screen, and use render_visual or other tools when visual diagrams or motion make things clearer.
 5. ENGAGING & FRIENDLY: Keep the tone supportive and conversational, naturally checking in to see if the user needs more details or wants to explore further.
 6. VERBAL BRIDGING (NO DEAD AIR): When you need to call search_web, youtube_channel_search, youtube_fetch_transcript, or browser tools, ALWAYS first speak a quick, natural 1-sentence bridging phrase in the user's language (e.g. "Ek second, main iski latest details check karke batata hoon..." or "Let me check that on YouTube for you...") BEFORE or while triggering the tool so the user is never left waiting in dead silence.
+7. UNIVERSAL FORMULA & EQUATION NOTATION: Whenever writing any formula, equation, matrix, chemical reaction, derivation, or quantitative expression on the whiteboard (in ANY subject: Mathematics, Physics, Chemistry, Economics, Statistics, Biology, or Engineering), ALWAYS format them in clean standard LaTeX/KaTeX:
+   - For standalone/display equations and matrices: use standard LaTeX (e.g. \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix} for matrices, \\frac{a}{b} for fractions, \\int or \\sum for calculus, and \\ce{...} for chemistry like \\ce{2H2 + O2 -> 2H2O}).
+   - For equations or variables inside bullet notes or questions: wrap them in $...$ (e.g. $E = mc^2$, $x = 5$, $\\Delta H = -50\\text{ kJ}$, $\\begin{pmatrix} 2 & 3 \\\\ 1 & 4 \\end{pmatrix}$). Never write raw messy brackets or unformatted equations.
+8. CONTINUOUS DIGITAL NOTEBOOK (NEVER ERASE OR OVERWRITE): The student's whiteboard is a permanent chronological lecture notebook. NEVER try to edit, replace, or overwrite earlier formulas, steps, or notes. Every time you explain a new concept, ask a practice question, show a worked example, or introduce a new step, provide it as a fresh card that appends naturally below. The student needs to scroll up to reference earlier formulas while solving questions below. NEVER call clear_whiteboard unless the student explicitly tells you to 'clear the board' or 'erase everything'.
 ${whiteboardSummary ? `\nACTIVE WHITEBOARD NOTES:\n${whiteboardSummary}\nAcknowledge and continue seamlessly from these notes.` : ''}
 ${recentTopicsSummary ? `\nRECENT TOPICS: ${recentTopicsSummary}` : ''}
 ${dialogueHistorySummary ? `\nRECENT CONTEXT: ${dialogueHistorySummary}` : ''}`;
@@ -805,9 +809,11 @@ Greet "${sName}" warmly by name in 1-2 spoken sentences. Mention that you rememb
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
 
-        // Merge notes if teacher continues elaborating on same topic
+        // Continuous Append-Only Digital Notebook Architecture:
+        // Every new concept, practice question, worked example, formula, or visual
+        // is appended chronologically below so the student's study notes are 100% preserved.
         setWhiteboardItems((prev) => {
-          // If updating an existing item in-place by ID (e.g. Manim async compilation finished)
+          // If updating an existing item in-place by explicit ID (e.g. async Manim video rendering finished)
           if (args.id) {
             const existingIdx = prev.findIndex((it) => it.id === args.id);
             if (existingIdx !== -1) {
@@ -822,82 +828,20 @@ Greet "${sName}" warmly by name in 1-2 spoken sentences. Mention that you rememb
             }
           }
 
+          // Anti-duplication safeguard: ignore if this call is an exact identical duplicate of the last card
           const lastItem = prev[prev.length - 1];
-          if (
-            lastItem &&
-            lastItem.topic &&
-            topic &&
-            isSameOrRelatedTopic(lastItem.topic, topic)
-          ) {
-            // Dedicated cards (video timeline, visual diagrams) should NEVER be merged into plain text notes!
-            const isNewItemTimeline = newItem.cardType === 'video_timeline' || Boolean(newItem.timeline);
-            const isLastItemTimeline = lastItem.cardType === 'video_timeline' || Boolean(lastItem.timeline);
-            if (isNewItemTimeline || isLastItemTimeline) {
-              return [...prev, newItem];
+          if (lastItem) {
+            const sameTopic = (lastItem.topic || '') === (newItem.topic || '');
+            const sameFormula = (lastItem.formula || '') === (newItem.formula || '');
+            const sameQuestion = (lastItem.question || '') === (newItem.question || '');
+            const sameNotes = JSON.stringify(lastItem.notes || []) === JSON.stringify(newItem.notes || []);
+            const sameVisual = (lastItem.svgCode || '') === (newItem.svgCode || '') && (lastItem.imageUrl || '') === (newItem.imageUrl || '');
+            if (sameTopic && sameFormula && sameQuestion && sameNotes && sameVisual) {
+              return prev;
             }
-
-            const isNewItemAnimation = Boolean(newItem.animationType) || newItem.visualType === 'animation';
-            const isLastItemAnimation = Boolean(lastItem.animationType) || lastItem.visualType === 'animation';
-
-            // STAGE 2 PRESERVATION: An animation card must NEVER merge into an introductory textbook card!
-            // It must append chronologically below so initial notes and static diagrams are 100% preserved.
-            if (isNewItemAnimation && !isLastItemAnimation) {
-              return [...prev, newItem];
-            }
-
-            const isNewItemVisual = Boolean(newItem.svgCode || newItem.imageUrl || newItem.cardType === 'visual' || newItem.visualType);
-            const isLastItemVisual = Boolean(lastItem.svgCode || lastItem.imageUrl || lastItem.cardType === 'visual' || lastItem.visualType);
-
-            // ANTI-DUPLICATION GUARD: If both are visual cards for the EXACT SAME topic or animation type, update the card in-place rather than duplicating!
-            if (isNewItemVisual && isLastItemVisual) {
-              const isSameTopic = isSameOrRelatedTopic(lastItem.topic, topic);
-              const isSameAnim = (lastItem.animationType && lastItem.animationType === newItem.animationType) ||
-                (lastItem.visualType && lastItem.visualType === newItem.visualType);
-              if (isSameTopic && isSameAnim) {
-                const updatedList = [...prev];
-                updatedList[updatedList.length - 1] = {
-                  ...lastItem,
-                  ...newItem,
-                  id: lastItem.id,
-                  notes: newItem.notes.length > 0 ? newItem.notes : lastItem.notes,
-                };
-                return updatedList;
-              }
-              return [...prev, newItem];
-            }
-
-            const mergedNotes = [...lastItem.notes];
-            for (const note of notes) {
-              const noteClean = note.trim().toLowerCase();
-              if (!mergedNotes.some((n) => n.trim().toLowerCase() === noteClean)) {
-                mergedNotes.push(note);
-              }
-            }
-
-            const updatedItem = {
-              ...lastItem,
-              notes: mergedNotes,
-              formula: args.formula || lastItem.formula,
-              code: args.code || lastItem.code,
-              language: (args.language || '').toLowerCase().trim() || lastItem.language,
-              question: args.question || lastItem.question,
-              studentAnswer: studentAnswer || lastItem.studentAnswer,
-              visualType: args.visualType || (resolvedSvgCode ? 'svg' : lastItem.visualType),
-              svgCode: args.svgCode || lastItem.svgCode || resolvedSvgCode,
-              imageUrl: args.imageUrl || lastItem.imageUrl,
-              imageTitle: args.imageTitle || lastItem.imageTitle,
-              attribution: args.attribution || lastItem.attribution,
-              subject: args.subject || lastItem.subject,
-              caption: args.caption || lastItem.caption,
-              tableData: resolvedTableData || lastItem.tableData,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            };
-
-            const updatedList = [...prev];
-            updatedList[updatedList.length - 1] = updatedItem;
-            return updatedList;
           }
 
+          // Always append new card to the student's notebook!
           return [...prev, newItem];
         });
 

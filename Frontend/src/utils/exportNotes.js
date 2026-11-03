@@ -274,11 +274,12 @@ export function exportWhiteboardToInteractiveHtml(items = [], studentProfile = {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Study Notes: ${escapeHtml(studentName)} - ${escapeHtml(dateStr)}</title>
   
-  <!-- KaTeX for crisp offline mathematical formula rendering -->
+  <!-- KaTeX & mhchem for crisp offline mathematical and scientific formula rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/mhchem.min.js" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"
-    onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});">
+    onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '\\[', right: '\\]', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}], throwOnError: false});">
   </script>
 
   <style>

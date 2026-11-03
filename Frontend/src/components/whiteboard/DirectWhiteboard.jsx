@@ -1080,7 +1080,7 @@ export function DirectWhiteboard({
               Whiteboard is ready
             </h3>
             <p className="text-sm text-stone-500 max-w-md leading-relaxed font-sans">
-              ऊपर Pen या Highlighter चुनें और बोर्ड पर कुछ भी लिखें या टिक करें। जेमिनी आपकी हैंडराइटिंग और स्टेप्स को देखकर लाइव वॉइस में चेक करेगा!
+              Select the Pen or Highlighter tool above, then write or mark anything on the board. Gemini will observe your handwriting and the steps you take, providing feedback via live voice!
             </p>
           </div>
         ) : (
@@ -1249,14 +1249,13 @@ export function DirectWhiteboard({
 
                         {/* 7. Socratic Question */}
                         {item.question && (
-                          <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
-                            <span>
-                              {isLatest ? (
-                                <TypewriterText text={item.question} speed={14} />
-                              ) : (
-                                item.question
-                              )}
-                            </span>
+                          <div className="pt-2 text-base md:text-lg font-serif text-stone-900 border-t border-stone-200/60 mt-2">
+                            <div className="flex items-start gap-2">
+                              <span className="text-amber-600 font-sans font-bold text-sm tracking-wide shrink-0 mt-0.5">❓ Question:</span>
+                              <div className="flex-1">
+                                <InlineFormattedNote text={item.question} isLatest={isLatest} />
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1387,14 +1386,13 @@ export function DirectWhiteboard({
 
                       {/* 8. Socratic Question */}
                       {item.question && (
-                        <div className="pt-2 text-base md:text-lg font-serif italic text-stone-900">
-                          <span>
-                            {isLatest ? (
-                              <TypewriterText text={item.question} speed={14} />
-                            ) : (
-                              item.question
-                            )}
-                          </span>
+                        <div className="pt-2 text-base md:text-lg font-serif text-stone-900 border-t border-stone-200/60 mt-2">
+                          <div className="flex items-start gap-2">
+                            <span className="text-amber-600 font-sans font-bold text-sm tracking-wide shrink-0 mt-0.5">❓ Question:</span>
+                            <div className="flex-1">
+                              <InlineFormattedNote text={item.question} isLatest={isLatest} />
+                            </div>
+                          </div>
                         </div>
                       )}
                     </>

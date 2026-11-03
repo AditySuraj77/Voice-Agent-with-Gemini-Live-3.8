@@ -326,9 +326,7 @@ export function LiveBrowserViewer({
             </div>
             <div>
               <h3 className="text-base font-bold text-stone-100">Live Browser Ready</h3>
-              <p className="text-xs text-stone-400 mt-1 leading-relaxed">
-                अपने AI टीचर से कहें: <em>"Wikipedia open karo"</em>, <em>"latest science news search karo"</em>, ya koi bhi website browse karne ko bolein.
-              </p>
+              
             </div>
 
             {/* Quick Links */}
