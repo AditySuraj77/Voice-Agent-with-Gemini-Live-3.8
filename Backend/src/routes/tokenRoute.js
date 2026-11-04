@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { geminiTokenService } from '../services/geminiTokenService.js';
 import { geminiKeyPool } from '../services/geminiKeyPool.js';
+import { verifyAuthSession } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
@@ -51,13 +52,19 @@ async function handleTokenRequest(req, res) {
   }
 }
 
-router.get('/token', handleTokenRequest);
-router.post('/token', handleTokenRequest);
+router.get('/token', verifyAuthSession, handleTokenRequest);
+router.post('/token', verifyAuthSession, handleTokenRequest);
 
 /**
- * Health & Pool Status endpoint
+ * Health & Pool Status endpoint (Protected in production)
  */
 router.get('/pool-status', (req, res) => {
+  const isProd = process.env.NODE_ENV === 'production';
+  const adminKey = process.env.ADMIN_KEY;
+  if (isProd && adminKey && req.headers['x-admin-key'] !== adminKey) {
+    return res.status(403).json({ error: 'Forbidden', message: 'Admin authorization required.' });
+  }
+
   res.json({
     success: true,
     status: geminiKeyPool.getPoolStatus()

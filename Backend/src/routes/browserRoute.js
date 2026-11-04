@@ -1,7 +1,11 @@
 import express from 'express';
 import { browserService } from '../services/browserService.js';
+import { verifyAuthSession } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+// Protect browser automation endpoints with graceful session auth
+router.use(verifyAuthSession);
 
 /**
  * Helper to safely extract and validate session ID from request.

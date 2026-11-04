@@ -12,14 +12,23 @@ export default defineConfig({
     port: 5173,
   },
   build: {
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('katex')) {
-            return 'katex';
-          }
-          if (id.includes('monaco')) {
-            return 'monaco';
+          if (id.includes('node_modules')) {
+            if (id.includes('katex')) {
+              return 'katex';
+            }
+            if (id.includes('monaco') || id.includes('@monaco-editor')) {
+              return 'monaco';
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons';
+            }
+            if (id.includes('@supabase')) {
+              return 'supabase';
+            }
           }
         },
       },

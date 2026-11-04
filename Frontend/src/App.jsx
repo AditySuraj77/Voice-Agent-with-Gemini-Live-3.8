@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
-import { loader } from '@monaco-editor/react';
+
 import { useGeminiLive } from './hooks/useGeminiLive.js';
 import { DirectWhiteboard } from './components/whiteboard/DirectWhiteboard.jsx';
 import { LiveBrowserViewer } from './components/browser/LiveBrowserViewer.jsx';
@@ -46,7 +46,10 @@ export default function App() {
 
   // Preload Monaco Editor in the background so Code Lab opens with 0ms delay
   useEffect(() => {
-    loader.init().catch(() => {});
+    const idleTimer = setTimeout(() => {
+      import('@monaco-editor/react').then(({ loader }) => loader?.init().catch(() => {})).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(idleTimer);
   }, []);
 
   // Multi-panel workspace state (Code Lab / Live Browser)

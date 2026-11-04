@@ -1,6 +1,7 @@
 import express from 'express';
 import { searchUnified } from '../services/duckduckgoSearchService.js';
 import { searchUniversalVisual } from '../services/visualSearchService.js';
+import { verifyAuthSession } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -62,10 +63,11 @@ router.post('/tools/visual-search', async (req, res) => {
 
 /**
  * Endpoint for generating educational AI illustrations via Cloudflare Workers AI FLUX.1-schnell
+ * Protected by verifyAuthSession to prevent unauthorized credit drain
  * POST /api/tools/generate-image
  * Body: { prompt: string, topic?: string, subject?: string }
  */
-router.post('/tools/generate-image', async (req, res) => {
+router.post('/tools/generate-image', verifyAuthSession, async (req, res) => {
   try {
     const { prompt, topic, subject } = req.body;
     const basePrompt = prompt || topic;

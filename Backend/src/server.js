@@ -23,12 +23,43 @@ import { browserService } from './services/browserService.js';
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
-// Middleware
+// Allowed origins for local development
+const allowedLocalOrigins = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173'
+]);
+
+// Configured production client origins (comma-separated if multiple)
+const configuredOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+// Flexible and secure CORS configuration for production and local development
 app.use(cors({
-  origin: [CLIENT_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, or server-to-server)
+    if (!origin) return callback(null, true);
+
+    if (allowedLocalOrigins.has(origin) || configuredOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Automatically allow Vercel deployment and preview subdomains
+    if (/\.vercel\.app$/.test(origin) || process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS] Request rejected from disallowed origin: ${origin}`);
+    return callback(new Error(`CORS origin ${origin} is not allowed by policy.`));
+  },
   methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id', 'x-gemini-api-key'],
   credentials: true
 }));
 
@@ -76,7 +107,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY),
+    apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEYS),
     tavilyConfigured: Boolean(process.env.TAVILY_API_KEY),
     searchProvider: (process.env.SEARCH_PROVIDER || 'duckduckgo').toLowerCase()
   });
@@ -101,14 +132,14 @@ app.use('/api', insightRouter);
 // Start server
 const server = app.listen(PORT, () => {
   console.log(`[Backend] Gemini Live Voice Agent Server listening on http://localhost:${PORT}`);
-  console.log(`[Backend] Client CORS origin: ${CLIENT_ORIGIN}`);
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn('[Backend] WARNING: GEMINI_API_KEY is not set in environment or .env file!');
+  console.log(`[Backend] Allowed CORS origins:`, Array.from(allowedLocalOrigins).concat(configuredOrigins));
+  if (!process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEYS) {
+    console.warn('[Backend] WARNING: GEMINI_API_KEY / GEMINI_API_KEYS not set in environment or .env file!');
   } else {
-    console.log('[Backend] GEMINI_API_KEY detected.');
+    console.log('[Backend] Gemini API key(s) detected.');
   }
   if (!process.env.TAVILY_API_KEY) {
-    console.warn('[Backend] NOTE: TAVILY_API_KEY is not set. Real-time web search will be disabled until set.');
+    console.warn('[Backend] NOTE: TAVILY_API_KEY is not set. Real-time web search will default to DuckDuckGo.');
   } else {
     console.log('[Backend] TAVILY_API_KEY detected. Real-time web search enabled.');
   }
