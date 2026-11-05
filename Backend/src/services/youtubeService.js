@@ -1,6 +1,107 @@
 import { YouTube } from 'youtube-sr';
 import { YoutubeTranscript } from 'youtube-transcript';
 
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyCA5HWPSp6l8NMSSB8aUQyVpVL-9U6UwWo';
+
+/**
+ * Parses ISO 8601 duration (e.g. "PT1H8M1S", "PT15M30S") to human string and total seconds.
+ */
+export function parseIsoDuration(iso = '') {
+  if (!iso || typeof iso !== 'string') return { formatted: '', totalSeconds: 0 };
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return { formatted: '', totalSeconds: 0 };
+  const h = parseInt(match[1] || 0, 10);
+  const m = parseInt(match[2] || 0, 10);
+  const s = parseInt(match[3] || 0, 10);
+  const total = h * 3600 + m * 60 + s;
+  if (h > 0) {
+    return { formatted: `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`, totalSeconds: total };
+  }
+  return { formatted: `${m}:${String(s).padStart(2, '0')}`, totalSeconds: total };
+}
+
+/**
+ * Fetches official YouTube video details via YouTube Data API v3.
+ * 100% immune to bot-blocking and CAPTCHAs on cloud hosts (Render/AWS).
+ */
+export async function fetchVideoDetailsWithApi(videoId) {
+  if (!videoId || !YOUTUBE_API_KEY) return null;
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      console.warn(`[YouTubeService] YouTube Data API returned HTTP ${resp.status}`);
+      return null;
+    }
+    const data = await resp.json();
+    const item = data.items?.[0];
+    if (!item) return null;
+
+    const durationInfo = parseIsoDuration(item.contentDetails?.duration);
+    const thumbnails = item.snippet?.thumbnails;
+    const thumbnail =
+      thumbnails?.maxres?.url ||
+      thumbnails?.standard?.url ||
+      thumbnails?.high?.url ||
+      thumbnails?.medium?.url ||
+      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+    return {
+      id: videoId,
+      title: item.snippet?.title || '',
+      channel: item.snippet?.channelTitle || 'YouTube',
+      duration: durationInfo.formatted,
+      durationSec: durationInfo.totalSeconds,
+      thumbnail,
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      description: item.snippet?.description || '',
+    };
+  } catch (err) {
+    console.warn(`[YouTubeService] YouTube Data API fetch failed for ${videoId}:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Searches for videos via official YouTube Data API v3.
+ */
+export async function searchVideoWithApi(query, maxResults = 5) {
+  if (!query || !YOUTUBE_API_KEY) return [];
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(query)}&maxResults=${maxResults}&key=${YOUTUBE_API_KEY}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    if (!Array.isArray(data.items) || data.items.length === 0) return [];
+
+    const videoIds = data.items.map((i) => i.id?.videoId).filter(Boolean);
+    if (videoIds.length === 0) return [];
+
+    const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoIds.join(',')}&key=${YOUTUBE_API_KEY}`;
+    const detailsResp = await fetch(detailsUrl);
+    if (!detailsResp.ok) return [];
+    const detailsData = await detailsResp.json();
+
+    return (detailsData.items || []).map((item) => {
+      const durationInfo = parseIsoDuration(item.contentDetails?.duration);
+      const thumbnails = item.snippet?.thumbnails;
+      return {
+        id: item.id,
+        title: item.snippet?.title || '',
+        channel: item.snippet?.channelTitle || 'YouTube',
+        duration: durationInfo.formatted,
+        durationSec: durationInfo.totalSeconds,
+        thumbnail: thumbnails?.high?.url || thumbnails?.medium?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+        url: `https://www.youtube.com/watch?v=${item.id}`,
+        description: item.snippet?.description || '',
+      };
+    });
+  } catch (err) {
+    console.warn('[YouTubeService] YouTube Data API search error:', err.message);
+    return [];
+  }
+}
+
 /**
  * Extracts 11-character YouTube video ID from various URL formats or raw ID.
  */
@@ -387,13 +488,20 @@ export async function searchYouTubeDirect(query, type = 'video') {
 export async function searchYouTubeVideo(query, channelName = '') {
   const directId = extractVideoId(query);
   if (directId) {
-    // 1. Direct watch page scrape (most accurate, contains full description chapters)
+    // 1. Primary: Official YouTube Data API v3 (fastest, 100% immune to bot-blocking)
+    const apiDetails = await fetchVideoDetailsWithApi(directId);
+    if (apiDetails && apiDetails.title) {
+      console.log(`[YouTubeService] YouTube Data API v3 resolved details for: ${directId}`);
+      return apiDetails;
+    }
+
+    // 2. Direct watch page scrape fallback
     const directDetails = await fetchVideoDetailsDirect(directId);
     if (directDetails && directDetails.title) {
       return directDetails;
     }
 
-    // 2. Fallback to youtube-sr
+    // 3. Fallback to youtube-sr
     try {
       const v = await YouTube.getVideo(`https://www.youtube.com/watch?v=${directId}`);
       if (v) {
@@ -429,7 +537,18 @@ export async function searchYouTubeVideo(query, channelName = '') {
 
   console.log(`[YouTubeService] Searching YouTube for query: "${fullQuery}"`);
 
-  // 1. First attempt: Direct YouTube search scraping (immune to youtube-sr browseId crash)
+  // 1. Primary: Official YouTube Data API v3 search
+  try {
+    const apiResults = await searchVideoWithApi(fullQuery, 3);
+    if (apiResults && apiResults.length > 0) {
+      console.log(`[YouTubeService] YouTube Data API v3 found ${apiResults.length} videos for "${fullQuery}"`);
+      return apiResults[0];
+    }
+  } catch (apiErr) {
+    console.warn('[YouTubeService] YouTube Data API search failed, falling back:', apiErr.message);
+  }
+
+  // 2. Direct YouTube search scraping
   try {
     const directResults = await searchYouTubeDirect(fullQuery, 'video');
     if (directResults && directResults.length > 0) {
@@ -445,7 +564,7 @@ export async function searchYouTubeVideo(query, channelName = '') {
     console.warn('[YouTubeService] Direct search scraping failed, trying youtube-sr:', directSearchErr.message);
   }
 
-  // 2. Second attempt: youtube-sr library with try/catch
+  // 3. Fallback: youtube-sr library with try/catch
   try {
     const results = await YouTube.search(fullQuery, { limit: 3, type: 'video' });
     if (results && results.length > 0) {
@@ -646,9 +765,59 @@ export async function fetchYouTubeTranscriptAndDetails({ query, channelName = ''
 
   console.log(`[YouTubeService] Found video: "${video.title}" (ID: ${video.id}) by ${video.channel}`);
 
+  const durationSec = video.durationSec || parseTimestampToSeconds(video.duration);
   const transcriptData = await getTranscript(video.id);
 
   if (!transcriptData.hasTranscript) {
+    // Official Chapter Roadmap Fallback: Extract creator's chapters from description
+    const descChapters = parseDescriptionChapters(video.description, durationSec);
+    if (descChapters.length >= 2) {
+      console.log(`[YouTubeService] Direct captions unavailable, but extracted ${descChapters.length} official chapters from description for ${video.id}`);
+      const timeline = descChapters.map((ch, idx) => ({
+        index: idx + 1,
+        start: ch.timeStr,
+        end: formatTimestamp(ch.endSec),
+        startSec: ch.sec,
+        endSec: ch.endSec,
+        timeRange: `${ch.timeStr} - ${formatTimestamp(ch.endSec)}`,
+        topic: ch.title,
+        text: `Chapter ${idx + 1}: ${ch.title}`,
+        preview: `Official Chapter: ${ch.title}`,
+        isOfficialChapter: true,
+      }));
+
+      const roadmapLines = timeline.map(
+        (ch) => `${ch.index}. [${ch.timeRange}] "${ch.topic}"`
+      );
+
+      const formattedSummary = `
+=== YOUTUBE VIDEO RETRIEVED (OFFICIAL CHAPTER ROADMAP) ===
+Title: "${video.title}"
+Channel: ${video.channel}
+Duration: ${video.duration || 'N/A'}
+URL: ${video.url}
+Thumbnail: ${video.thumbnail}
+
+=== COMPLETE CHRONOLOGICAL ROADMAP (${timeline.length} CHAPTERS) ===
+${roadmapLines.join('\n')}
+
+=== SMART GROUNDING & MENTOR TEACHING DIRECTIVE ===
+1. All chapters above are currently posted onto the student's Whiteboard roadmap.
+2. Guide the student through these timestamps and topics step by step.
+`.trim();
+
+      return {
+        success: true,
+        video,
+        hasTranscript: true,
+        language: 'en',
+        timeline,
+        formattedSummary,
+        fullText: video.description || '',
+        timedTranscript: [],
+      };
+    }
+
     return {
       success: true,
       video,
@@ -657,9 +826,6 @@ export async function fetchYouTubeTranscriptAndDetails({ query, channelName = ''
       formattedSummary: `Video: "${video.title}" by ${video.channel} (${video.url})\nNote: Subtitles are disabled by the creator for this video.`,
     };
   }
-
-  // Parse duration seconds from formatted duration (e.g. "19:05")
-  const durationSec = parseTimestampToSeconds(video.duration);
 
   // Full chronological timeline covering 00:00 through the conclusion
   const timeline = buildTranscriptTimeblocks(

@@ -1234,7 +1234,39 @@ export class GeminiLiveClient {
           if (res.ok) {
             const data = await res.json();
             if (data.success && data.video) {
-              resultPayload = data.formattedSummary || `Retrieved video: "${data.video.title}" by ${data.video.channel}. Transcript: ${data.fullText || 'No transcript'}`;
+              let timeline = Array.isArray(data.timeline) ? data.timeline : [];
+
+              // Client-side safety fallback: If backend returned no timeline, parse description chapters
+              if (timeline.length === 0 && data.video.description) {
+                const descRegex = /(?:^|\n)\s*(?:\[|\()?(\d{1,2}:\d{2}(?::\d{2})?)(?:\]|\))?\s*[-–—:]?\s*([^\n\r]+)/g;
+                const foundChapters = [];
+                let m;
+                while ((m = descRegex.exec(data.video.description)) !== null) {
+                  const timeStr = m[1];
+                  const rawTitle = m[2].trim().replace(/^[-–—:]\s*/, '');
+                  if (rawTitle && rawTitle.length >= 2 && !foundChapters.some((c) => c.timeStr === timeStr)) {
+                    foundChapters.push({ timeStr, title: rawTitle });
+                  }
+                }
+                if (foundChapters.length >= 2) {
+                  timeline = foundChapters.map((ch, idx) => {
+                    const next = foundChapters[idx + 1];
+                    const end = next ? next.timeStr : 'End';
+                    return {
+                      index: idx + 1,
+                      start: ch.timeStr,
+                      end,
+                      timeRange: `${ch.timeStr} - ${end}`,
+                      topic: ch.title,
+                      text: `Chapter ${idx + 1}: ${ch.title}`,
+                      preview: `Official Chapter: ${ch.title}`,
+                      isOfficialChapter: true,
+                    };
+                  });
+                }
+              }
+
+              resultPayload = data.formattedSummary || `Retrieved video: "${data.video.title}" by ${data.video.channel}. Timeline: ${timeline.length} chapters loaded.`;
 
               // Pin dedicated YouTube video roadmap onto Whiteboard for student
               if (this.onWhiteboardCall) {
@@ -1242,8 +1274,8 @@ export class GeminiLiveClient {
                   `Channel: ${data.video.channel} • Duration: ${data.video.duration || 'N/A'}`,
                   `Video Link: ${data.video.url}`,
                 ];
-                if (data.hasTranscript) {
-                  noteBullets.push(`Full chronological roadmap (${data.timeline?.length || 0} chapters) loaded onto whiteboard.`);
+                if (timeline.length > 0) {
+                  noteBullets.push(`Full chronological roadmap (${timeline.length} chapters) loaded onto whiteboard.`);
                   noteBullets.push(`Strict Grounding: Zero external hallucination.`);
                 } else {
                   noteBullets.push(`Note: Creator has disabled subtitles on this video.`);
@@ -1254,7 +1286,7 @@ export class GeminiLiveClient {
                   notes: noteBullets,
                   cardType: 'video_timeline',
                   video: data.video,
-                  timeline: data.timeline || [],
+                  timeline: timeline,
                   attribution: `${data.video.channel} (YouTube)`,
                   caption: `YouTube Video: "${data.video.title}" by ${data.video.channel}`,
                 });
