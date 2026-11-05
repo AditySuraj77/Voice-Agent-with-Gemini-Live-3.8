@@ -2,6 +2,8 @@ import { YouTube } from 'youtube-sr';
 import { YoutubeTranscript } from 'youtube-transcript';
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyCA5HWPSp6l8NMSSB8aUQyVpVL-9U6UwWo';
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '1e00523d58msh29a2a42cd96b5b0p121e78jsn6f4c1eb2f499';
+const RAPIDAPI_HOST = process.env.RAPIDAPI_HOST || 'youtube-transcripts.p.rapidapi.com';
 
 /**
  * Parses ISO 8601 duration (e.g. "PT1H8M1S", "PT15M30S") to human string and total seconds.
@@ -314,7 +316,62 @@ export async function fetchChannelTabContent(channelName, tab = 'videos', query 
 }
 
 /**
- * Fetches transcript for a YouTube video with language fallbacks.
+ * Fetches spoken subtitle transcript via RapidAPI (youtube-transcripts).
+ * Immune to cloud IP bot-detection. Returns parsed transcript cues with ms offsets.
+ */
+export async function fetchTranscriptFromRapidApi(videoId) {
+  if (!videoId || !RAPIDAPI_KEY) return null;
+  try {
+    const url = `https://${RAPIDAPI_HOST}/youtube/transcript?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-key': RAPIDAPI_KEY,
+        'x-rapidapi-host': RAPIDAPI_HOST,
+      },
+    });
+
+    if (!resp.ok) {
+      console.warn(`[YouTubeService] RapidAPI returned HTTP ${resp.status}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    if (!data || !Array.isArray(data.content) || data.content.length === 0) {
+      return null;
+    }
+
+    const timedTranscript = [];
+    const textParts = [];
+
+    for (const item of data.content) {
+      const cleanText = (item.text || '').replace(/\n+/g, ' ').trim();
+      if (cleanText) {
+        timedTranscript.push({
+          time: formatTimestamp(item.offset, true),
+          offsetMs: typeof item.offset === 'number' ? item.offset : 0,
+          text: cleanText,
+        });
+        textParts.push(cleanText);
+      }
+    }
+
+    return {
+      success: true,
+      hasTranscript: true,
+      language: data.lang || 'en',
+      chunkCount: timedTranscript.length,
+      fullText: textParts.join(' '),
+      timedTranscript,
+    };
+  } catch (err) {
+    console.warn('[YouTubeService] RapidAPI transcript fetch error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Fetches transcript for a YouTube video with language fallbacks and RapidAPI cloud bridge.
  */
 export async function getTranscript(videoId) {
   if (!videoId) throw new Error('Video ID is required to fetch transcript.');
@@ -324,6 +381,7 @@ export async function getTranscript(videoId) {
 
   const langPreferences = ['en', 'hi', undefined];
 
+  // 1. Try free direct scraper first (works on localhost)
   for (const lang of langPreferences) {
     try {
       rawTranscript = await YoutubeTranscript.fetchTranscript(videoId, lang ? { lang } : undefined);
@@ -336,41 +394,47 @@ export async function getTranscript(videoId) {
     }
   }
 
-  if (!rawTranscript || rawTranscript.length === 0) {
+  if (rawTranscript && rawTranscript.length > 0) {
+    const timedTranscript = [];
+    const textParts = [];
+
+    for (const item of rawTranscript) {
+      const timeStr = formatTimestamp(item.offset, true);
+      const cleanText = (item.text || '').replace(/\n+/g, ' ').trim();
+      if (cleanText) {
+        timedTranscript.push({
+          time: timeStr,
+          offsetMs: item.offset,
+          text: cleanText,
+        });
+        textParts.push(cleanText);
+      }
+    }
+
     return {
-      success: false,
-      hasTranscript: false,
-      message: 'Captions/subtitles are disabled or not available for this video.',
-      fullText: '',
-      timedTranscript: [],
+      success: true,
+      hasTranscript: true,
+      language: detectedLang,
+      chunkCount: timedTranscript.length,
+      fullText: textParts.join(' '),
+      timedTranscript,
     };
   }
 
-  const timedTranscript = [];
-  const textParts = [];
-
-  for (const item of rawTranscript) {
-    const timeStr = formatTimestamp(item.offset, true);
-    const cleanText = (item.text || '').replace(/\n+/g, ' ').trim();
-    if (cleanText) {
-      timedTranscript.push({
-        time: timeStr,
-        offsetMs: item.offset,
-        text: cleanText,
-      });
-      textParts.push(cleanText);
-    }
+  // 2. Cloud Fallback: Use RapidAPI for cloud deployments (Render/AWS) where YouTube blocks datacenter IPs
+  console.log(`[YouTubeService] Direct scraping failed/blocked, querying RapidAPI transcript for ${videoId}...`);
+  const rapidRes = await fetchTranscriptFromRapidApi(videoId);
+  if (rapidRes && rapidRes.hasTranscript && rapidRes.timedTranscript.length > 0) {
+    console.log(`[YouTubeService] RapidAPI retrieved ${rapidRes.timedTranscript.length} transcript cues successfully!`);
+    return rapidRes;
   }
 
-  const fullText = textParts.join(' ');
-
   return {
-    success: true,
-    hasTranscript: true,
-    language: detectedLang,
-    chunkCount: timedTranscript.length,
-    fullText,
-    timedTranscript,
+    success: false,
+    hasTranscript: false,
+    message: 'Captions/subtitles are disabled or not available for this video.',
+    fullText: '',
+    timedTranscript: [],
   };
 }
 
