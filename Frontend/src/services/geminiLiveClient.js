@@ -186,9 +186,9 @@ export class GeminiLiveClient {
         },
         sessionResumption: resumptionHandle ? { handle: resumptionHandle } : {},
         contextWindowCompression: {
-          triggerTokens: '40000',
+          triggerTokens: '60000',
           slidingWindow: {
-            targetTokens: '20000',
+            targetTokens: '40000',
           },
         },
         tools: [

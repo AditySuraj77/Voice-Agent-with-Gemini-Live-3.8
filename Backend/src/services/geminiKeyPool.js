@@ -226,9 +226,9 @@ export class GeminiKeyPool {
           tools: GEMINI_TOOLS,
           sessionResumption: {},
           contextWindowCompression: {
-            triggerTokens: '40000',
+            triggerTokens: '60000',
             slidingWindow: {
-              targetTokens: '20000',
+              targetTokens: '40000',
             },
           },
         },
