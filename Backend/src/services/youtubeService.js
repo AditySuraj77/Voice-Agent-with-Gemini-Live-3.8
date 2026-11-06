@@ -1,9 +1,145 @@
+import fs from 'fs';
+import path from 'path';
 import { YouTube } from 'youtube-sr';
 import { YoutubeTranscript } from 'youtube-transcript';
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyCA5HWPSp6l8NMSSB8aUQyVpVL-9U6UwWo';
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '1e00523d58msh29a2a42cd96b5b0p121e78jsn6f4c1eb2f499';
+const RAW_RAPIDAPI_KEYS = process.env.RAPIDAPI_KEYS || process.env.RAPIDAPI_KEY || '1e00523d58msh29a2a42cd96b5b0p121e78jsn6f4c1eb2f499,75dd0a4250msh0b7f52789bede16p1fd462jsnc017e1e4bff2';
 const RAPIDAPI_HOST = process.env.RAPIDAPI_HOST || 'youtube-transcripts.p.rapidapi.com';
+
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://txzsfzadovdswkgpyxjp.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_e-SL46duBCgi4Cwl-Uzv_A__n_Bo-Ts';
+
+/**
+ * Returns deduplicated array of RapidAPI keys for load-balancing and quota failover.
+ */
+export function getRapidApiKeys() {
+  const keys = RAW_RAPIDAPI_KEYS.split(',').map((k) => k.trim()).filter(Boolean);
+  return [...new Set(keys)];
+}
+
+// In-memory transcript cache for 1ms lookups
+const transcriptMemoryCache = new Map();
+
+// Local disk cache directory for persistence across server restarts
+const CACHE_DIR = path.resolve(process.cwd(), '.cache', 'transcripts');
+try {
+  if (!fs.existsSync(CACHE_DIR)) {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.warn('[YouTubeService] Could not create cache directory:', e.message);
+}
+
+function getFromCache(videoId) {
+  if (!videoId) return null;
+  // 1. In-memory check
+  if (transcriptMemoryCache.has(videoId)) {
+    return transcriptMemoryCache.get(videoId);
+  }
+  // 2. Persistent disk check
+  try {
+    const filePath = path.join(CACHE_DIR, `${videoId}.json`);
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const parsed = JSON.parse(content);
+      transcriptMemoryCache.set(videoId, parsed);
+      return parsed;
+    }
+  } catch (e) {
+    // Disk read failed, fallback to network
+  }
+  return null;
+}
+
+function saveToCache(videoId, data) {
+  if (!videoId || !data || !data.hasTranscript) return;
+  // 1. In-memory save
+  transcriptMemoryCache.set(videoId, data);
+  // 2. Persistent disk save
+  try {
+    const filePath = path.join(CACHE_DIR, `${videoId}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(data), 'utf8');
+  } catch (e) {
+    // Disk write failed, ignore
+  }
+}
+
+/**
+ * Reads cached video transcript from Supabase database (Cloud Tier 3).
+ */
+export async function getFromSupabase(videoId) {
+  if (!videoId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/video_transcripts?video_id=eq.${videoId}&select=*`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+
+    if (!resp.ok) return null;
+
+    const rows = await resp.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+
+    const row = rows[0];
+    return {
+      success: true,
+      hasTranscript: true,
+      language: 'en',
+      chunkCount: Array.isArray(row.timed_transcript) ? row.timed_transcript.length : 0,
+      fullText: row.full_text || '',
+      timedTranscript: Array.isArray(row.timed_transcript) ? row.timed_transcript : [],
+      timeline: Array.isArray(row.timeline) ? row.timeline : [],
+    };
+  } catch (err) {
+    console.warn('[YouTubeService] Supabase cache read error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Saves fetched video transcript to Supabase database for lifetime persistence.
+ */
+export async function saveToSupabase(videoId, data, videoInfo = {}) {
+  if (!videoId || !data || !data.hasTranscript || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  try {
+    const payload = {
+      video_id: videoId,
+      title: videoInfo.title || '',
+      channel: videoInfo.channel || '',
+      duration: videoInfo.duration || '',
+      duration_sec: videoInfo.durationSec || 0,
+      timeline: data.timeline || [],
+      timed_transcript: data.timedTranscript || [],
+      full_text: data.fullText || '',
+      updated_at: new Date().toISOString(),
+    };
+
+    const url = `${SUPABASE_URL}/rest/v1/video_transcripts`;
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify(payload),
+    }).then(res => {
+      if (res.ok) {
+        console.log(`[YouTubeService] [SUPABASE SYNC] Successfully persisted ${videoId} to Supabase!`);
+      }
+    }).catch(err => {
+      console.warn('[YouTubeService] Supabase async save failed:', err.message);
+    });
+  } catch (err) {
+    console.warn('[YouTubeService] Supabase cache save error:', err.message);
+  }
+}
 
 /**
  * Parses ISO 8601 duration (e.g. "PT1H8M1S", "PT15M30S") to human string and total seconds.
@@ -316,65 +452,96 @@ export async function fetchChannelTabContent(channelName, tab = 'videos', query 
 }
 
 /**
- * Fetches spoken subtitle transcript via RapidAPI (youtube-transcripts).
+ * Fetches spoken subtitle transcript via RapidAPI (youtube-transcripts) with multi-key pool failover.
  * Immune to cloud IP bot-detection. Returns parsed transcript cues with ms offsets.
  */
 export async function fetchTranscriptFromRapidApi(videoId) {
-  if (!videoId || !RAPIDAPI_KEY) return null;
-  try {
-    const url = `https://${RAPIDAPI_HOST}/youtube/transcript?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
-    const resp = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'x-rapidapi-key': RAPIDAPI_KEY,
-        'x-rapidapi-host': RAPIDAPI_HOST,
-      },
-    });
+  if (!videoId) return null;
+  const keys = getRapidApiKeys();
+  if (keys.length === 0) return null;
 
-    if (!resp.ok) {
-      console.warn(`[YouTubeService] RapidAPI returned HTTP ${resp.status}`);
-      return null;
-    }
+  for (let i = 0; i < keys.length; i++) {
+    const apiKey = keys[i];
+    try {
+      const url = `https://${RAPIDAPI_HOST}/youtube/transcript?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-key': apiKey,
+          'x-rapidapi-host': RAPIDAPI_HOST,
+        },
+      });
 
-    const data = await resp.json();
-    if (!data || !Array.isArray(data.content) || data.content.length === 0) {
-      return null;
-    }
-
-    const timedTranscript = [];
-    const textParts = [];
-
-    for (const item of data.content) {
-      const cleanText = (item.text || '').replace(/\n+/g, ' ').trim();
-      if (cleanText) {
-        timedTranscript.push({
-          time: formatTimestamp(item.offset, true),
-          offsetMs: typeof item.offset === 'number' ? item.offset : 0,
-          text: cleanText,
-        });
-        textParts.push(cleanText);
+      if (resp.status === 429 || resp.status === 403) {
+        console.warn(`[YouTubeService] RapidAPI Key #${i + 1} exhausted/blocked (HTTP ${resp.status}), attempting next key...`);
+        continue;
       }
-    }
 
-    return {
-      success: true,
-      hasTranscript: true,
-      language: data.lang || 'en',
-      chunkCount: timedTranscript.length,
-      fullText: textParts.join(' '),
-      timedTranscript,
-    };
-  } catch (err) {
-    console.warn('[YouTubeService] RapidAPI transcript fetch error:', err.message);
-    return null;
+      if (!resp.ok) {
+        console.warn(`[YouTubeService] RapidAPI Key #${i + 1} returned HTTP ${resp.status}`);
+        continue;
+      }
+
+      const data = await resp.json();
+      if (!data || !Array.isArray(data.content) || data.content.length === 0) {
+        continue;
+      }
+
+      const timedTranscript = [];
+      const textParts = [];
+
+      for (const item of data.content) {
+        const cleanText = (item.text || '').replace(/\n+/g, ' ').trim();
+        if (cleanText) {
+          timedTranscript.push({
+            time: formatTimestamp(item.offset, true),
+            offsetMs: typeof item.offset === 'number' ? item.offset : 0,
+            text: cleanText,
+          });
+          textParts.push(cleanText);
+        }
+      }
+
+      const result = {
+        success: true,
+        hasTranscript: true,
+        language: data.lang || 'en',
+        chunkCount: timedTranscript.length,
+        fullText: textParts.join(' '),
+        timedTranscript,
+      };
+
+      // Cache permanently so this video never uses API credits again
+      saveToCache(videoId, result);
+      return result;
+    } catch (err) {
+      console.warn(`[YouTubeService] RapidAPI Key #${i + 1} error:`, err.message);
+    }
   }
+
+  return null;
 }
 
 /**
- * Fetches transcript for a YouTube video with language fallbacks and RapidAPI cloud bridge.
+ * Fetches transcript for a YouTube video with Cache, language fallbacks, and RapidAPI multi-key pool.
  */
 export async function getTranscript(videoId) {
   if (!videoId) throw new Error('Video ID is required to fetch transcript.');
+
+  // 0. Persistent & In-Memory Cache Lookup (0ms latency, 0 quota used)
+  const cached = getFromCache(videoId);
+  if (cached && cached.hasTranscript && cached.timedTranscript?.length > 0) {
+    console.log(`[YouTubeService] [LOCAL CACHE HIT] Serving video ${videoId} from local persistent cache (0 API quota used)`);
+    return cached;
+  }
+
+  // 0.5. Supabase Cloud Database Cache (Permanent across Render restarts, 0 quota used)
+  const supabaseCached = await getFromSupabase(videoId);
+  if (supabaseCached && supabaseCached.hasTranscript && supabaseCached.timedTranscript?.length > 0) {
+    console.log(`[YouTubeService] [SUPABASE CACHE HIT] Serving video ${videoId} from Supabase permanent database (0 API quota used)`);
+    saveToCache(videoId, supabaseCached);
+    return supabaseCached;
+  }
 
   let rawTranscript = null;
   let detectedLang = 'en';
@@ -411,7 +578,7 @@ export async function getTranscript(videoId) {
       }
     }
 
-    return {
+    const result = {
       success: true,
       hasTranscript: true,
       language: detectedLang,
@@ -419,10 +586,13 @@ export async function getTranscript(videoId) {
       fullText: textParts.join(' '),
       timedTranscript,
     };
+
+    saveToCache(videoId, result);
+    return result;
   }
 
-  // 2. Cloud Fallback: Use RapidAPI for cloud deployments (Render/AWS) where YouTube blocks datacenter IPs
-  console.log(`[YouTubeService] Direct scraping failed/blocked, querying RapidAPI transcript for ${videoId}...`);
+  // 2. Cloud Fallback: Use RapidAPI multi-key pool with automatic failover
+  console.log(`[YouTubeService] Direct scraping failed/blocked, querying RapidAPI multi-key pool for ${videoId}...`);
   const rapidRes = await fetchTranscriptFromRapidApi(videoId);
   if (rapidRes && rapidRes.hasTranscript && rapidRes.timedTranscript.length > 0) {
     console.log(`[YouTubeService] RapidAPI retrieved ${rapidRes.timedTranscript.length} transcript cues successfully!`);
@@ -897,6 +1067,14 @@ ${roadmapLines.join('\n')}
     durationSec,
     video.description || ''
   );
+
+  // Sync to Supabase so this video is permanently saved in cloud database for all students
+  saveToSupabase(video.id, {
+    hasTranscript: true,
+    timeline,
+    timedTranscript: transcriptData.timedTranscript,
+    fullText: transcriptData.fullText,
+  }, video);
 
   // Formatted chronological roadmap for Gemini Live
   const roadmapLines = timeline.map(
